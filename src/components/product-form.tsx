@@ -14,8 +14,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
 
+interface SizeInput {
+  quantity: number
+  barcodes: string[]
+}
+
 interface SizeInputs {
-  [key: string]: number
+  [key: string]: SizeInput
 }
 
 interface ProductFormData {
@@ -42,7 +47,7 @@ export const ProductFormComponent: React.FC = () => {
   })
 
   const total = useMemo(() => {
-    return Object.values(formData.sizes).reduce((sum, size) => sum + size, 0)
+    return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
   }, [formData.sizes])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,15 +56,27 @@ export const ProductFormComponent: React.FC = () => {
   }
 
   const handleSizeChange = (size: string, value: string) => {
+    const quantity = parseInt(value) || 0
     setFormData((prev) => ({
       ...prev,
-      sizes: { ...prev.sizes, [size]: parseInt(value) || 0 },
+      sizes: { 
+        ...prev.sizes, 
+        [size]: { 
+          quantity, 
+          barcodes: Array(quantity).fill('').map(() => generateBarcode())
+        } 
+      },
     }))
   }
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     setFormData((prev) => ({ ...prev, image: file }));
   };
+
+  const generateBarcode = () => {
+    return Math.random().toString(36).substr(2, 9).toUpperCase()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,7 +170,7 @@ export const ProductFormComponent: React.FC = () => {
                 <Input
                   id={size}
                   type="number"
-                  value={formData.sizes[size] || ''}
+                  value={formData.sizes[size]?.quantity || ''}
                   onChange={(e) => handleSizeChange(size, e.target.value)}
                 />
               </div>

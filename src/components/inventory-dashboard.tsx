@@ -11,6 +11,11 @@ import ProductCard from './product-card'
 import { db, storage } from '../services/firebase/firebase.config'
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
+
+interface SizeInput {
+  quantity: number
+  barcodes: string[]
+}
   
 interface Product {
   id: string
@@ -18,7 +23,7 @@ interface Product {
   reference: string
   color: string
   gender: 'Dama' | 'Hombre'
-  sizes: { [key: string]: number }
+  sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
 }
@@ -135,9 +140,9 @@ export function InventoryDashboardComponent() {
       <div className="w-full md:w-3/4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
-          <Button onClick={() => router.push('/add-product')}>
+          <Button onClick={() => router.push('/')}>
             <PlusIcon className="mr-2 h-4 w-4" /> Add New Product
-          </Button>
+          </Button> 
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredProducts.map((product) => (
