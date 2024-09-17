@@ -30,6 +30,7 @@ interface ProductFormData {
   gender: Gender
   sizes: SizeInputs
   total: number
+  comments: string
   image: File | null
   imageUrl: string
 }
@@ -42,6 +43,7 @@ export const ProductFormComponent: React.FC = () => {
     gender: 'Dama',
     sizes: {},
     total: 0,
+    comments: '',
     image: null,
     imageUrl: '',
   })
@@ -101,6 +103,7 @@ export const ProductFormComponent: React.FC = () => {
         gender: formData.gender,
         sizes: formData.sizes,
         total,
+        comments: formData.comments,
         imageUrl, // Guarda la URL de la imagen subida
       });
 
@@ -112,6 +115,7 @@ export const ProductFormComponent: React.FC = () => {
         gender: 'Dama',
         sizes: {},
         total:0,
+        comments: '',
         image: null,
         imageUrl: '',
       });
@@ -153,6 +157,10 @@ export const ProductFormComponent: React.FC = () => {
           <div>
             <Label htmlFor="color">Color</Label>
             <Input id="color" name="color" value={formData.color} onChange={handleInputChange} />
+          </div>
+          <div>
+            <Label htmlFor="commets">Comments</Label>
+            <Input id="comments" name="comments" value={formData.comments} onChange={handleInputChange} />
           </div>
           <div className="flex items-center space-x-2">
             <Label htmlFor="gender">Gender</Label>

@@ -34,8 +34,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onDelete, onUpdate }
             alt={product.reference}
             width={190}
             height={150}
-            objectFit="cover"
-            className="rounded-md"
+            className="rounded-md w-full h-auto object-cover"
+            priority
           />
         </div>
       <div className="w-2/3 flex flex-col">
