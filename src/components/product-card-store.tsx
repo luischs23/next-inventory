@@ -1,37 +1,43 @@
 import React from 'react'
 import { Card, CardContent } from "app/components/ui/card"
+import Image from 'next/image'
 
-interface Size {
-    quantity: number
-    barcodes: string[]
-  }
-
-  interface Product {
-    id: string
-    brand: string
-    reference: string
-    color: string
-    sizes: { [size: string]: Size }
-  }
+interface ProductWithBarcode {
+  id: string
+  brand: string
+  reference: string
+  color: string
+  size: string
+  barcode: string
+  imageUrl: string
+}
 
 interface ProductCardProps {
-  product: Product
+  product: ProductWithBarcode
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-    const size = Object.entries(product.sizes)[0] // Get the first (and only) size
-  
-    return (
-      <Card className="w-full">
-        <CardContent className="p-4">
+  return (
+    <Card className="w-full">
+      <CardContent className="p-4 flex items-center justify-between">
+        <div>
           <h3 className="text-lg font-semibold">{product.brand} - {product.reference}</h3>
           <p>Color: {product.color}</p>
-          <p>Size: {size[0]}</p>
-          <p>Quantity: {size[1].quantity}</p>
-          <p>Barcode: {size[1].barcodes[0]}</p>
-        </CardContent>
-      </Card>
-    )
-  }
-  
-  export default ProductCard
+          <p>Size: {product.size}</p>
+          <p>Barcode: {product.barcode}</p>
+        </div>
+        <div className="w-24 h-24 relative">
+          <Image
+            src={product.imageUrl}
+            alt={`${product.brand} ${product.reference}`}
+            layout="fill"
+            className='object-cover'
+            priority
+          />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default ProductCard

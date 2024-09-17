@@ -140,7 +140,7 @@ export function InventoryDashboardComponent() {
       <div className="w-full md:w-3/4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
-          <Button onClick={() => router.push('/')}>
+          <Button onClick={() => router.push('/form-product')}>
             <PlusIcon className="mr-2 h-4 w-4" /> Add New Product
           </Button> 
         </div>

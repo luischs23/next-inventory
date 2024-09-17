@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo,  } from 'react'
+import { useRouter } from 'next/navigation'
 import { db, storage } from '../services/firebase/firebase.config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { addDoc, collection } from 'firebase/firestore';
@@ -36,6 +37,7 @@ interface ProductFormData {
 }
 
 export const ProductFormComponent: React.FC = () => {
+  const router = useRouter()
   const [formData, setFormData] = useState<ProductFormData>({
     brand: 'Nike',
     reference: '',
@@ -197,7 +199,7 @@ export const ProductFormComponent: React.FC = () => {
             <Label htmlFor="image">Image</Label>
             <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} />
           </div>
-          <Button type="submit">Save Product</Button>
+          <Button type="submit" onClick={() => router.push('/inventory')}>Save Product</Button>
         </form>
       </CardContent>
     </Card>
