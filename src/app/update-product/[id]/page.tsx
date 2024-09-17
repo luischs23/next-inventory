@@ -10,6 +10,13 @@ import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { Label } from "app/components/ui/label"
+import Barcode from 'react-barcode'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "app/components/ui/dialog"
+
+interface SizeInput {
+  quantity: number
+  barcodes: string[]
+}
 
 interface Product {
   id: string
@@ -17,7 +24,7 @@ interface Product {
   reference: string
   color: string
   gender: 'Dama' | 'Hombre'
-  sizes: { [key: string]: number }
+  sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
 }
@@ -33,7 +40,12 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
       try {
         const productDoc = await getDoc(doc(db, 'products', params.id))
         if (productDoc.exists()) {
-          setProduct({ id: productDoc.id, ...productDoc.data() } as Product)
+          const productData = productDoc.data() as Omit<Product, 'id'>
+          setProduct({ 
+            id: productDoc.id, 
+            ...productData,
+            sizes: productData.sizes || {}
+          })
         } else {
           console.error('Product not found')
           router.push('/inventory')
@@ -54,14 +66,20 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
   }
 
   const handleSizeChange = (size: string, value: string) => {
+    const quantity = parseInt(value) || 0
     setProduct(prev => {
       if (!prev) return null
-      const newSizes = { ...prev.sizes, [size]: parseInt(value) || 0 }
-      const newTotal = Object.values(newSizes).reduce((a, b) => a + b, 0)
+      const currentBarcodes = prev.sizes[size]?.barcodes || []
+      const newBarcodes = Array(quantity).fill('').map((_, index) => 
+        currentBarcodes[index] || Math.random().toString(36).substr(2, 9).toUpperCase()
+      )
       return {
         ...prev,
-        sizes: newSizes,
-        total: newTotal
+        sizes: {
+          ...prev.sizes,
+          [size]: { quantity, barcodes: newBarcodes }
+        },
+        total: Object.values(prev.sizes).reduce((sum, s) => sum + s.quantity, 0) - prev.sizes[size].quantity + quantity
       }
     })
   }
@@ -102,6 +120,9 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
   if (!product) {
     return <div>Product not found</div>
   }
+  const sizeInputs = product.gender === 'Dama'
+    ? ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
+    : ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
   return (
     <Card className="w-full max-w-2xl mx-auto mt-8">
@@ -136,16 +157,34 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
           </div>
           <div>
             <Label>Sizes</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {Object.entries(product.sizes).map(([size, quantity]) => (
+            <div className="grid grid-cols-3 gap-4">
+              {sizeInputs.map((size) => (
                 <div key={size}>
                   <Label htmlFor={size}>{size}</Label>
                   <Input
                     id={size}
                     type="number"
-                    value={quantity}
+                    value={product.sizes[size]?.quantity || ''}
                     onChange={(e) => handleSizeChange(size, e.target.value)}
                   />
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" className="mt-2 w-full">View Barcodes</Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl">
+                      <DialogHeader>
+                        <DialogTitle>Barcodes for {product.brand} - {product.reference} - Size {size}</DialogTitle>
+                      </DialogHeader>
+                      <div className="grid grid-cols-3 gap-4">
+                        {product.sizes[size]?.barcodes.map((barcode, index) => (
+                          <div key={index} className="text-center">
+                            <Barcode value={barcode} width={1} height={50} fontSize={12} />
+                            <p className="mt-1 text-sm">{barcode}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
               ))}
             </div>
