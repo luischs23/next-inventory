@@ -15,6 +15,8 @@ import Link from 'next/link'
 export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [role, setRole] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
@@ -23,7 +25,7 @@ export default function SignUpPage() {
     e.preventDefault()
     setError('')
 
-    if (!email || !password || !role) {
+    if (!email || !password || !role || !firstName || !lastName) {
       setError('Please fill in all fields')
       return
     }
@@ -34,6 +36,8 @@ export default function SignUpPage() {
 
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
+        firstName,
+        lastName,
         role: role
       })
 
@@ -52,6 +56,28 @@ export default function SignUpPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="firstName">First Name</Label>
+              <Input
+                id="firstName"
+                type="text"
+                placeholder="Enter your first name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName">Last Name</Label>
+              <Input
+                id="lastName"
+                type="text"
+                placeholder="Enter your last name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

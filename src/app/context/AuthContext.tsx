@@ -8,13 +8,11 @@ import { auth, db } from 'app/services/firebase/firebase.config'
 interface AuthContextType {
   user: User | null
   userRole: string | null
-  loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   userRole: null,
-  loading: true,
 })
 
 export const useAuth = () => useContext(AuthContext)
@@ -22,7 +20,6 @@ export const useAuth = () => useContext(AuthContext)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -35,14 +32,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUserRole(null)
       }
-      setLoading(false)
     })
 
     return () => unsubscribe()
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, userRole, loading }}>
+    <AuthContext.Provider value={{ user, userRole }}>
       {children}
     </AuthContext.Provider>
   )
