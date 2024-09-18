@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs } from 'firebase/firestore'
+import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import ProductSearch from 'app/components/product-search'
 import ProductCard from 'app/components/product-card-store'
+import { MoreVertical, Save } from 'lucide-react'
 
 interface Size {
     quantity: number
@@ -31,11 +33,11 @@ interface Size {
     size: string
     barcode: string
   }
-  
   interface InvoiceItem extends ProductWithBarcode {
     invoiceId: string
     salePrice: number
     sold: boolean
+    addedAt: Timestamp | Date
   }
   
   export default function StorePage({ params }: { params: { id: string } }) {
@@ -43,6 +45,8 @@ interface Size {
     const router = useRouter()
     const [invoice, setInvoice] = useState<InvoiceItem[]>([])
     const [totalSold, setTotalSold] = useState(0)
+    const [customerName, setCustomerName] = useState('')
+    const [customerPhone, setCustomerPhone] = useState('')
   
     useEffect(() => {
       if (!user) {
@@ -63,7 +67,8 @@ interface Size {
           ...data,
           invoiceId: doc.id,
           salePrice: data.salePrice || 0,
-          sold: data.sold || false
+          sold: data.sold || false,
+          addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date()
         }
       })
       setInvoice(invoiceItems)
@@ -109,12 +114,13 @@ interface Size {
         ...product,
         invoiceId: invoiceRef.id,
         salePrice: 0,
-        sold: false
+        sold: false,
+        addedAt: serverTimestamp() as Timestamp
       }
       await setDoc(invoiceRef, newInvoiceItem)
   
       // Update local state
-      setInvoice(prevInvoice => [...prevInvoice, newInvoiceItem])
+      setInvoice(prevInvoice => [...prevInvoice, {...newInvoiceItem, addedAt: new Date()}])
     }
   
     const handleReturn = async (item: InvoiceItem) => {
@@ -177,6 +183,32 @@ interface Size {
       setTotalSold(prevTotal => prevTotal + item.salePrice)
     }
   
+    const handleSaveInvoice = async () => {
+      if (!user) return
+    
+      const savedInvoiceRef = collection(db, 'savedInvoices')
+      const savedInvoiceDoc = await addDoc(savedInvoiceRef, {
+        storeId: params.id,
+        userId: user.uid,
+        customerName,
+        customerPhone,
+        totalSold,
+        createdAt: serverTimestamp(),
+        items: invoice.map(item => ({
+          brand: item.brand,
+          reference: item.reference,
+          color: item.color,
+          size: item.size,
+          barcode: item.barcode,
+          salePrice: item.salePrice,
+          sold: item.sold,
+          addedAt: item.addedAt instanceof Date ? Timestamp.fromDate(item.addedAt) : item.addedAt
+        }))
+      })
+    
+      router.push(`/saved-invoice/${savedInvoiceDoc.id}`)
+    }
+  
     return (
       <div className="container mx-auto p-4">
         <Card className="mb-8">
@@ -185,6 +217,35 @@ interface Size {
           </CardHeader>
           <CardContent>
             <ProductSearch onAddProduct={handleAddToInvoice} />
+          </CardContent>
+        </Card>
+  
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent className="flex space-x-4">
+            <Input
+              placeholder="Customer Name"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+            />
+            <Input
+              placeholder="Customer Phone"
+              value={customerPhone}
+              onChange={(e) => setCustomerPhone(e.target.value)}
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline"><MoreVertical className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={handleSaveInvoice}>
+                  <Save className="mr-2 h-4 w-4" />
+                  <span>Save Invoice</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </CardContent>
         </Card>
   
@@ -197,9 +258,9 @@ interface Size {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {invoice.map((item) => (
+              {invoice.map((item, index) => (
                 <div key={item.invoiceId} className="space-y-2">
-                  <ProductCard product={item} />
+                  <ProductCard product={item} itemNumber={index + 1} />
                   <div className="flex items-center space-x-2">
                     <Button onClick={() => handleReturn(item)}>Return</Button>
                     <Input

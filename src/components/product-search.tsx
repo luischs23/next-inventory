@@ -22,6 +22,7 @@ interface Product {
   total: number
   imageUrl: string
   saleprice: number
+  addedAt: Date
 }
 
 interface ProductWithBarcode extends Product {
@@ -104,7 +105,7 @@ export default function ProductSearch({ onAddProduct }: ProductSearchProps) {
         {error && <p className="text-red-500 mt-2">{error}</p>}
         {product && (
           <div className="mt-4 flex items-center justify-between">
-            <ProductCard product={product} />
+            <ProductCard product={product}/>
             <Button onClick={handleAdd}>Add</Button>
           </div>
         )}
