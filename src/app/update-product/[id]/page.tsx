@@ -29,6 +29,8 @@ interface Product {
   sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
+  baseprice: number
+  saleprice: number
 }
 
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
@@ -300,6 +302,28 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
             <Label htmlFor="image">Image</Label>
             <Input id="image" name="image" type="file" onChange={handleImageChange} />
           </div>
+          <div className='flex items-center space-x-4'>
+          <div>
+              <Label htmlFor="baseprice">Base Price</Label>
+              <Input
+                id="baseprice"
+                name="baseprice"
+                type="number"
+                value={product.baseprice}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div>
+              <Label htmlFor="saleprice">Sale Price</Label>
+              <Input
+                id="saleprice"
+                name="saleprice"
+                type="number"
+                value={product.saleprice}
+                onChange={handleInputChange}
+              />
+            </div>
+            </div>
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => router.push('/inventory')}>Cancel</Button>
             <Button type="submit">Update Product</Button>

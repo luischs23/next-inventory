@@ -21,6 +21,7 @@ interface Product {
   sizes: { [size: string]: Size }
   total: number
   imageUrl: string
+  saleprice: number
 }
 
 interface ProductWithBarcode extends Product {

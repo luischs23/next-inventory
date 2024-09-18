@@ -17,6 +17,8 @@ interface Product {
   sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
+  baseprice: number
+  saleprice: number
 }
 
 interface ProductCardProps {
@@ -61,6 +63,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onDelete, onUpdate }
         <p className="mt-2 font-semibold">Total: {product.total}</p>
       </CardContent>
       <CardFooter className="flex justify-end space-x-2">
+        <Button className='bg-lime-500 pointer-events-none'>{product.saleprice}</Button>
         <Button variant="outline" onClick={onUpdate}>Update</Button>
         <Button variant="destructive" onClick={onDelete}>Delete</Button>
       </CardFooter>

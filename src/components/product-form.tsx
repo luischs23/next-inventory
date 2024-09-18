@@ -34,6 +34,8 @@ interface ProductFormData {
   comments: string
   image: File | null
   imageUrl: string
+  baseprice: number
+  saleprice: number
 }
 
 export const ProductFormComponent: React.FC = () => {
@@ -48,6 +50,8 @@ export const ProductFormComponent: React.FC = () => {
     comments: '',
     image: null,
     imageUrl: '',
+    baseprice: 0,
+    saleprice: 0
   })
 
   const total = useMemo(() => {
@@ -107,6 +111,8 @@ export const ProductFormComponent: React.FC = () => {
         total,
         comments: formData.comments,
         imageUrl, // Guarda la URL de la imagen subida
+        baseprice: formData.baseprice,
+        saleprice: formData.saleprice
       });
 
       // Limpiar el formulario
@@ -120,6 +126,8 @@ export const ProductFormComponent: React.FC = () => {
         comments: '',
         image: null,
         imageUrl: '',
+        baseprice: 0,
+        saleprice: 0
       });
 
     } catch (error) {
@@ -199,6 +207,28 @@ export const ProductFormComponent: React.FC = () => {
             <Label htmlFor="image">Image</Label>
             <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} />
           </div>
+          <div className='flex items-center space-x-4'>
+          <div>
+              <Label htmlFor="baseprice">Base Price</Label>
+              <Input
+                id="baseprice"
+                name="baseprice"
+                type="number"
+                value={formData.baseprice}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div>
+              <Label htmlFor="saleprice">Sale Price</Label>
+              <Input
+                id="saleprice"
+                name="saleprice"
+                type="number"
+                value={formData.saleprice}
+                onChange={handleInputChange}
+              />
+            </div>
+            </div>
           <Button type="submit" onClick={() => router.push('/inventory')}>Save Product</Button>
         </form>
       </CardContent>

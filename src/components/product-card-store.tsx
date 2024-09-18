@@ -10,6 +10,7 @@ interface ProductWithBarcode {
   size: string
   barcode: string
   imageUrl: string
+  saleprice: number
 }
 
 interface ProductCardProps {
@@ -25,6 +26,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <p>Color: {product.color}</p>
           <p>Size: {product.size}</p>
           <p>Barcode: {product.barcode}</p>
+          <p>Sale Price: {product.saleprice}</p>
         </div>
         <div className="w-24 h-24 relative">
           <Image
