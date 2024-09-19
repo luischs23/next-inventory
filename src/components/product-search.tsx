@@ -104,9 +104,9 @@ export default function ProductSearch({ onAddProduct }: ProductSearchProps) {
         </form>
         {error && <p className="text-red-500 mt-2">{error}</p>}
         {product && (
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4">
             <ProductCard product={product}/>
-            <Button onClick={handleAdd}>Add</Button>
+            <Button onClick={handleAdd} className='mt-2'>Add</Button>
           </div>
         )}
       </CardContent>

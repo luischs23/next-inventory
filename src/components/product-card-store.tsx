@@ -16,10 +16,9 @@ interface ProductWithBarcode {
 
 interface ProductCardProps {
   product: ProductWithBarcode
-  itemNumber?: number
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, itemNumber }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const formatDate = (date: Timestamp | Date | undefined) => {
     if (!date) return 'N/A'
     if (date instanceof Timestamp) {
@@ -33,7 +32,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, itemNumber }) => {
 
   return (
     <Card className="w-full">
-      <CardContent className="p-4 flex items-center justify-between">
+      <CardContent className="p-2 flex items-center justify-between">
         <div className="flex-1">
           <h3 className="text-lg font-semibold">{product.brand} - {product.reference}</h3>
           <p>Color: {product.color}</p>
@@ -49,9 +48,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, itemNumber }) => {
             objectFit="cover"
           />
         </div>
-        {itemNumber !== undefined && (
-          <div className="ml-4 text-2xl font-bold">{itemNumber}</div>
-        )}
       </CardContent>
     </Card>
   )

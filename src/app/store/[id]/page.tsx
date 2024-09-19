@@ -39,6 +39,10 @@ interface Size {
     sold: boolean
     addedAt: Timestamp | Date
   }
+
+  interface Store {
+    name: string
+  }
   
   export default function StorePage({ params }: { params: { id: string } }) {
     const { user } = useAuth()
@@ -47,18 +51,28 @@ interface Size {
     const [totalSold, setTotalSold] = useState(0)
     const [customerName, setCustomerName] = useState('')
     const [customerPhone, setCustomerPhone] = useState('')
+    const [storeName, setStoreName] = useState<string>('')
   
     useEffect(() => {
       if (!user) {
         router.push('/login')
       } else {
-        fetchInvoiceItems()
+        fetchStoreAndInvoiceItems()
       }
     }, [user, router])
   
-    const fetchInvoiceItems = async () => {
+    const fetchStoreAndInvoiceItems = async () => {
       if (!user) return
   
+      // Fetch store name
+      const storeRef = doc(db, 'stores', params.id)
+      const storeDoc = await getDoc(storeRef)
+      if (storeDoc.exists()) {
+        const storeData = storeDoc.data() as Store
+        setStoreName(storeData.name)
+      }
+  
+      // Fetch invoice items
       const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
       const invoiceSnapshot = await getDocs(invoiceRef)
       const invoiceItems = invoiceSnapshot.docs.map(doc => {
@@ -185,7 +199,7 @@ interface Size {
   
     const handleSaveInvoice = async () => {
       if (!user) return
-    
+  
       const savedInvoiceRef = collection(db, 'savedInvoices')
       const savedInvoiceDoc = await addDoc(savedInvoiceRef, {
         storeId: params.id,
@@ -202,10 +216,22 @@ interface Size {
           barcode: item.barcode,
           salePrice: item.salePrice,
           sold: item.sold,
-          addedAt: item.addedAt instanceof Date ? Timestamp.fromDate(item.addedAt) : item.addedAt
+          addedAt: item.addedAt
         }))
       })
-    
+  
+      // Clear the invoice items after saving
+      setInvoice([])
+      setTotalSold(0)
+      setCustomerName('')
+      setCustomerPhone('')
+  
+      // Clear the items from the Firestore collection
+      const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
+      const invoiceSnapshot = await getDocs(invoiceRef)
+      const deletePromises = invoiceSnapshot.docs.map(doc => deleteDoc(doc.ref))
+      await Promise.all(deletePromises)
+  
       router.push(`/saved-invoice/${savedInvoiceDoc.id}`)
     }
   
@@ -213,7 +239,7 @@ interface Size {
       <div className="container mx-auto p-4">
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Store {params.id}</CardTitle>
+            <CardTitle>{storeName}</CardTitle>
           </CardHeader>
           <CardContent>
             <ProductSearch onAddProduct={handleAddToInvoice} />
@@ -226,12 +252,12 @@ interface Size {
           </CardHeader>
           <CardContent className="flex space-x-4">
             <Input
-              placeholder="Customer Name"
+              placeholder="Name"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
             />
             <Input
-              placeholder="Customer Phone"
+              placeholder="Phone"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
             />
@@ -258,9 +284,9 @@ interface Size {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {invoice.map((item, index) => (
+              {invoice.map((item) => (
                 <div key={item.invoiceId} className="space-y-2">
-                  <ProductCard product={item} itemNumber={index + 1} />
+                  <ProductCard product={item} />
                   <div className="flex items-center space-x-2">
                     <Button onClick={() => handleReturn(item)}>Return</Button>
                     <Input
@@ -271,7 +297,7 @@ interface Size {
                       className="w-24"
                     />
                     <Button onClick={() => handleSold(item)} disabled={item.sold}>Sold</Button>
-                    <span className="ml-auto">${item.salePrice.toFixed(2)}</span>
+                    <span className="ml-auto">${item.salePrice.toFixed(0)}</span>
                   </div>
                 </div>
               ))}

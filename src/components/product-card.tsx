@@ -36,7 +36,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onDelete, onUpdate }
             alt={product.reference}
             width={190}
             height={150}
-            className="rounded-md w-full h-auto object-cover"
+            className="rounded-md w-52 h-48 object-cover mt-2 ml-2"
             priority
           />
         </div>
@@ -60,10 +60,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onDelete, onUpdate }
               </span>
             ))}
         </div>
+        <div className='flex items-center space-x-2'>
         <p className="mt-2 font-semibold">Total: {product.total}</p>
+        <p className="mt-2 font-normal">Price: {product.saleprice}</p>
+        </div>
       </CardContent>
       <CardFooter className="flex justify-end space-x-2">
-        <Button className='bg-lime-500 pointer-events-none'>{product.saleprice}</Button>
         <Button variant="outline" onClick={onUpdate}>Update</Button>
         <Button variant="destructive" onClick={onDelete}>Delete</Button>
       </CardFooter>

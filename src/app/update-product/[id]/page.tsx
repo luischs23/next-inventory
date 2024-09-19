@@ -237,18 +237,18 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
                   />
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button variant="outline" className="mt-2 w-full">Manage Barcodes</Button>
+                      <Button variant="outline" className="mt-2 w-full">Barcodes</Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-3xl text-gray-300">
                       <DialogHeader>
-                        <DialogTitle>Manage Barcodes for {product.brand} - {product.reference} - Size {size}</DialogTitle>
-                        <DialogDescription>Add, remove, or view barcodes for this product size.</DialogDescription>
+                        <DialogTitle>Barcodes - {product.brand} {product.reference} Size {size}</DialogTitle>
+                        <DialogDescription className='text-slate-200'>Add, remove, or view barcodes for this product size.</DialogDescription>
                       </DialogHeader>
                       <div className="grid grid-cols-2 gap-4">
                         {product.sizes[size].barcodes.map((barcode, index) => (
                           <div key={index} className="text-center border p-4 rounded">
                             <p className="mb-2">
-                              {product.brand} - {product.reference} - {product.color} - Size {size}
+                              {product.brand} {product.reference} {product.color} Size {size}
                             </p>
                             <div className="flex flex-col items-center justify-center">
                               <Barcode value={barcode} width={1} height={50} fontSize={12} />
