@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, getDocs, setDoc, deleteDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
@@ -12,11 +12,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "app/components/ui/dialog"
 import { Label } from "app/components/ui/label"
 import Barcode from 'react-barcode'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { PlusIcon, Trash2Icon, RotateCcwIcon } from 'lucide-react'
+import Image from 'next/image'
+import { useToast } from "app/components/ui/use-toast"
 
 interface SizeInput {
   quantity: number
   barcodes: string[]
+}
+
+interface Store {
+  id: string
+  name: string
 }
 
 interface Product {
@@ -31,18 +38,23 @@ interface Product {
   total: number
   baseprice: number
   saleprice: number
+  exhibition: { [storeId: string]: { size: string, barcode: string } }
 }
 
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
 export default function UpdateProductPage({ params }: { params: { id: string } }) {
-  const router = useRouter()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [newImage, setNewImage] = useState<File | null>(null)
   const [newSize, setNewSize] = useState('')
   const [newQuantity, setNewQuantity] = useState(0)
+  const [stores, setStores] = useState<Store[]>([])
+  const [selectedStore, setSelectedStore] = useState('')
+  const [exhibitionBarcode, setExhibitionBarcode] = useState('')
+  const { toast } = useToast()
+  const router = useRouter()
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -53,7 +65,8 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
           setProduct({ 
             id: productDoc.id, 
             ...productData,
-            sizes: productData.sizes || {}
+            sizes: productData.sizes || {},
+            exhibition: productData.exhibition || {}
           })
         } else {
           console.error('Product not found')
@@ -65,7 +78,15 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         setLoading(false)
       }
     }
+
+    const fetchStores = async () => {
+      const storesSnapshot = await getDocs(collection(db, 'stores'))
+      const storesList = storesSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }))
+      setStores(storesList)
+    }
+
     fetchProduct()
+    fetchStores()
   }, [params.id, router])
 
   const availableSizes = useMemo(() => {
@@ -86,6 +107,11 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
       .map(([size]) => size)
   }, [product])
 
+  const availableStores = useMemo(() => {
+    if (!product) return []
+    return stores.filter(store => !product.exhibition[store.id])
+  }, [product, stores])
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setProduct(prev => prev ? { ...prev, [name]: value } : null)
@@ -100,22 +126,46 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
     return Math.random().toString(36).substr(2, 9).toUpperCase()
   }
 
-  const handleAddSize = () => {
+  const handleAddSize = async () => {
     if (newSize && newQuantity > 0 && product) {
-      setProduct(prev => {
-        if (!prev) return null
-        const newBarcodes = Array(newQuantity).fill('').map(() => generateBarcode())
-        return {
-          ...prev,
-          sizes: {
-            ...prev.sizes,
-            [newSize]: { quantity: newQuantity, barcodes: newBarcodes }
+      const newBarcodes = Array(newQuantity).fill('').map(() => generateBarcode())
+      const updatedProduct = {
+        ...product,
+        sizes: {
+          ...product.sizes,
+          [newSize]: { quantity: newQuantity, barcodes: newBarcodes }
+        },
+        total: product.total + newQuantity
+      }
+
+      try {
+        // Update Firestore
+        await updateDoc(doc(db, 'products', product.id), updatedProduct)
+
+        // Update local state
+        setProduct(updatedProduct)
+        setNewSize('')
+        setNewQuantity(0)
+
+        toast({
+          title: "Size Added",
+          description: `Size ${newSize} has been added to the inventory.`,
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
           },
-          total: prev.total + newQuantity
-        }
-      })
-      setNewSize('')
-      setNewQuantity(0)
+        })
+      } catch (error) {
+        console.error('Error adding size:', error)
+        toast({
+          title: "Error",
+          description: "Failed to add size. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -164,6 +214,138 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
     }
   }
 
+  const handleAddExhibition = async () => {
+    if (product && selectedStore && exhibitionBarcode) {
+      const size = Object.entries(product.sizes).find(([_, sizeData]) => 
+        sizeData.barcodes.includes(exhibitionBarcode)
+      )?.[0]
+
+      if (size) {
+        const updatedSizes = { ...product.sizes }
+        updatedSizes[size] = {
+          ...updatedSizes[size],
+          quantity: updatedSizes[size].quantity - 1,
+          barcodes: updatedSizes[size].barcodes.filter(b => b !== exhibitionBarcode)
+        }
+
+        const updatedProduct = {
+          ...product,
+          sizes: updatedSizes,
+          total: product.total - 1,
+          exhibition: {
+            ...product.exhibition,
+            [selectedStore]: { size, barcode: exhibitionBarcode }
+          }
+        }
+
+        try {
+          // Update the product in the main products collection
+          await updateDoc(doc(db, 'products', product.id), updatedProduct)
+
+          // Add to the exhibition collection
+          const exhibitionProductData = {
+            id: product.id,
+            brand: product.brand,
+            reference: product.reference,
+            color: product.color,
+            gender: product.gender,
+            imageUrl: product.imageUrl,
+            baseprice: product.baseprice,
+            saleprice: product.saleprice,
+            exhibitionSize: size,
+            exhibitionBarcode: exhibitionBarcode
+          }
+
+          await setDoc(doc(db, 'exhibition', selectedStore, 'products', product.id), exhibitionProductData)
+
+          setProduct(updatedProduct)
+          setSelectedStore('')
+          setExhibitionBarcode('')
+
+          toast({
+            title: "Added to Exhibition",
+            description: `Product added to exhibition in ${stores.find(s => s.id === selectedStore)?.name}.`,
+            duration: 3000,
+            style: {
+              background: "#2196F3",
+              color: "white",
+              fontWeight: "bold",
+            },
+          })
+        } catch (error) {
+          console.error('Error adding to exhibition:', error)
+          toast({
+            title: "Error",
+            description: "Failed to add product to exhibition. Please try again.",
+            duration: 3000,
+            variant: "destructive",
+          })
+        }
+      } else {
+        toast({
+          title: "Invalid Barcode",
+          description: "The entered barcode does not match any product size.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleReturnFromExhibition = async (storeId: string) => {
+    if (product) {
+      const exhibitionItem = product.exhibition[storeId]
+      if (exhibitionItem) {
+        const { size, barcode } = exhibitionItem
+
+        const updatedProduct = {
+          ...product,
+          sizes: {
+            ...product.sizes,
+            [size]: {
+              quantity: (product.sizes[size]?.quantity || 0) + 1,
+              barcodes: [...(product.sizes[size]?.barcodes || []), barcode]
+            }
+          },
+          total: product.total + 1,
+          exhibition: Object.fromEntries(
+            Object.entries(product.exhibition).filter(([key]) => key !== storeId)
+          )
+        }
+
+        try {
+          // Update the product in Firestore
+          await updateDoc(doc(db, 'products', product.id), updatedProduct)
+
+          // Remove from the exhibition collection
+          await deleteDoc(doc(db, 'exhibition', storeId, 'products', product.id))
+
+          // Update local state
+          setProduct(updatedProduct)
+
+          toast({
+            title: "Returned from Exhibition",
+            description: `Product returned from exhibition in ${stores.find(s => s.id === storeId)?.name}.`,
+            duration: 3000,
+            style: {
+              background: "#FF9800",
+              color: "white",
+              fontWeight: "bold",
+            },
+          })
+        } catch (error) {
+          console.error('Error returning from exhibition:', error)
+          toast({
+            title: "Error",
+            description: "Failed to return product from exhibition. Please try again.",
+            duration: 3000,
+            variant: "destructive",
+          })
+        }
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!product) return
@@ -182,9 +364,24 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         imageUrl
       })
 
-      router.push('/inventory')
+      toast({
+        title: "Product Updated",
+        description: "The product has been successfully updated.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (error) {
       console.error('Error updating product:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update product. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     }
   }
 
@@ -197,35 +394,39 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto mt-8">
+    <Card className="w-full max-w-4xl mx-auto mt-8">
       <CardHeader>
         <CardTitle>Update Product</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="brand">Brand</Label>
-            <Input id="brand" name="brand" value={product.brand} onChange={handleInputChange} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="brand">Brand</Label>
+              <Input id="brand" name="brand" value={product.brand} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="reference">Reference</Label>
+              <Input id="reference" name="reference" value={product.reference} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Input id="color" name="color" value={product.color} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="comments">Comments</Label>
+              <Input id="comments" name="comments" value={product.comments} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="gender">Gender</Label>
+              <Input id="gender" name="gender" value={product.gender} readOnly />
+            </div>
           </div>
-          <div>
-            <Label htmlFor="reference">Reference</Label>
-            <Input id="reference" name="reference" value={product.reference} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="color">Color</Label>
-            <Input id="color" name="color" value={product.color} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="comments">Comments</Label>
-            <Input id="comments" name="comments" value={product.comments} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="gender">Gender</Label>
-            <Input id="gender" name="gender" value={product.gender} readOnly />
-          </div>
+          
+          {/* Sizes */}
           <div>
             <Label>Sizes</Label>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {sortedSizes.map((size) => (
                 <div key={size}>
                   <Label htmlFor={size}>{size}</Label>
@@ -275,7 +476,9 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
               ))}
             </div>
           </div>
-          <div className="flex space-x-2">
+          
+          {/* Add new size */}
+          <div className="flex flex-wrap gap-2">
             <Select value={newSize} onValueChange={setNewSize}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select new size" />
@@ -291,6 +494,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
               placeholder="Quantity"
               value={newQuantity}
               onChange={(e) => setNewQuantity(parseInt(e.target.value))}
+              className="w-24"
             />
             <Button type="button" onClick={handleAddSize}>Add Size</Button>
           </div>
@@ -298,32 +502,88 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
             <Label htmlFor="total">Total</Label>
             <Input id="total" name="total" value={product.total} readOnly />
           </div>
+          
+          {/* Exhibition */}
           <div>
-            <Label htmlFor="image">Image</Label>
-            <Input id="image" name="image" type="file" onChange={handleImageChange} />
+            <Label>Exhibition</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Select value={selectedStore} onValueChange={setSelectedStore}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Store" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableStores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder="Barcode"
+                value={exhibitionBarcode}
+                onChange={(e) => setExhibitionBarcode(e.target.value)}
+                className="w-32"
+              />
+              <Button type="button" onClick={handleAddExhibition}>Add to Exh</Button>
+            </div>
+            <div className="mt-2 space-y-2">
+              {Object.entries(product.exhibition).map(([storeId, { size, barcode }]) => {
+                const storeName = stores.find(s => s.id === storeId)?.name || storeId
+                return (
+                  <div key={storeId} className="flex items-center justify-between text-sm bg-gray-100 p-2 rounded">
+                    <span>{storeName}: {size} - Bc: {barcode}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleReturnFromExhibition(storeId)}
+                    >
+                      <RotateCcwIcon className="w-4 h-4 mr-2" />
+                      Return
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-          <div className='flex items-center space-x-4'>
-          <div>
-              <Label htmlFor="baseprice">Base Price</Label>
-              <Input
-                id="baseprice"
-                name="baseprice"
-                type="number"
-                value={product.baseprice}
-                onChange={handleInputChange}
-              />
-            </div>
+          
+          {/* Image and Pricing */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="saleprice">Sale Price</Label>
-              <Input
-                id="saleprice"
-                name="saleprice"
-                type="number"
-                value={product.saleprice}
-                onChange={handleInputChange}
-              />
+              <Label htmlFor="image">Current Image</Label>
+              <div className="relative w-32 h-32 overflow-hidden rounded-md">
+                <Image
+                  src={product.imageUrl}
+                  alt={`${product.brand} ${product.reference}`}
+                  fill
+                  sizes="(max-width: 128px) 100vw, 128px"
+                  className="object-cover"
+                />
+              </div>
+              <Label htmlFor="newImage" className="mt-2">Upload New Image</Label>
+              <Input id="newImage" name="newImage" type="file" onChange={handleImageChange} />
             </div>
+            <div className='space-y-4'>
+              <div>
+                <Label htmlFor="baseprice">Base Price</Label>
+                <Input
+                  id="baseprice"
+                  name="baseprice"
+                  type="number"
+                  value={product.baseprice}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div>
+                <Label htmlFor="saleprice">Sale Price</Label>
+                <Input
+                  id="saleprice"
+                  name="saleprice"
+                  type="number"
+                  value={product.saleprice}
+                  onChange={handleInputChange}
+                />
+              </div>
             </div>
+          </div>
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => router.push('/inventory')}>Cancel</Button>
             <Button type="submit">Update Product</Button>

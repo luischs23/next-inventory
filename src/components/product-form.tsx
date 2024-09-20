@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo,  } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from '../services/firebase/firebase.config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, getDocs } from 'firebase/firestore';
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -36,6 +36,7 @@ interface ProductFormData {
   imageUrl: string
   baseprice: number
   saleprice: number
+  exhibition: { [store: string]: string }
 }
 
 export const ProductFormComponent: React.FC = () => {
@@ -51,8 +52,20 @@ export const ProductFormComponent: React.FC = () => {
     image: null,
     imageUrl: '',
     baseprice: 0,
-    saleprice: 0
+    saleprice: 0,
+    exhibition: {}
   })
+
+  const [stores, setStores] = useState<string[]>([])
+
+  useEffect(() => {
+    const fetchStores = async () => {
+      const storesSnapshot = await getDocs(collection(db, 'stores'))
+      const storesList = storesSnapshot.docs.map(doc => doc.id)
+      setStores(storesList)
+    }
+    fetchStores()
+  }, [])
 
   const total = useMemo(() => {
     return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
@@ -98,7 +111,7 @@ export const ProductFormComponent: React.FC = () => {
         imageUrl = await getDownloadURL(imageRef);
 
         // Update the imageUrl in the formData state
-        setFormData((prev) => ({ ...prev, imageUrl }));
+        setFormData((prev) => ({   ...prev, imageUrl }));
       }
 
       // Guardar los datos del producto en Firestore
@@ -112,7 +125,8 @@ export const ProductFormComponent: React.FC = () => {
         comments: formData.comments,
         imageUrl, // Guarda la URL de la imagen subida
         baseprice: formData.baseprice,
-        saleprice: formData.saleprice
+        saleprice: formData.saleprice,
+        exhibition: formData.exhibition
       });
 
       // Limpiar el formulario
@@ -127,9 +141,10 @@ export const ProductFormComponent: React.FC = () => {
         image: null,
         imageUrl: '',
         baseprice: 0,
-        saleprice: 0
+        saleprice: 0,
+        exhibition: {}
       });
-
+      router.push('/inventory');
     } catch (error) {
       console.error('Error al guardar el producto:', error);
     }
@@ -139,99 +154,99 @@ export const ProductFormComponent: React.FC = () => {
     ? ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
     : ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
-  return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>Add New Product</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="brand">Brand</Label>
-            <Select name="brand" onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select brand" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Nike">Nike</SelectItem>
-                <SelectItem value="Adidas">Adidas</SelectItem>
-                <SelectItem value="Puma">Puma</SelectItem>
-                <SelectItem value="Reebok">Reebok</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="reference">Reference</Label>
-            <Input id="reference" name="reference" value={formData.reference} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="color">Color</Label>
-            <Input id="color" name="color" value={formData.color} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="commets">Comments</Label>
-            <Input id="comments" name="comments" value={formData.comments} onChange={handleInputChange} />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="gender">Gender</Label>
-            <Switch
-              id="gender"
-              checked={formData.gender === 'Hombre'}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, gender: checked ? 'Hombre' : 'Dama' }))}
-            />
-            <span>{formData.gender}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            {sizeInputs.map((size) => (
-              <div key={size}>
-                <Label htmlFor={size}>{size}</Label>
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>Add New Product</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="brand">Brand</Label>
+              <Select name="brand" onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Nike">Nike</SelectItem>
+                  <SelectItem value="Adidas">Adidas</SelectItem>
+                  <SelectItem value="Puma">Puma</SelectItem>
+                  <SelectItem value="Reebok">Reebok</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="reference">Reference</Label>
+              <Input id="reference" name="reference" value={formData.reference} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Input id="color" name="color" value={formData.color} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="comments">Comments</Label>
+              <Input id="comments" name="comments" value={formData.comments} onChange={handleInputChange} />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="gender">Gender</Label>
+              <Switch
+                id="gender"
+                checked={formData.gender === 'Hombre'}
+                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, gender: checked ? 'Hombre' : 'Dama' }))}
+              />
+              <span>{formData.gender}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              {sizeInputs.map((size) => (
+                <div key={size}>
+                  <Label htmlFor={size}>{size}</Label>
+                  <Input
+                    id={size}
+                    type="number"
+                    value={formData.sizes[size]?.quantity || ''}
+                    onChange={(e) => handleSizeChange(size, e.target.value)}
+                  />
+                </div>
+              ))}
+              <div>
+                <Label htmlFor="total">Total</Label>
                 <Input
-                  id={size}
+                  id="total"
                   type="number"
-                  value={formData.sizes[size]?.quantity || ''}
-                  onChange={(e) => handleSizeChange(size, e.target.value)}
+                  value={total}
+                  readOnly
                 />
               </div>
-            ))}
-            <div>
-              <Label htmlFor="total">Total</Label>
-              <Input
-                id="total"
-                type="number"
-                value={total}
-                readOnly
-              />
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="image">Image</Label>
-            <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} />
-          </div>
-          <div className='flex items-center space-x-4'>
-          <div>
-              <Label htmlFor="baseprice">Base Price</Label>
-              <Input
-                id="baseprice"
-                name="baseprice"
-                type="number"
-                value={formData.baseprice}
-                onChange={handleInputChange}
-              />
             </div>
             <div>
-              <Label htmlFor="saleprice">Sale Price</Label>
-              <Input
-                id="saleprice"
-                name="saleprice"
-                type="number"
-                value={formData.saleprice}
-                onChange={handleInputChange}
-              />
+              <Label htmlFor="image">Image</Label>
+              <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} />
             </div>
+            <div className='flex items-center space-x-4'>
+              <div>
+                <Label htmlFor="baseprice">Base Price</Label>
+                <Input
+                  id="baseprice"
+                  name="baseprice"
+                  type="number"
+                  value={formData.baseprice}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div>
+                <Label htmlFor="saleprice">Sale Price</Label>
+                <Input
+                  id="saleprice"
+                  name="saleprice"
+                  type="number"
+                  value={formData.saleprice}
+                  onChange={handleInputChange}
+                />
+              </div>
             </div>
-          <Button type="submit" onClick={() => router.push('/inventory')}>Save Product</Button>
-        </form>
-      </CardContent>
-    </Card>
-  )
-}
+            <Button type="submit">Save Product</Button>
+          </form>
+        </CardContent>
+      </Card>
+    )
+  }
