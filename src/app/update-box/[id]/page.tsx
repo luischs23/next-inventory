@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
+import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, getDocs } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -35,7 +35,7 @@ interface Warehouse {
   name: string
 }
 
-export default function FormBoxPage() {
+export default function UpdateBoxPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [formData, setFormData] = useState<BoxFormData>({
@@ -54,7 +54,14 @@ export default function FormBoxPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
 
   useEffect(() => {
-    const fetchWarehouses = async () => {
+    const fetchBoxAndWarehouses = async () => {
+      // Fetch box data
+      const boxDoc = await getDoc(doc(db, 'boxes', params.id))
+      if (boxDoc.exists()) {
+        setFormData({ ...boxDoc.data() as BoxFormData, image: null })
+      }
+
+      // Fetch warehouses
       const warehousesCollection = collection(db, 'warehouses')
       const warehousesSnapshot = await getDocs(warehousesCollection)
       const warehousesList = warehousesSnapshot.docs.map(doc => ({
@@ -64,8 +71,8 @@ export default function FormBoxPage() {
       setWarehouses(warehousesList)
     }
 
-    fetchWarehouses()
-  }, [])
+    fetchBoxAndWarehouses()
+  }, [params.id])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -80,7 +87,7 @@ export default function FormBoxPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      let imageUrl = ''
+      let imageUrl = formData.imageUrl
 
       if (formData.image) {
         const imageRef = ref(storage, `boxes/${formData.image.name}`)
@@ -101,11 +108,11 @@ export default function FormBoxPage() {
         warehouseId: formData.warehouseId,
       }
 
-      await addDoc(collection(db, 'boxes'), boxData)
+      await updateDoc(doc(db, 'boxes', params.id), boxData)
 
       toast({
         title: "Success",
-        description: "Box saved successfully",
+        description: "Box updated successfully",
         duration: 3000,
           style: {
             background: "#4CAF50",
@@ -114,12 +121,12 @@ export default function FormBoxPage() {
           },
       })
 
-      router.push('/warehouses')
+      router.push(`/warehouse-inventory/${formData.warehouseId}`)
     } catch (error) {
-      console.error('Error saving the box:', error)
+      console.error('Error updating the box:', error)
       toast({
         title: "Error",
-        description: "Failed to save the box. Please try again.",
+        description: "Failed to update the box. Please try again.",
         variant: "destructive",
       })
     }
@@ -127,16 +134,16 @@ export default function FormBoxPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-4">Add New Box</h1>
+      <h1 className="text-2xl font-bold mb-4">Update Box</h1>
       <Card className="w-full max-w-2xl mx-auto">
         <CardHeader>
-          <CardTitle>Add New Box</CardTitle>
+          <CardTitle>Update Box Details</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="brand">Brand</Label>
-              <Select name="brand" onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
+              <Select name="brand" value={formData.brand} onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select brand" />
                 </SelectTrigger>
@@ -222,7 +229,7 @@ export default function FormBoxPage() {
                 </SelectContent>
               </Select>
             </div>
-            <Button type="submit">Save Box</Button>
+            <Button type="submit">Update Box</Button>
           </form>
         </CardContent>
       </Card>

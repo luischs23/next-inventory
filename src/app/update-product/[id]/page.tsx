@@ -371,7 +371,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         style: {
           background: "#4CAF50",
           color: "white",
-          fontWeight: "bold",
+          fontWeight: "bold", 
         },
       })
     } catch (error) {
