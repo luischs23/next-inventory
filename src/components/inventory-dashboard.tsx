@@ -6,17 +6,21 @@ import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
-import { PlusIcon, Pencil, Trash2 } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
+import { PlusIcon, Pencil, Trash2, MoreHorizontal, FileDown } from 'lucide-react'
 import { db, storage } from '../services/firebase/firebase.config'
 import { collection, getDocs, deleteDoc, doc} from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import Image from 'next/image'
 import { useProducts } from 'app/app/context/ProductContext'
+import { FieldValue } from 'firebase/firestore'
+import * as XLSX from 'xlsx'
+import { saveAs } from 'file-saver'
 
 interface SizeInput {
   quantity: number
   barcodes: string[]
-}
+} 
 
 interface Product {
   id: string
@@ -36,7 +40,7 @@ interface Product {
 
 export function InventoryDashboardComponent() {
   const router = useRouter()
-  const { products, addNewProduct } = useProducts()
+  const { products, addNewProduct, removeProduct } = useProducts()
   const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [loading, setLoading] = useState(true)
@@ -83,6 +87,54 @@ export function InventoryDashboardComponent() {
     fetchProducts()
   }, [addNewProduct])
 
+  const exportToExcel = () => {
+    const workbook = XLSX.utils.book_new()
+    
+    const worksheetData = products.map(product => ({
+      'Brand': product.brand,
+      'Reference': product.reference,
+      'Color': product.color,
+      'Gender': product.gender,
+      'Sizes': JSON.stringify(product.sizes),
+      'Total Quantity': product.total,
+      'Comments': product.comments,
+      'Base Price': product.baseprice,
+      'Sale Price': product.saleprice,
+      'Exhibition': JSON.stringify(product.exhibition),
+      'Created At': product.createdAt instanceof FieldValue 
+        ? new Date().toISOString()
+        : new Date(product.createdAt).toISOString(),
+      'Image URL': product.imageUrl
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData)
+
+    // Set column widths
+    worksheet['!cols'] = [
+      { width: 15 }, // Brand
+      { width: 15 }, // Reference
+      { width: 15 }, // Color
+      { width: 10 }, // Gender
+      { width: 30 }, // Sizes
+      { width: 15 }, // Total Quantity
+      { width: 20 }, // Comments
+      { width: 15 }, // Base Price
+      { width: 15 }, // Sale Price
+      { width: 30 }, // Exhibition
+      { width: 20 }, // Created At
+      { width: 30 }  // Image URL
+    ]
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory')
+
+    // Generate Excel file
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    
+    // Save the file
+    saveAs(data, 'inventory.xlsx')
+  }
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
@@ -101,17 +153,9 @@ export function InventoryDashboardComponent() {
       await deleteDoc(doc(db, 'products', id))
       const imageRef = ref(storage, imageUrl)
       await deleteObject(imageRef)
-      // Instead of setProducts, we'll need to update the ProductContext
-      // This might require adding a removeProduct function to the context
-      // For now, we'll just re-fetch the products
-      const productsCollection = collection(db, 'products')
-      const productsSnapshot = await getDocs(productsCollection)
-      const productsList = productsSnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toMillis() || 0
-      } as Product))
-      productsList.forEach(product => addNewProduct(product))
+      
+      // Use the removeProduct function from the context to update the state
+      removeProduct(id)
     } catch (error) {
       console.error('Error deleting product:', error)
     }
@@ -145,10 +189,11 @@ export function InventoryDashboardComponent() {
         return a.brand.localeCompare(b.brand)
       }
       // Sort by entry order (newest first)
-      return b.createdAt - a.createdAt
+      const aCreatedAt = a.createdAt instanceof FieldValue ? Date.now() : a.createdAt
+      const bCreatedAt = b.createdAt instanceof FieldValue ? Date.now() : b.createdAt
+      return (bCreatedAt as number) - (aCreatedAt as number)
     })
   }, [filteredProducts, sortOrder])
-
   const summaryInfo = useMemo(() => {
     const totalItems = filteredProducts.length
     const totalPares = filteredProducts.reduce((sum, product) => sum + product.total, 0)
@@ -224,11 +269,16 @@ export function InventoryDashboardComponent() {
       </Card>
       <div className="w-full md:w-3/4">
         <div className="flex justify-between items-center mb-4 space-x-4">
-          <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
-          <Button onClick={() => router.push('/form-product')}>
-            <PlusIcon className="mr-2 h-4 w-4" /> Add
-          </Button> 
+        <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
+          <div className="flex space-x-2">
+            <Button onClick={() => router.push('/form-product')}>
+              <PlusIcon className="mr-2 h-4 w-4" /> Add
+            </Button>
+          </div>
         </div>
+        <Button onClick={exportToExcel}>
+          <FileDown className="mr-2 h-4 w-4" /> Export Excel
+        </Button>
         <div className="mb-4 p-4 bg-gray-100 rounded-lg">
           <div className="grid grid-cols-2 gap-2">
             <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
@@ -243,50 +293,62 @@ export function InventoryDashboardComponent() {
         {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
               <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
-              <Card className="flex-grow">
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="relative w-16 h-16 flex-shrink-0">
-                      <Image
-                        src={product.imageUrl}
-                        alt={product.reference}
-                        fill
-                        sizes="(max-width: 64px) 100vw, 64px"
-                        className="object-cover rounded-md"
-                      />
-                    </div>
-                    <div className="flex-grow">
-                      <h3 className="font-semibold">{product.brand}</h3>
-                      <p className="text-sm text-gray-500">{product.reference}</p>
-                      <p className="text-sm">{product.color} - {product.gender}</p>
-                    </div>
+              <Card className="flex-grow relative">
+              <CardContent className="p-4">
+                <div className="absolute top-2 right-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleUpdate(product.id)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        <span>Update</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleDelete(product.id, product.imageUrl)}>
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        <span>Delete</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <div className="relative w-16 h-16 flex-shrink-0">
+                    <Image
+                      src={product.imageUrl}
+                      alt={product.reference}
+                      fill
+                      sizes="(max-width: 64px) 100vw, 64px"
+                      className="object-cover rounded-md"
+                    />
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <div className='flex space-x-9'>
-                      <span className="font-medium">Total:</span> {product.total}
-                      <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
-                    </div>
+                  <div className="flex-grow">
+                    <h3 className="font-semibold">{product.brand}</h3>
+                    <p className="text-sm text-gray-500">{product.reference}</p>
+                    <p className="text-sm">{product.color} - {product.gender}</p>
                   </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-sm">Sizes:</span>
-                    <div className="grid grid-cols-3 gap-1 mt-1">
-                      {sortSizes(product.sizes).map(([size, { quantity }]) => (
-                        <div key={size} className="text-xs bg-gray-100 p-1 rounded">
-                          {size}: {quantity}
-                        </div>
-                      ))}
-                    </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                  <div className='flex space-x-9'>
+                    <span className="font-medium">Total:</span> {product.total}
+                    <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
                   </div>
-                  <div className="mt-4 flex justify-end space-x-2">
-                    <Button size="sm" variant="outline" onClick={() => handleUpdate(product.id)}>
-                      <Pencil className="h-4 w-4 mr-1" /> Edit
-                    </Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id, product.imageUrl)}>
-                      <Trash2 className="h-4 w-4 mr-1" /> Delete
-                    </Button>
+                </div>
+                <div className="mt-2">
+                  <span className="font-medium text-sm">Sizes:</span>
+                  <div className="grid grid-cols-3 gap-1 mt-1">
+                    {sortSizes(product.sizes).map(([size, { quantity }]) => (
+                      <div key={size} className="text-xs bg-gray-100 p-1 rounded">
+                        {size}: {quantity}
+                      </div>
+                    ))}
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </CardContent>
+            </Card>
             </div>
           ))}
         </div>

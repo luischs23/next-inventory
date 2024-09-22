@@ -60,6 +60,7 @@ export const ProductFormComponent: React.FC = () => {
     exhibition: {}
   })
 
+  const [imageError, setImageError] = useState('')
   const [stores, setStores] = useState<string[]>([])
 
   useEffect(() => {
@@ -111,6 +112,7 @@ export const ProductFormComponent: React.FC = () => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     setFormData((prev) => ({ ...prev, image: file }))
+    setImageError('')  // Clear any previous error when a new image is selected
   }
 
   const generateBarcode = () => {
@@ -119,14 +121,14 @@ export const ProductFormComponent: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.image) {
+      setImageError('Please upload an image for the product.')
+      return
+    }
     try {
-      let imageUrl = ''
-
-      if (formData.image) {
-        const imageRef = ref(storage, `products/${formData.image.name}`)
-        await uploadBytes(imageRef, formData.image)
-        imageUrl = await getDownloadURL(imageRef)
-      }
+      const imageRef = ref(storage, `products/${formData.image.name}`)
+      await uploadBytes(imageRef, formData.image)
+      const imageUrl = await getDownloadURL(imageRef)
 
       const productData = {
         brand: formData.brand,
@@ -258,7 +260,15 @@ export const ProductFormComponent: React.FC = () => {
           </div>
           <div>
             <Label htmlFor="image">Image</Label>
-            <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} />
+            <Input 
+              id="image" 
+              name="image" 
+              type="file" 
+              accept="image/*" 
+              onChange={handleImageChange} 
+              required
+              />
+              {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
           </div>
           <div className='flex items-center space-x-4'>
             <div>

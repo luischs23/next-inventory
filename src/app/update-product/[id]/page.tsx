@@ -56,15 +56,13 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
   const { toast } = useToast()
   const router = useRouter()
 
-  const formatNumber = (value: number | string) => {
-    // Remove any non-digit characters
-    const number = value.toString().replace(/[^\d]/g, '')
-    // Format with thousands separators
+  const formatNumber = (value: string): string => {
+    const number = value.replace(/[^\d]/g, '')
     return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   }
 
   const parseFormattedNumber = (value: string): number => {
-    return parseInt(value.replace(/,/g, ''), 10)
+    return parseInt(value.replace(/\./g, ''), 10)
   }
 
   useEffect(() => {
@@ -78,12 +76,11 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
             ...productData,
             sizes: productData.sizes || {},
             exhibition: productData.exhibition || {},
-            baseprice: formatNumber(productData.baseprice),
-            saleprice: formatNumber(productData.saleprice)
+            baseprice: formatNumber(productData.baseprice.toString()),
+            saleprice: formatNumber(productData.saleprice.toString())
           })
         } else {
           console.error('Product not found')
-          router.push('/inventory')
         }
       } catch (error) {
         console.error('Error fetching product:', error)
@@ -164,6 +161,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         setProduct(updatedProduct)
         setNewSize('')
         setNewQuantity(0) 
+        console.log("hola")
 
         toast({
           title: "Size Added",
@@ -315,7 +313,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
       const exhibitionItem = product.exhibition[storeId]
       if (exhibitionItem) {
         const { size, barcode } = exhibitionItem
-
+  
         const updatedProduct = {
           ...product,
           sizes: {
@@ -330,27 +328,17 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
             Object.entries(product.exhibition).filter(([key]) => key !== storeId)
           )
         }
-
+  
         try {
           // Update the product in Firestore
           await updateDoc(doc(db, 'products', product.id), updatedProduct)
-
+  
           // Remove from the exhibition collection
           await deleteDoc(doc(db, 'exhibition', storeId, 'products', product.id))
-
+  
           // Update local state
           setProduct(updatedProduct)
-
-          toast({
-            title: "Returned from Exhibition",
-            description: `Product returned from exhibition in ${stores.find(s => s.id === storeId)?.name}.`,
-            duration: 3000,
-            style: {
-              background: "#FF9800",
-              color: "white",
-              fontWeight: "bold",
-            },
-          })
+  
         } catch (error) {
           console.error('Error returning from exhibition:', error)
           toast({
@@ -395,20 +383,22 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
 
       setProduct({
         ...updatedProduct,
-        baseprice: formatNumber(updatedProduct.baseprice),
-        saleprice: formatNumber(updatedProduct.saleprice)
+        baseprice: formatNumber(updatedProduct.baseprice.toString()),
+        saleprice: formatNumber(updatedProduct.saleprice.toString())
       })
 
-      toast({
-        title: "Product Updated",
-        description: "The product has been successfully updated.",
-        duration: 3000,
-        style: {
-          background: "#4CAF50",
-          color: "white",
-          fontWeight: "bold", 
-        },
-      })
+      if (e.type === 'submit') {
+        toast({
+          title: "Product Updated",
+          description: "The product has been successfully updated.",
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold", 
+          },    
+        })
+      }
     } catch (error) {
       console.error('Error updating product:', error)
       toast({
@@ -621,7 +611,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
           </div>
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => router.push('/inventory')}>Cancel</Button>
-            <Button type="submit">Update Product</Button>
+            <Button type="submit" onClick={() => router.push('/inventory')}>Update Product</Button>
           </div>
         </form>
       </CardContent>
