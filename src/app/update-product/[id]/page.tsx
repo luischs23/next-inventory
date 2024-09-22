@@ -36,8 +36,8 @@ interface Product {
   sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
-  baseprice: number
-  saleprice: number
+  baseprice: string
+  saleprice: string
   exhibition: { [storeId: string]: { size: string, barcode: string } }
 }
 
@@ -56,6 +56,17 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
   const { toast } = useToast()
   const router = useRouter()
 
+  const formatNumber = (value: number | string) => {
+    // Remove any non-digit characters
+    const number = value.toString().replace(/[^\d]/g, '')
+    // Format with thousands separators
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  }
+
+  const parseFormattedNumber = (value: string): number => {
+    return parseInt(value.replace(/,/g, ''), 10)
+  }
+
   useEffect(() => {
     const fetchProduct = async () => {
       try {
@@ -66,7 +77,9 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
             id: productDoc.id, 
             ...productData,
             sizes: productData.sizes || {},
-            exhibition: productData.exhibition || {}
+            exhibition: productData.exhibition || {},
+            baseprice: formatNumber(productData.baseprice),
+            saleprice: formatNumber(productData.saleprice)
           })
         } else {
           console.error('Product not found')
@@ -114,7 +127,12 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setProduct(prev => prev ? { ...prev, [name]: value } : null)
+    if (name === 'baseprice' || name === 'saleprice') {
+      const formattedValue = formatNumber(value)
+      setProduct(prev => prev ? { ...prev, [name]: formattedValue } : null)
+    } else {
+      setProduct(prev => prev ? { ...prev, [name]: value } : null)
+    }
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,7 +163,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         // Update local state
         setProduct(updatedProduct)
         setNewSize('')
-        setNewQuantity(0)
+        setNewQuantity(0) 
 
         toast({
           title: "Size Added",
@@ -187,11 +205,11 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         return {
           ...prev,
           sizes: updatedSizes,
-          total: prev.total - 1
+          total: Object.values(updatedSizes).reduce((sum, size) => sum + size.quantity, 0)
         }
       })
     }
-  } 
+  }
 
   const handleAddBarcode = (size: string) => {
     if (product) {
@@ -359,9 +377,26 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
         imageUrl = await getDownloadURL(imageRef)
       }
 
-      await updateDoc(doc(db, 'products', product.id), {
+      // Filter out sizes with 0 quantity
+      const updatedSizes = Object.fromEntries(
+        Object.entries(product.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
+      )
+
+      const updatedProduct = {
         ...product,
-        imageUrl
+        sizes: updatedSizes,
+        total: Object.values(updatedSizes).reduce((sum, size) => sum + size.quantity, 0),
+        imageUrl,
+        baseprice: parseFormattedNumber(product.baseprice),
+        saleprice: parseFormattedNumber(product.saleprice)
+      }
+
+      await updateDoc(doc(db, 'products', product.id), updatedProduct)
+
+      setProduct({
+        ...updatedProduct,
+        baseprice: formatNumber(updatedProduct.baseprice),
+        saleprice: formatNumber(updatedProduct.saleprice)
       })
 
       toast({
@@ -567,7 +602,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
                 <Input
                   id="baseprice"
                   name="baseprice"
-                  type="number"
+                  type="text"
                   value={product.baseprice}
                   onChange={handleInputChange}
                 />
@@ -577,7 +612,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
                 <Input
                   id="saleprice"
                   name="saleprice"
-                  type="number"
+                  type="text"
                   value={product.saleprice}
                   onChange={handleInputChange}
                 />

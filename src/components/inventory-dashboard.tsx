@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { PlusIcon, Pencil, Trash2 } from 'lucide-react'
 import { db, storage } from '../services/firebase/firebase.config'
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
+import { collection, getDocs, deleteDoc, doc} from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import Image from 'next/image'
 
@@ -28,12 +28,14 @@ interface Product {
   total: number
   baseprice: number
   saleprice: number
+  createdAt: number 
 }
 
 export function InventoryDashboardComponent() {
   const router = useRouter()
   const [products, setProducts] = useState<Product[]>([])
   const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
+  const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -41,7 +43,11 @@ export function InventoryDashboardComponent() {
       try {
         const productsCollection = collection(db, 'products')
         const productsSnapshot = await getDocs(productsCollection)
-        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))
+        const productsList = productsSnapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toMillis() || 0
+        } as Product))
         setProducts(productsList)
       } catch (error) {
         console.error('Error fetching products:', error)
@@ -95,6 +101,27 @@ export function InventoryDashboardComponent() {
       return sizeA.localeCompare(sizeB)
     })
   }
+  const formatNumber = (value: number) => {
+    return value.toLocaleString('es-ES')
+  }
+
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      if (sortOrder === 'alphabetical') {
+        return a.brand.localeCompare(b.brand)
+      }
+      // Sort by entry order (newest first)
+      return b.createdAt - a.createdAt
+    })
+  }, [filteredProducts, sortOrder])
+
+  const summaryInfo = useMemo(() => {
+    const totalItems = filteredProducts.length
+    const totalPares = filteredProducts.reduce((sum, product) => sum + product.total, 0)
+    const totalBase = filteredProducts.reduce((sum, product) => sum + product.baseprice * product.total, 0)
+    const totalSale = filteredProducts.reduce((sum, product) => sum + product.saleprice * product.total, 0)
+    return { totalItems, totalPares, totalBase, totalSale }
+  }, [filteredProducts])
 
   if (loading) {
     return <div>Loading...</div>
@@ -133,7 +160,7 @@ export function InventoryDashboardComponent() {
               value={filters.color}
               onChange={(e) => handleFilterChange('color', e.target.value)}
             />
-          </div>|
+          </div>
           <div>
             <label htmlFor="gender" className="text-sm font-medium">Gender</label>
             <Select onValueChange={(value) => handleFilterChange('gender', value)}>
@@ -147,61 +174,86 @@ export function InventoryDashboardComponent() {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label htmlFor="sortOrder" className="text-sm font-medium">Sort Order</label>
+            <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+              <SelectTrigger id="sortOrder">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entry">Entry Order</SelectItem>
+                <SelectItem value="alphabetical">Alphabetical</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
       <div className="w-full md:w-3/4">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 space-x-4">
           <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
           <Button onClick={() => router.push('/form-product')}>
-            <PlusIcon className="mr-2 h-4 w-4" /> Add New Product
+            <PlusIcon className="mr-2 h-4 w-4" /> Add
           </Button> 
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProducts.map((product) => (
-            <Card key={product.id} className="flex flex-col">
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-4">
-                  <div className="relative w-16 h-16 flex-shrink-0">
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.reference}
-                      fill
-                      sizes="(max-width: 64px) 100vw, 64px"
-                      className="object-cover rounded-md"
-                    />
+        <div className="mb-4 p-4 bg-gray-100 rounded-lg">
+          <div className="grid grid-cols-2 gap-2">
+            <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
+            <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
+            <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
+          </div>
+        </div>
+        <div className="space-y-4">
+        {sortedProducts.map((product, index) => (
+            <div key={product.id} className="flex items-start">
+              <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
+              <Card className="flex-grow">
+                <CardContent className="p-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="relative w-16 h-16 flex-shrink-0">
+                      <Image
+                        src={product.imageUrl}
+                        alt={product.reference}
+                        fill
+                        sizes="(max-width: 64px) 100vw, 64px"
+                        className="object-cover rounded-md"
+                      />
+                    </div>
+                    <div className="flex-grow">
+                      <h3 className="font-semibold">{product.brand}</h3>
+                      <p className="text-sm text-gray-500">{product.reference}</p>
+                      <p className="text-sm">{product.color} - {product.gender}</p>
+                    </div>
                   </div>
-                  <div className="flex-grow">
-                    <h3 className="font-semibold">{product.brand}</h3>
-                    <p className="text-sm text-gray-500">{product.reference}</p>
-                    <p className="text-sm">{product.color} - {product.gender}</p>
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div className='flex space-x-9'>
+                      <span className="font-medium">Total:</span> {product.total}
+                      <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
+                    </div>
                   </div>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                  <div className='flex space-x-9'>
-                    <span className="font-medium">Total:</span> {product.total}
-                    <span className="font-medium">Sale:</span> ${product.saleprice}
+                  <div className="mt-2">
+                    <span className="font-medium text-sm">Sizes:</span>
+                    <div className="grid grid-cols-3 gap-1 mt-1">
+                      {sortSizes(product.sizes).map(([size, { quantity }]) => (
+                        <div key={size} className="text-xs bg-gray-100 p-1 rounded">
+                          {size}: {quantity}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="mt-2">
-                  <span className="font-medium text-sm">Sizes:</span>
-                  <div className="grid grid-cols-3 gap-1 mt-1">
-                    {sortSizes(product.sizes).map(([size, { quantity }]) => (
-                      <div key={size} className="text-xs bg-gray-100 p-1 rounded">
-                        {size}: {quantity}
-                      </div>
-                    ))}
+                  <div className="mt-4 flex justify-end space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => handleUpdate(product.id)}>
+                      <Pencil className="h-4 w-4 mr-1" /> Edit
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id, product.imageUrl)}>
+                      <Trash2 className="h-4 w-4 mr-1" /> Delete
+                    </Button>
                   </div>
-                </div>
-                <div className="mt-4 flex justify-end space-x-2">
-                  <Button size="sm" variant="outline" onClick={() => handleUpdate(product.id)}>
-                    <Pencil className="h-4 w-4 mr-1" /> Edit
-                  </Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(product.id, product.imageUrl)}>
-                    <Trash2 className="h-4 w-4 mr-1" /> Delete
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           ))}
         </div>
       </div>
