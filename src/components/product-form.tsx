@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from '../services/firebase/firebase.config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { addDoc, collection, getDocs } from 'firebase/firestore';
+import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
 import { Label } from "../components/ui/label"
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Switch } from "../components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { useToast } from "app/components/ui/use-toast"
+import { useProducts } from 'app/app/context/ProductContext'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -43,6 +44,7 @@ interface ProductFormData {
 export const ProductFormComponent: React.FC = () => {
   const router = useRouter()
   const { toast } = useToast()
+  const { addNewProduct } = useProducts()
   const [formData, setFormData] = useState<ProductFormData>({
     brand: 'Nike',
     reference: '',
@@ -140,9 +142,13 @@ export const ProductFormComponent: React.FC = () => {
         baseprice: parseInt(formData.baseprice.replace(/\./g, '')),
         saleprice: parseInt(formData.saleprice.replace(/\./g, '')),
         exhibition: formData.exhibition,
+        createdAt: serverTimestamp(),
       }
 
-      await addDoc(collection(db, 'products'), productData)
+      const docRef = await addDoc(collection(db, 'products'), productData)
+
+      // Add the new product to the local state
+      addNewProduct({ id: docRef.id, ...productData })
 
       setFormData({
         brand: 'Nike',
@@ -172,7 +178,7 @@ export const ProductFormComponent: React.FC = () => {
 
       router.push('/inventory')
     } catch (error) {
-      console.error('Error al guardar el producto:', error)
+      console.error('Error adding product:', error)
       toast({
         title: "Error",
         description: "Failed to add product. Please try again.",

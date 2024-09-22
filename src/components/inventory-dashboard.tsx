@@ -11,6 +11,7 @@ import { db, storage } from '../services/firebase/firebase.config'
 import { collection, getDocs, deleteDoc, doc} from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import Image from 'next/image'
+import { useProducts } from 'app/app/context/ProductContext'
 
 interface SizeInput {
   quantity: number
@@ -29,11 +30,13 @@ interface Product {
   baseprice: number
   saleprice: number
   createdAt: number 
+  comments: string 
+  exhibition: { [store: string]: string } 
 }
 
 export function InventoryDashboardComponent() {
   const router = useRouter()
-  const [products, setProducts] = useState<Product[]>([])
+  const { products, addNewProduct } = useProducts()
   const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [loading, setLoading] = useState(true)
@@ -43,21 +46,42 @@ export function InventoryDashboardComponent() {
       try {
         const productsCollection = collection(db, 'products')
         const productsSnapshot = await getDocs(productsCollection)
-        const productsList = productsSnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toMillis() || 0
-        } as Product))
-        setProducts(productsList)
+        const productsList = productsSnapshot.docs.map(doc => {
+          const data = doc.data()
+          let createdAtTimestamp = 0
+  
+          // Handle different possible formats of createdAt
+          if (data.createdAt) {
+            if (typeof data.createdAt.toMillis === 'function') {
+              // It's a Firestore Timestamp
+              createdAtTimestamp = data.createdAt.toMillis()
+            } else if (data.createdAt.seconds) {
+              // It's an object with seconds
+              createdAtTimestamp = data.createdAt.seconds * 1000
+            } else if (typeof data.createdAt === 'number') {
+              // It's already a number (milliseconds or seconds)
+              createdAtTimestamp = data.createdAt > 100000000000 ? data.createdAt : data.createdAt * 1000
+            }
+          }
+  
+          return { 
+            id: doc.id, 
+            ...data,
+            createdAt: createdAtTimestamp,
+            comments: data.comments || '',
+            exhibition: data.exhibition || {}
+          } as Product
+        })
+        productsList.forEach(product => addNewProduct(product))
       } catch (error) {
         console.error('Error fetching products:', error)
       } finally {
         setLoading(false)
       }
     }
-
+  
     fetchProducts()
-  }, [])
+  }, [addNewProduct])
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -77,7 +101,17 @@ export function InventoryDashboardComponent() {
       await deleteDoc(doc(db, 'products', id))
       const imageRef = ref(storage, imageUrl)
       await deleteObject(imageRef)
-      setProducts((prev) => prev.filter((product) => product.id !== id))
+      // Instead of setProducts, we'll need to update the ProductContext
+      // This might require adding a removeProduct function to the context
+      // For now, we'll just re-fetch the products
+      const productsCollection = collection(db, 'products')
+      const productsSnapshot = await getDocs(productsCollection)
+      const productsList = productsSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toMillis() || 0
+      } as Product))
+      productsList.forEach(product => addNewProduct(product))
     } catch (error) {
       console.error('Error deleting product:', error)
     }

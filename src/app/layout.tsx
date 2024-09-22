@@ -5,6 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 import Navbar from 'app/components/Navbar'
 import { ThemeProvider } from 'app/components/ThemeProvider'
 import { Toaster } from "app/components/ui/toaster"
+import { ProductProvider } from 'app/app/context/ProductContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -28,11 +29,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <div className="flex flex-col md:flex-row min-h-screen">
-              <Navbar />
-              <main className="flex-1 p-4 pb-16 md:ml-16">{children}</main>
-            </div>
-            <Toaster />
+            <ProductProvider>
+              <div className="flex flex-col md:flex-row min-h-screen">
+                <Navbar />
+                <main className="flex-1 p-4 pb-16 md:ml-16">{children}</main>
+              </div>
+              <Toaster />
+            </ProductProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
