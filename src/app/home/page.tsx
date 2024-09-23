@@ -75,9 +75,15 @@ export default function HomePage() {
               <CardHeader>
                 <CardTitle>{store.name}</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex flex-col gap-2">
                 <Link href={`/store/${store.id}/invoices`}>
                   <Button className="w-full">View Invoices</Button>
+                </Link>
+                <Link href={`/inventory-exb/${store.id}`}>
+                  <Button className="w-full" variant="outline">Exb Inventory</Button>
+                </Link>
+                <Link href={`/unassigned-exb/${store.id}`}>
+                  <Button className="w-full" variant="outline">Unassigned Exhibition</Button>
                 </Link>
               </CardContent>
             </Card>

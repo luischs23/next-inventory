@@ -266,8 +266,8 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
             color: product.color,
             gender: product.gender,
             imageUrl: product.imageUrl,
-            baseprice: product.baseprice,
-            saleprice: product.saleprice,
+            baseprice: parseFormattedNumber(product.baseprice),
+            saleprice: parseFormattedNumber(product.saleprice),
             exhibitionSize: size,
             exhibitionBarcode: exhibitionBarcode
           }
