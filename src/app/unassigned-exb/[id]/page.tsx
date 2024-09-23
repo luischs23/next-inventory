@@ -111,6 +111,7 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
         (filters.gender === '' || filters.gender === 'all' || product.gender === filters.gender)
       )
     })
+    .sort((a, b) => a.brand.localeCompare(b.brand)) // Sort alphabetically by brand
   }, [products, filters])
 
   const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({ src, alt, ...props }) => {

@@ -52,27 +52,47 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
     warehouseId: searchParams.get('warehouseId') || '',
   })
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchBoxAndWarehouses = async () => {
-      // Fetch box data
-      const boxDoc = await getDoc(doc(db, 'boxes', params.id))
-      if (boxDoc.exists()) {
-        setFormData({ ...boxDoc.data() as BoxFormData, image: null })
+      setLoading(true)
+      try {
+        // Fetch warehouses first
+        const warehousesCollection = collection(db, 'warehouses')
+        const warehousesSnapshot = await getDocs(warehousesCollection)
+        const warehousesList = warehousesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+        }))
+        setWarehouses(warehousesList)
+
+        // Now fetch the box data
+        const warehouseId = searchParams.get('warehouseId')
+        if (!warehouseId) {
+          throw new Error('Warehouse ID is missing')
+        }
+
+        const boxDoc = await getDoc(doc(db, `warehouses/${warehouseId}/boxes`, params.id))
+        if (boxDoc.exists()) {
+          const boxData = boxDoc.data() as BoxFormData
+          setFormData({ ...boxData, image: null, warehouseId })
+        } else {
+          throw new Error('Box not found')
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error)
+        toast({
+          title: "Error",
+          description: "Failed to fetch box data. Please try again.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
       }
-
-      // Fetch warehouses
-      const warehousesCollection = collection(db, 'warehouses')
-      const warehousesSnapshot = await getDocs(warehousesCollection)
-      const warehousesList = warehousesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name,
-      }))
-      setWarehouses(warehousesList)
     }
-
     fetchBoxAndWarehouses()
-  }, [params.id])
+  }, [params.id, searchParams])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -105,10 +125,9 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
         imageUrl,
         baseprice: formData.baseprice,
         saleprice: formData.saleprice,
-        warehouseId: formData.warehouseId,
       }
 
-      await updateDoc(doc(db, 'boxes', params.id), boxData)
+      await updateDoc(doc(db, `warehouses/${formData.warehouseId}/boxes`, params.id), boxData)
 
       toast({
         title: "Success",
@@ -130,6 +149,10 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
         variant: "destructive",
       })
     }
+  }
+
+  if (loading) {
+    return <div>Loading...</div>
   }
 
   return (
@@ -211,23 +234,6 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
                   onChange={handleInputChange}
                 />
               </div>
-            </div>
-            <div>
-              <Label htmlFor="warehouseId">Warehouse</Label>
-              <Select 
-                name="warehouseId" 
-                value={formData.warehouseId} 
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, warehouseId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select warehouse" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <Button type="submit">Update Box</Button>
           </form>

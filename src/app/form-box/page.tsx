@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams} from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { addDoc, collection, getDocs } from 'firebase/firestore'
@@ -25,9 +25,8 @@ interface BoxFormData {
   comments: string
   image: File | null
   imageUrl: string
-  baseprice: number
-  saleprice: number
-  warehouseId: string
+  baseprice: string
+  saleprice: string
 }
 
 interface Warehouse {
@@ -38,6 +37,7 @@ interface Warehouse {
 export default function FormBoxPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const warehouseId = searchParams.get('warehouseId')
   const [formData, setFormData] = useState<BoxFormData>({
     brand: 'Nike',
     reference: '',
@@ -47,11 +47,11 @@ export default function FormBoxPage() {
     comments: '',
     image: null,
     imageUrl: '',
-    baseprice: 0,
-    saleprice: 0,
-    warehouseId: searchParams.get('warehouseId') || '',
+    baseprice: '',
+    saleprice: '',
   })
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [imageError, setImageError] = useState('')
 
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -67,6 +67,15 @@ export default function FormBoxPage() {
     fetchWarehouses()
   }, [])
 
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target
+    // Remove non-digit characters and parse as number
+    const numericValue = parseInt(value.replace(/\D/g, ''), 10)
+    // Format with commas for display
+    const formattedValue = isNaN(numericValue) ? '' : numericValue.toLocaleString()
+    setFormData(prev => ({ ...prev, [name]: formattedValue }))
+  }
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
@@ -75,6 +84,7 @@ export default function FormBoxPage() {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     setFormData((prev) => ({ ...prev, image: file }))
+    setImageError('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,12 +106,12 @@ export default function FormBoxPage() {
         quantity: formData.quantity,
         comments: formData.comments,
         imageUrl,
-        baseprice: formData.baseprice,
-        saleprice: formData.saleprice,
-        warehouseId: formData.warehouseId,
+        baseprice: parseInt(formData.baseprice.replace(/\D/g, ''), 10),
+        saleprice: parseInt(formData.saleprice.replace(/\D/g, ''), 10),
+        warehouseId: warehouseId,
       }
 
-      await addDoc(collection(db, 'boxes'), boxData)
+      await addDoc(collection(db, `warehouses/${warehouseId}/boxes`), boxData)
 
       toast({
         title: "Success",
@@ -114,7 +124,8 @@ export default function FormBoxPage() {
           },
       })
 
-      router.push('/warehouses')
+      // Redirect back to the specific warehouse inventory page
+      router.push(`/warehouse-inventory/${warehouseId}`)
     } catch (error) {
       console.error('Error saving the box:', error)
       toast({
@@ -181,7 +192,8 @@ export default function FormBoxPage() {
             </div>
             <div>
               <Label htmlFor="image">Image</Label>
-              <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} />
+              <Input id="image" name="image" type="file" accept="image/*" onChange={handleImageChange} required />
+              {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
             </div>
             <div className='flex items-center space-x-4'>
               <div>
@@ -189,9 +201,8 @@ export default function FormBoxPage() {
                 <Input
                   id="baseprice"
                   name="baseprice"
-                  type="number"
                   value={formData.baseprice}
-                  onChange={handleInputChange}
+                  onChange={handlePriceChange}
                 />
               </div>
               <div>
@@ -199,28 +210,10 @@ export default function FormBoxPage() {
                 <Input
                   id="saleprice"
                   name="saleprice"
-                  type="number"
                   value={formData.saleprice}
-                  onChange={handleInputChange}
+                  onChange={handlePriceChange}
                 />
               </div>
-            </div>
-            <div>
-              <Label htmlFor="warehouseId">Warehouse</Label>
-              <Select 
-                name="warehouseId" 
-                value={formData.warehouseId} 
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, warehouseId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select warehouse" />
-                </SelectTrigger>
-                <SelectContent>
-                  {warehouses.map((warehouse) => (
-                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
             <Button type="submit">Save Box</Button>
           </form>
