@@ -54,7 +54,7 @@ export default function UpdateProductPage({ params }: { params: { id: string } }
   const [selectedStore, setSelectedStore] = useState('')
   const [exhibitionBarcode, setExhibitionBarcode] = useState('')
   const { toast } = useToast()
-  const router = useRouter()
+  const router = useRouter() 
 
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')

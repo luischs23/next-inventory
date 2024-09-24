@@ -25,6 +25,8 @@
   } from "app/components/ui/alert-dialog"
   import * as XLSX from 'xlsx'
   import { saveAs } from 'file-saver'
+  import jsPDF from 'jspdf'
+  import 'jspdf-autotable'
 
   interface Box {
     id: string
@@ -34,15 +36,16 @@
     gender: 'Dama' | 'Hombre'
     quantity: number
     imageUrl: string
+    baseprice: number
     saleprice: number
-    sizes: { [key: string]: number }
+    createdAt: number
   }
 
   export default function InventoryPage() {
     const [boxes, setBoxes] = useState<Box[]>([])
     const [loading, setLoading] = useState(true)
     const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
-    const [sortOrder, setSortOrder] = useState<'brand' | 'reference' | 'color'>('brand')
+    const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
     const [boxToDelete, setBoxToDelete] = useState<Box | null>(null)
     const router = useRouter()
     const params = useParams()
@@ -52,10 +55,26 @@
       setLoading(true)
       try {
         const boxesSnapshot = await getDocs(collection(db, `warehouses/${warehouseId}/boxes`))
-        const boxesList = boxesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Box))
+        const boxesList = boxesSnapshot.docs.map(doc => {
+          const data = doc.data()
+          let createdAtTimestamp = 0
+  
+          if (data.createdAt) {
+            if (typeof data.createdAt.toMillis === 'function') {
+              createdAtTimestamp = data.createdAt.toMillis()
+            } else if (data.createdAt.seconds) {
+              createdAtTimestamp = data.createdAt.seconds * 1000
+            } else if (typeof data.createdAt === 'number') {
+              createdAtTimestamp = data.createdAt > 100000000000 ? data.createdAt : data.createdAt * 1000
+            }
+          }
+  
+          return {
+            id: doc.id,
+            ...data,
+            createdAt: createdAtTimestamp,
+          } as Box
+        })
         setBoxes(boxesList)
       } catch (error) {
         console.error('Error fetching boxes:', error)
@@ -78,28 +97,37 @@
     }
 
     const filteredBoxes = useMemo(() => {
-      return boxes
-        .filter((box) => {
-          return (
-            (filters.brand === '' || box.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
-            (filters.reference === '' || box.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
-            (filters.color === '' || box.color.toLowerCase().includes(filters.color.toLowerCase())) &&
-            (filters.gender === '' || filters.gender === 'all' || box.gender === filters.gender)
-          )
-        })
-        .sort((a, b) => {
-          if (sortOrder === 'brand') return a.brand.localeCompare(b.brand)
-          if (sortOrder === 'reference') return a.reference.localeCompare(b.reference)
-          if (sortOrder === 'color') return a.color.localeCompare(b.color)
-          return 0
-        })
-    }, [boxes, filters, sortOrder])
+    return boxes.filter((box) => {
+      return (
+        (filters.brand === '' || box.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
+        (filters.reference === '' || box.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
+        (filters.color === '' || box.color.toLowerCase().includes(filters.color.toLowerCase())) &&
+        (filters.gender === '' || filters.gender === 'all' || box.gender === filters.gender)
+      )
+    })
+  }, [boxes, filters])
+
+  const sortedBoxes = useMemo(() => {
+    return [...filteredBoxes].sort((a, b) => {
+      if (sortOrder === 'alphabetical') {
+        // Si los timestamps son iguales, se ordena alfabéticamente
+        const alphabeticalSort = a.brand.localeCompare(b.brand)
+        if (a.createdAt === b.createdAt) {
+          return alphabeticalSort
+        }
+        // Si los timestamps son diferentes, se prioriza por createdAt
+        return a.createdAt > b.createdAt ? -1 : 1
+      }
+      // Si el tipo de ordenación es por "Entry Order", simplemente ordena por createdAt
+      return b.createdAt - a.createdAt
+    })
+  }, [filteredBoxes, sortOrder])
 
     const handleDelete = async () => {
       if (boxToDelete) {
         try {
           // Delete the document from Firestore
-          await deleteDoc(doc(db, 'boxes', boxToDelete.id))
+          await deleteDoc(doc(db, `warehouses/${warehouseId}/boxes`, boxToDelete.id))
           console.log(`Document with ID ${boxToDelete.id} deleted successfully`)
 
           // Delete the image from Storage
@@ -111,6 +139,10 @@
 
           toast({
             title: "Success",
+            style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",},
             description: `Box ${boxToDelete.brand} ${boxToDelete.reference} has been deleted successfully.`,
           })
 
@@ -143,8 +175,8 @@
         'Color': box.color,
         'Gender': box.gender,
         'Quantity': box.quantity,
+        'Base Price': box.baseprice,
         'Sale Price': box.saleprice,
-        'Sizes': Object.entries(box.sizes).map(([size, count]) => `${size}: ${count}`).join(', '),
       }))
 
       const worksheet = XLSX.utils.json_to_sheet(worksheetData)
@@ -157,15 +189,58 @@
       saveAs(data, 'inventory_report.xlsx')
     }
 
+    const exportToPDF = () => {
+      const doc = new jsPDF()
+  
+      // Add title
+      doc.setFontSize(18)
+      doc.text('Inventory Report', 14, 22)
+  
+      // Add summary information
+      doc.setFontSize(12)
+      doc.text(`Total Items: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
+      doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
+      doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
+      doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+  
+      // Add table
+      const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Quantity", "Base Price", "Sale Price"]
+      const tableRows = sortedBoxes.map((box, index) => [
+        index + 1,
+        box.brand,
+        box.reference,
+        box.color,
+        box.gender,
+        box.quantity,
+        formatNumber(box.baseprice),
+        formatNumber(box.saleprice)
+      ])
+  
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 65,
+        theme: 'grid',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+        alternateRowStyles: { fillColor: [224, 224, 224] }
+      })
+  
+      // Save the PDF
+      doc.save('inventory_report.pdf')
+    } 
+
     const summaryInfo = useMemo(() => {
-      return filteredBoxes.reduce((acc, box) => {
-        acc.totalItems += 1
-        acc.totalPares += box.quantity
-        acc.totalBase += box.quantity * (box.saleprice / 2) // Assuming base price is half of sale price
-        acc.totalSale += box.quantity * box.saleprice
-        return acc
-      }, { totalItems: 0, totalPares: 0, totalBase: 0, totalSale: 0 })
+      const totalItems = filteredBoxes.length
+      const totalPares = filteredBoxes.reduce((sum, box) => sum + Number(box.quantity || 0), 0) // Convertir quantity a número
+      const totalBase = filteredBoxes.reduce((sum, box) => sum + Number((box.baseprice || 0) * (box.quantity || 0)), 0) // Convertir baseprice y quantity a números
+      const totalSale = filteredBoxes.reduce((sum, box) => sum + Number((box.saleprice || 0) * (box.quantity || 0)), 0) // Convertir saleprice y quantity a números
+      return { totalItems, totalPares, totalBase, totalSale }
     }, [filteredBoxes])
+    
+    const formatNumber = (num: number) => {
+      return num.toLocaleString('es-ES')
+    }
 
     if (loading) {
       return <div className="container mx-auto px-4 py-8">Loading...</div>
@@ -221,18 +296,17 @@
               </div>
             </div>
             <div>
-              <label htmlFor="sortOrder" className="text-sm font-medium">Sort By</label>
-              <Select value={sortOrder} onValueChange={(value: 'brand' | 'reference' | 'color') => setSortOrder(value)}>
-                <SelectTrigger id="sortOrder">
+             <label htmlFor="sortOrder" className="text-sm font-medium">Sort Order</label>
+             <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+               <SelectTrigger id="sortOrder">
                   <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="brand">Brand</SelectItem>
-                  <SelectItem value="reference">Reference</SelectItem>
-                  <SelectItem value="color">Color</SelectItem>
+               </SelectTrigger>
+               <SelectContent>
+                 <SelectItem value="entry">Entry Order</SelectItem>
+                  <SelectItem value="alphabetical">Alphabetical</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+             </div>
           </CardContent>
         </Card>
         <h1 className="text-2xl font-bold">Inventory Dashboard</h1>
@@ -240,6 +314,9 @@
           <div className="space-x-2">
             <Button onClick={exportToExcel}>
               <FileDown className="mr-2 h-4 w-4" /> Export Excel
+            </Button>
+            <Button onClick={exportToPDF}>
+              Export PDF
             </Button>
             <Button onClick={() => router.push(`/form-box?warehouseId=${warehouseId}`)}>
               <Plus className="mr-2 h-4 w-4" /> Add
@@ -250,16 +327,16 @@
         <Card className="mb-6">
           <CardContent className="p-4">
             <div className="grid grid-cols-2 gap-4">
-              <div>Items: {summaryInfo.totalItems}</div>
-              <div>Total pares: {summaryInfo.totalPares}</div>
-              <div>Total base: ${summaryInfo.totalBase.toLocaleString()}</div>
-              <div>Total sale: ${summaryInfo.totalSale.toLocaleString()}</div>
+              <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
+              <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
+              <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
+              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
             </div>
           </CardContent>
         </Card>
 
         <div className="space-y-4">
-          {filteredBoxes.map((box, index) => (
+          {sortedBoxes.map((box, index) => (
             <div key={box.id} className="flex items-start">
               <div className="text-sm font-semibold mr-2 mt-2">{index + 1}</div>
               <Card className="flex-grow relative">
@@ -306,7 +383,7 @@
                       <p className="text-sm">{box.color} - {box.gender}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold">Total: {box.quantity}</p>
+                      <p className="font-semibold mt-5">Total: {box.quantity}</p>
                       <p className="text-sm">Sale: ${box.saleprice.toLocaleString()}</p>
                     </div>
                   </div>

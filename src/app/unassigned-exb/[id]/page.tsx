@@ -12,9 +12,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Pencil, MoreHorizontal, ImageIcon, FileDown } from 'lucide-react'
 import Image from 'next/image'
 import { ImageProps } from 'next/image'
-import { Document, Page, Text, View, StyleSheet, PDFDownloadLink } from '@react-pdf/renderer'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 interface UnassignedProduct {
     id: string
@@ -35,38 +36,6 @@ interface UnassignedProduct {
     src: string
     alt: string
   }
-  const styles = StyleSheet.create({
-    page: { padding: 30 },
-    title: { fontSize: 24, marginBottom: 20 },
-    table: { display: 'table', width: 'auto', borderStyle: 'solid', borderWidth: 1, borderRightWidth: 0, borderBottomWidth: 0 },
-    tableRow: { margin: 'auto', flexDirection: 'row' },
-    tableCol: { width: '25%', borderStyle: 'solid', borderWidth: 1, borderLeftWidth: 0, borderTopWidth: 0 },
-    tableCell: { margin: 'auto', marginTop: 5, fontSize: 10 },
-  })
-  
-  const PDFDocument = ({ products, storeName }: { products: UnassignedProduct[], storeName: string }) => (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>{storeName} Unassigned Exhibition Products</Text>
-        <View style={styles.table}>
-          <View style={styles.tableRow}>
-            <View style={styles.tableCol}><Text style={styles.tableCell}>Brand</Text></View>
-            <View style={styles.tableCol}><Text style={styles.tableCell}>Reference</Text></View>
-            <View style={styles.tableCol}><Text style={styles.tableCell}>Color</Text></View>
-            <View style={styles.tableCol}><Text style={styles.tableCell}>Gender</Text></View>
-          </View>
-          {products.map((product) => (
-            <View style={styles.tableRow} key={product.id}>
-              <View style={styles.tableCol}><Text style={styles.tableCell}>{product.brand}</Text></View>
-              <View style={styles.tableCol}><Text style={styles.tableCell}>{product.reference}</Text></View>
-              <View style={styles.tableCol}><Text style={styles.tableCell}>{product.color}</Text></View>
-              <View style={styles.tableCol}><Text style={styles.tableCell}>{product.gender}</Text></View>
-            </View>
-          ))}
-        </View>
-      </Page>
-    </Document>
-  )
 
 export default function UnassignedExhibitionPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -160,6 +129,37 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
     saveAs(data, `${storeName}_unassigned_exhibition_products.xlsx`)
   }
 
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+
+    doc.setFontSize(18)
+    doc.text(`${storeName} Unassigned Exhibition Products`, 14, 22)
+
+    doc.setFontSize(12)
+    doc.text(`Total Items: ${filteredProducts.length}`, 14, 30)
+
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender"]
+    const tableRows = filteredProducts.map((product, index) => [
+      index + 1,
+      product.brand,
+      product.reference,
+      product.color,
+      product.gender,
+    ])
+
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 40,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      alternateRowStyles: { fillColor: [224, 224, 224] }
+    })
+
+    doc.save(`${storeName}_unassigned_exhibition_products.pdf`)
+  }
+
   if (loading) {
     return <div className="container mx-auto px-4 py-8">Loading...</div>
   }
@@ -208,18 +208,11 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
       <h2 className="text-2xl font-bold">{storeName} Unassigned Exhibition Products</h2>
         <div className="flex justify-between items-center mb-4">
           <div className="space-x-2">
-            <PDFDownloadLink
-              document={<PDFDocument products={filteredProducts} storeName={storeName} />}
-              fileName={`${storeName}_unassigned_exhibition_products.pdf`}
-            >
-              {({  loading }) => 
-                <Button disabled={loading}>
-                  {loading ? 'Generating PDF...' : 'Export PDF'}
-                </Button>
-              }
-            </PDFDownloadLink>
             <Button onClick={exportToExcel}>
               <FileDown className="mr-2 h-4 w-4" /> Export Excel
+            </Button>
+            <Button onClick={exportToPDF}>
+              Export PDF
             </Button>
           </div>
         </div>

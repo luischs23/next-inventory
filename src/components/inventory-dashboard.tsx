@@ -279,16 +279,17 @@ export function InventoryDashboardComponent() {
         <Button onClick={exportToExcel}>
           <FileDown className="mr-2 h-4 w-4" /> Export Excel
         </Button>
-        <div className="mb-4 p-4 bg-gray-100 rounded-lg">
-          <div className="grid grid-cols-2 gap-2">
-            <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
-            <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
-            <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
-          </div>
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
+              <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
+              <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
+              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="space-y-4">
         {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">

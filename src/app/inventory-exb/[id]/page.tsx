@@ -11,9 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { Pencil, MoreHorizontal, FileDown, ImageIcon } from 'lucide-react'
 import Image from 'next/image'
-import { Document, Page, Text, View, StyleSheet, PDFDownloadLink } from '@react-pdf/renderer'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
 
 interface ExhibitionProduct {
   id: string
@@ -27,113 +28,6 @@ interface ExhibitionProduct {
   baseprice: number
   saleprice: number
 }
-
-const styles = StyleSheet.create({
-  page: {
-    flexDirection: 'column',
-    backgroundColor: '#E4E4E4',
-    padding: 10,
-  },
-  section: {
-    margin: 10,
-    padding: 10,
-    flexGrow: 1,
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 10,
-  },
-  table: {
-    display: 'table',
-    width: 'auto',
-    borderStyle: 'solid',
-    borderWidth: 1,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-  },
-  tableRow: {
-    margin: 'auto',
-    flexDirection: 'row',
-  },
-  tableCol: {
-    width: '12.5%',
-    borderStyle: 'solid',
-    borderWidth: 1,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-  },
-  tableCell: {
-    margin: 'auto',
-    marginTop: 5,
-    fontSize: 10,
-  },
-})
-
-const PDFDocument = ({ products, storeName }: { products: ExhibitionProduct[], storeName: string }) => (
-  <Document>
-    <Page size="A4" style={styles.page}>
-      <View style={styles.section}>
-        <Text style={styles.title}>{storeName} Exhibition Inventory</Text>
-        <View style={styles.table}>
-          <View style={styles.tableRow}>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Brand</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Reference</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Color</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Gender</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Size</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Barcode</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Base Price</Text>
-            </View>
-            <View style={styles.tableCol}>
-              <Text style={styles.tableCell}>Sale Price</Text>
-            </View>
-          </View>
-          {products.map((product) => (
-            <View style={styles.tableRow} key={product.id}>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.brand}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.reference}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.color}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.gender}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.exhibitionSize}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.exhibitionBarcode}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.baseprice}</Text>
-              </View>
-              <View style={styles.tableCol}>
-                <Text style={styles.tableCell}>{product.saleprice}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </View>
-    </Page>
-  </Document>
-)
 
 export default function InventoryExbPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -277,6 +171,46 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
     saveAs(data, `${storeName}_exhibition_inventory.xlsx`)
   }
 
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+
+    // Add title
+    doc.setFontSize(18)
+    doc.text('Inventory Report', 14, 22)
+
+    // Add summary information
+    doc.setFontSize(12)
+    doc.text(`Total Items: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
+    doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
+    doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
+    doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+
+    // Add table
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Base Price", "Sale Price"]
+    const tableRows = sortedProducts.map((box, index) => [
+      index + 1,
+      box.brand,
+      box.reference,
+      box.color,
+      box.gender,
+      formatNumber(box.baseprice),
+      formatNumber(box.saleprice)
+    ])
+
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 65,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      alternateRowStyles: { fillColor: [224, 224, 224] }
+    })
+
+    // Save the PDF
+    doc.save('inventory_report.pdf')
+  }
+
   if (loading) {
     return <div className="container mx-auto px-4 py-8">Loading...</div>
   }
@@ -349,28 +283,21 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
             <Button onClick={exportToExcel}>
               <FileDown className="mr-2 h-4 w-4" /> Export Excel
             </Button>
-            <PDFDownloadLink
-              document={<PDFDocument products={products} storeName={storeName} />}
-              fileName={`${storeName}_exhibition_inventory.pdf`}
-            >
-              {({ loading }) => 
-                <Button disabled={loading}>
-                  {loading ? 'Generating PDF...' : 'Export PDF'}
-                </Button>
-              }
-            </PDFDownloadLink>
+            <Button onClick={exportToPDF}>
+              Export PDF
+            </Button>
           </div>
         </div>
-        <div className="mb-4 p-4 bg-gray-100 rounded-lg">
-          <div className="grid grid-cols-2 gap-2">
-            <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
-            <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
-            <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
-          </div>
-        </div>
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
+              <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
+              <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
+              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
+            </div>
+          </CardContent>
+        </Card>
         <div className="space-y-4">
           {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">

@@ -25,14 +25,23 @@ interface BoxFormData {
   comments: string
   image: File | null
   imageUrl: string
-  baseprice: number
-  saleprice: number
+  baseprice: string
+  saleprice: string
   warehouseId: string
 }
 
 interface Warehouse {
   id: string
   name: string
+}
+
+const formatNumber = (value: string): string => {
+  const number = value.replace(/[^\d]/g, '')
+  return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+const parseFormattedNumber = (value: string): number => {
+  return parseInt(value.replace(/\./g, ''), 10)
 }
 
 export default function UpdateBoxPage({ params }: { params: { id: string } }) {
@@ -47,8 +56,8 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
     comments: '',
     image: null,
     imageUrl: '',
-    baseprice: 0,
-    saleprice: 0,
+    baseprice: '',
+    saleprice: '',
     warehouseId: searchParams.get('warehouseId') || '',
   })
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
@@ -76,7 +85,12 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
         const boxDoc = await getDoc(doc(db, `warehouses/${warehouseId}/boxes`, params.id))
         if (boxDoc.exists()) {
           const boxData = boxDoc.data() as BoxFormData
-          setFormData({ ...boxData, image: null, warehouseId })
+          setFormData({ ...boxData, 
+            image: null, 
+            warehouseId,
+            baseprice: formatNumber(boxData.baseprice.toString()),
+            saleprice: formatNumber(boxData.saleprice.toString())
+          })
         } else {
           throw new Error('Box not found')
         }
@@ -96,7 +110,12 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    if (name === 'baseprice' || name === 'saleprice') {
+      const formattedValue = formatNumber(value)
+      setFormData(prev => ({ ...prev, [name]: formattedValue }))
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,8 +142,8 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
         quantity: formData.quantity,
         comments: formData.comments,
         imageUrl,
-        baseprice: formData.baseprice,
-        saleprice: formData.saleprice,
+        baseprice: parseFormattedNumber(formData.baseprice),
+        saleprice: parseFormattedNumber(formData.saleprice),
       }
 
       await updateDoc(doc(db, `warehouses/${formData.warehouseId}/boxes`, params.id), boxData)
@@ -219,7 +238,6 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
                 <Input
                   id="baseprice"
                   name="baseprice"
-                  type="number"
                   value={formData.baseprice}
                   onChange={handleInputChange}
                 />
@@ -229,7 +247,6 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
                 <Input
                   id="saleprice"
                   name="saleprice"
-                  type="number"
                   value={formData.saleprice}
                   onChange={handleInputChange}
                 />
