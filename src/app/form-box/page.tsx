@@ -27,11 +27,12 @@ interface BoxFormData {
   imageUrl: string
   baseprice: string
   saleprice: string
+  barcode: string
 }
 
 interface Warehouse {
   id: string
-  name: string
+  name: string 
 }
 
 export default function FormBoxPage() {
@@ -49,6 +50,7 @@ export default function FormBoxPage() {
     imageUrl: '',
     baseprice: '',
     saleprice: '',
+    barcode: ''
   })
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [imageError, setImageError] = useState('')
@@ -87,6 +89,10 @@ export default function FormBoxPage() {
     setImageError('')
   }
 
+  const generateBarcode = () => {
+    return Math.random().toString(36).substr(2, 9).toUpperCase()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
@@ -97,6 +103,8 @@ export default function FormBoxPage() {
         await uploadBytes(imageRef, formData.image)
         imageUrl = await getDownloadURL(imageRef)
       }
+
+      const barcode = generateBarcode()
 
       const boxData = {
         brand: formData.brand,
@@ -109,6 +117,7 @@ export default function FormBoxPage() {
         baseprice: parseInt(formData.baseprice.replace(/\D/g, ''), 10),
         saleprice: parseInt(formData.saleprice.replace(/\D/g, ''), 10),
         warehouseId: warehouseId,
+        barcode
       }
 
       await addDoc(collection(db, `warehouses/${warehouseId}/boxes`), boxData)

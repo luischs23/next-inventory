@@ -12,6 +12,8 @@ interface ProductWithBarcode {
   barcode: string
   imageUrl: string
   addedAt?: Timestamp | Date
+  quantity: number
+  isBox?: boolean
 }
 
 interface ProductCardProps {
@@ -36,7 +38,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div className="flex-1">
           <h3 className="text-lg font-semibold">{product.brand} - {product.reference}</h3>
           <p>Color: {product.color}</p>
-          <p>Size: {product.size}</p>
+          <p>{product.isBox ? 'Box' : 'Size'}: {product.isBox ? product.quantity : product.size}</p>
           <p>Barcode: {product.barcode}</p>
           <p>Added: {formatDate(product.addedAt)}</p>
         </div>

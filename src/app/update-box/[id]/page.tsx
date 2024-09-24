@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Switch } from "app/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { toast } from "app/components/ui/use-toast"
+import { Barcode } from 'lucide-react'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -28,13 +29,14 @@ interface BoxFormData {
   baseprice: string
   saleprice: string
   warehouseId: string
+  barcode: string
 }
 
 interface Warehouse {
   id: string
   name: string
 }
-
+ 
 const formatNumber = (value: string): string => {
   const number = value.replace(/[^\d]/g, '')
   return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
@@ -59,6 +61,7 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
     baseprice: '',
     saleprice: '',
     warehouseId: searchParams.get('warehouseId') || '',
+    barcode: ''
   })
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [loading, setLoading] = useState(true)
@@ -89,7 +92,8 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
             image: null, 
             warehouseId,
             baseprice: formatNumber(boxData.baseprice.toString()),
-            saleprice: formatNumber(boxData.saleprice.toString())
+            saleprice: formatNumber(boxData.saleprice.toString()),
+            barcode: boxData.barcode || ''
           })
         } else {
           throw new Error('Box not found')
@@ -144,6 +148,8 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
         imageUrl,
         baseprice: parseFormattedNumber(formData.baseprice),
         saleprice: parseFormattedNumber(formData.saleprice),
+        barcode:  formData.barcode,
+
       }
 
       await updateDoc(doc(db, `warehouses/${formData.warehouseId}/boxes`, params.id), boxData)
@@ -227,6 +233,19 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
                 value={formData.quantity}
                 onChange={handleInputChange}
               />
+            </div>
+            <div>
+              <Label htmlFor="barcode">Barcode</Label>
+              <div className="flex items-center space-x-2">
+              <Input 
+                  id="barcode" 
+                  name="barcode" 
+                  value={formData.barcode} 
+                  onChange={handleInputChange}
+                  disabled
+                />
+                <Barcode className="h-5 w-5 text-gray-500" />
+              </div>
             </div>
             <div>
               <Label htmlFor="image">Image</Label>

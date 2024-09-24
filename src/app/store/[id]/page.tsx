@@ -34,6 +34,12 @@ interface ProductWithBarcode extends Product {
   size: string
   barcode: string
   exhibitionStore?: string
+  warehouseId?: string
+  quantity: number
+  isBox?: boolean
+  comments?: string
+  gender?: string
+  baseprice?: number
 }
 
 interface InvoiceItem extends ProductWithBarcode {
@@ -41,6 +47,13 @@ interface InvoiceItem extends ProductWithBarcode {
   salePrice: number
   sold: boolean
   addedAt: Timestamp | Date
+}
+
+interface BoxItem extends Omit<InvoiceItem, 'size'> {
+  comments: string
+  gender: string
+  baseprice: number
+  size: string
 }
 
 interface Store {
@@ -51,7 +64,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
   const { toast } = useToast()
   const { user } = useAuth()
   const router = useRouter()
-  const [invoice, setInvoice] = useState<InvoiceItem[]>([])
+  const [invoice, setInvoice] = useState<(InvoiceItem | BoxItem)[]>([])
   const [totalSold, setTotalSold] = useState(0)
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
@@ -59,6 +72,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
   const [searchBarcode, setSearchBarcode] = useState('')
   const [searchedProduct, setSearchedProduct] = useState<ProductWithBarcode | null>(null)
   const [stores, setStores] = useState<{[id: string]: string}>({})
+  const [warehouses, setWarehouses] = useState<{[id: string]: string}>({})
 
   useEffect(() => {
     if (!user) {
@@ -66,6 +80,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
     } else {
       fetchStoreAndInvoiceItems()
       fetchStores()
+      fetchWarehouses()
     }
   }, [user, router])
 
@@ -78,10 +93,18 @@ export default function StorePage({ params }: { params: { id: string } }) {
     setStores(storesData)
   }
 
+  const fetchWarehouses = async () => {
+    const warehousesSnapshot = await getDocs(collection(db, 'warehouses'))
+    const warehousesData = warehousesSnapshot.docs.reduce((acc, doc) => {
+      acc[doc.id] = doc.data().name
+      return acc
+    }, {} as {[id: string]: string})
+    setWarehouses(warehousesData)
+  }
+
   const fetchStoreAndInvoiceItems = async () => {
     if (!user) return
 
-    // Fetch store name
     const storeRef = doc(db, 'stores', params.id)
     const storeDoc = await getDoc(storeRef)
     if (storeDoc.exists()) {
@@ -89,24 +112,34 @@ export default function StorePage({ params }: { params: { id: string } }) {
       setStoreName(storeData.name)
     }
 
-    // Fetch invoice items
     const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
     const invoiceSnapshot = await getDocs(invoiceRef)
     const invoiceItems = invoiceSnapshot.docs.map(doc => {
-      const data = doc.data() as InvoiceItem
-      return {
-        ...data,
-        invoiceId: doc.id,
-        salePrice: Number(data.salePrice) || 0,
-        sold: data.sold || false,
-        addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date()
+      const data = doc.data()
+      if ('comments' in data && 'gender' in data && 'baseprice' in data) {
+        return {
+          ...data,
+          invoiceId: doc.id,
+          salePrice: Number(data.salePrice) || 0,
+          sold: data.sold || false,
+          addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date(),
+          baseprice: Number(data.baseprice)
+        } as BoxItem
+      } else {
+        return {
+          ...data,
+          invoiceId: doc.id,
+          salePrice: Number(data.salePrice) || 0,
+          sold: data.sold || false,
+          addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date()
+        } as InvoiceItem
       }
     })
     setInvoice(invoiceItems)
     calculateTotalSold(invoiceItems)
   }
 
-  const calculateTotalSold = (items: InvoiceItem[]) => {
+  const calculateTotalSold = (items: (InvoiceItem | BoxItem)[]) => {
     const total = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) : 0), 0)
     setTotalSold(total)
   }
@@ -129,7 +162,9 @@ export default function StorePage({ params }: { params: { id: string } }) {
             ...productData,
             id: doc.id,
             size,
-            barcode: searchBarcode
+            barcode: searchBarcode,
+            quantity: sizeData.quantity,
+            isBox: false
           }
           break
         }
@@ -152,7 +187,32 @@ export default function StorePage({ params }: { params: { id: string } }) {
             id: exhibitionDoc.id,
             size: exhibitionData.exhibitionSize,
             barcode: exhibitionData.exhibitionBarcode,
-            exhibitionStore: storeId
+            exhibitionStore: storeId,
+            quantity: 1,
+            isBox: false
+          } as ProductWithBarcode
+          break
+        }
+      }
+    }
+
+    // If still not found, search in all warehouse boxes
+    if (!foundProduct) {
+      for (const warehouseId of Object.keys(warehouses)) {
+        const boxesRef = collection(db, `warehouses/${warehouseId}/boxes`)
+        const boxesQuery = query(boxesRef, where('barcode', '==', searchBarcode))
+        const boxesSnapshot = await getDocs(boxesQuery)
+
+        if (!boxesSnapshot.empty) {
+          const boxDoc = boxesSnapshot.docs[0]
+          const boxData = boxDoc.data()
+          foundProduct = {
+            ...boxData,
+            id: boxDoc.id,
+            barcode: boxData.barcode,
+            warehouseId: warehouseId,
+            quantity: boxData.quantity || 0,
+            isBox: true
           } as ProductWithBarcode
           break
         }
@@ -166,10 +226,8 @@ export default function StorePage({ params }: { params: { id: string } }) {
     if (!user) return
 
     if (product.exhibitionStore) {
-      // Remove from exhibition
       await deleteDoc(doc(db, 'exhibition', product.exhibitionStore, 'products', product.id))
 
-      // Update the product document to remove the exhibition entry
       const productRef = doc(db, 'products', product.id)
       const productDoc = await getDoc(productRef)
       if (productDoc.exists()) {
@@ -178,8 +236,10 @@ export default function StorePage({ params }: { params: { id: string } }) {
         delete updatedExhibition[product.exhibitionStore]
         await updateDoc(productRef, { exhibition: updatedExhibition })
       }
+    } else if (product.warehouseId) {
+      const boxRef = doc(db, `warehouses/${product.warehouseId}/boxes`, product.id)
+      await deleteDoc(boxRef)
     } else {
-      // Update regular inventory
       const productRef = doc(db, 'products', product.id)
       const productDoc = await getDoc(productRef)
       if (productDoc.exists()) {
@@ -188,7 +248,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
         const newQuantity = productData.sizes[product.size].quantity - 1
         const newTotal = productData.total - 1
 
-        let updatedSizes = { ...productData.sizes }
+        const updatedSizes = { ...productData.sizes }
         if (newQuantity === 0 && newBarcodes.length === 0) {
           delete updatedSizes[product.size]
         } else {
@@ -205,18 +265,27 @@ export default function StorePage({ params }: { params: { id: string } }) {
       }
     }
 
-    // Add to invoice
     const invoiceRef = doc(collection(db, 'stores', params.id, 'invoices', user.uid, 'items'))
-    const newInvoiceItem: InvoiceItem = {
-      ...product,
-      invoiceId: invoiceRef.id,
-      salePrice: Number(product.saleprice),
-      sold: false,
-      addedAt: serverTimestamp() as Timestamp
-    }
+    const newInvoiceItem: InvoiceItem | BoxItem = product.isBox
+        ? {
+            ...product,
+            invoiceId: invoiceRef.id,
+            salePrice: Number(product.saleprice),
+            sold: false,
+            addedAt: serverTimestamp() as Timestamp,
+            comments: product.comments || '',
+            gender: product.gender || '',
+            baseprice: product.baseprice || 0
+          }
+        : {
+            ...product,
+            invoiceId: invoiceRef.id,
+            salePrice: Number(product.saleprice),
+            sold: false,
+            addedAt: serverTimestamp() as Timestamp
+          }
     await setDoc(invoiceRef, newInvoiceItem)
 
-    // Update local state
     setInvoice(prevInvoice => [...prevInvoice, {...newInvoiceItem, addedAt: new Date()}])
     setSearchedProduct(null)
     setSearchBarcode('')
@@ -233,15 +302,12 @@ export default function StorePage({ params }: { params: { id: string } }) {
     })
   }
 
-  const handleReturn = async (item: InvoiceItem) => {
+  const handleReturn = async (item: InvoiceItem | BoxItem) => {
     if (!user) return
 
-    // Remove from invoice
     await deleteDoc(doc(db, 'stores', params.id, 'invoices', user.uid, 'items', item.invoiceId))
 
-    // Update main inventory or exhibition
     if (item.exhibitionStore) {
-      // Add back to exhibition
       const exhibitionRef = doc(collection(db, 'exhibition', item.exhibitionStore, 'products'))
       await setDoc(exhibitionRef, {
         ...item,
@@ -249,7 +315,6 @@ export default function StorePage({ params }: { params: { id: string } }) {
         exhibitionBarcode: item.barcode
       })
 
-      // Update the product document to add the exhibition entry
       const productRef = doc(db, 'products', item.id)
       const productDoc = await getDoc(productRef)
       if (productDoc.exists()) {
@@ -260,8 +325,25 @@ export default function StorePage({ params }: { params: { id: string } }) {
         }
         await updateDoc(productRef, { exhibition: updatedExhibition })
       }
+    } else if (item.warehouseId) {
+      const boxRef = doc(db, `warehouses/${item.warehouseId}/boxes`, item.id)
+      const boxData: Partial<BoxItem> = {
+        brand: item.brand,
+        reference: item.reference,
+        color: item.color,
+        barcode: item.barcode,
+        quantity: item.quantity,
+        imageUrl: item.imageUrl,
+        saleprice: item.saleprice,
+        warehouseId: item.warehouseId,
+      }
+      // Include BoxItem-specific properties if they exist
+      if ('comments' in item) boxData.comments = item.comments
+      if ('gender' in item) boxData.gender = item.gender
+      if ('baseprice' in item) boxData.baseprice = item.baseprice
+
+      await setDoc(boxRef, boxData)
     } else {
-      // Update main inventory
       const productRef = doc(db, 'products', item.id)
       const productDoc = await getDoc(productRef)
       if (productDoc.exists()) {
@@ -286,7 +368,6 @@ export default function StorePage({ params }: { params: { id: string } }) {
       }
     }
 
-    // Update invoice and total sold
     setInvoice(prevInvoice => prevInvoice.filter(i => i.invoiceId !== item.invoiceId))
     if (item.sold) {
       setTotalSold(prevTotal => prevTotal - Number(item.salePrice))
@@ -295,7 +376,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
     toast({
       title: "Product Returned",
       description: "The product has been returned to inventory.",
-      duration: 3000, // Toast will disappear after 3 seconds
+      duration: 3000,
       style: {
         background: "#2196F3",
         color: "white",
@@ -312,13 +393,12 @@ export default function StorePage({ params }: { params: { id: string } }) {
     )
   }
 
-  const handleSold = async (item: InvoiceItem) => {
+  const handleSold = async (item: InvoiceItem | BoxItem) => {
     if (!user) return
 
     const updatedItem = { ...item, sold: true }
     await updateDoc(doc(db, 'stores', params.id, 'invoices', user.uid, 'items', item.invoiceId), updatedItem)
 
-    // Update the product document
     const productRef = doc(db, 'products', item.id)
     const productDoc = await getDoc(productRef)
     if (productDoc.exists()) {
@@ -385,17 +465,17 @@ export default function StorePage({ params }: { params: { id: string } }) {
           salePrice: Number(item.salePrice) || 0,
           sold: item.sold || false,
           addedAt: item.addedAt || serverTimestamp(),
-          exhibitionStore: item.exhibitionStore || null
+          exhibitionStore: item.exhibitionStore || null,
+          warehouseId: item.warehouseId || null,
+          isBox: 'comments' in item
         }))
       })
 
-      // Clear the invoice items after saving
       setInvoice([])
       setTotalSold(0)
       setCustomerName('')
       setCustomerPhone('')
 
-      // Clear the items from the Firestore collection
       const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
       const invoiceSnapshot = await getDocs(invoiceRef)
       const deletePromises = invoiceSnapshot.docs.map(doc => deleteDoc(doc.ref))
@@ -502,6 +582,11 @@ export default function StorePage({ params }: { params: { id: string } }) {
                 {item.exhibitionStore && (
                   <div className="text-sm text-gray-500">
                     Exhibition: {stores[item.exhibitionStore]}
+                  </div>
+                )}
+                {item.warehouseId && (
+                  <div className="text-sm text-gray-500">
+                    Warehouse: {warehouses[item.warehouseId]}
                   </div>
                 )}
               </div>

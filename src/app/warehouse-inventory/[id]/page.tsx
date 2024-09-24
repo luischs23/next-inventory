@@ -39,6 +39,7 @@
     baseprice: number
     saleprice: number
     createdAt: number
+    barcode: string
   }
 
   export default function InventoryPage() {
