@@ -52,8 +52,8 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
       }
 
       // Fetch invoices
-      const invoicesRef = collection(db, 'savedInvoices')
-      const q = query(invoicesRef, where('storeId', '==', params.id), where('userId', '==', user.uid))
+      const invoicesRef = collection(db, 'stores', params.id, 'savedInvoices')
+      const q = query(invoicesRef, where('userId', '==', user.uid))
       const querySnapshot = await getDocs(q)
       const invoiceList = querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -98,7 +98,7 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
             </CardHeader>
             <CardContent>
               <p>Total: ${invoice.totalSold.toFixed(2)}</p>
-              <Button className="mt-2" onClick={() => router.push(`/saved-invoice/${invoice.id}`)}>
+              <Button className="mt-2" onClick={() => router.push(`/store/${params.id}/saved-invoice/${invoice.id}`)}>
                 View Details
               </Button>
             </CardContent>

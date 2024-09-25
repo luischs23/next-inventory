@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
@@ -30,6 +30,7 @@ interface UnassignedProduct {
         barcode: string
       }
     }
+    warehouseId: string
   }
   
   interface ImageWithFallbackProps extends Omit<ImageProps, 'src' | 'alt'> {
@@ -53,10 +54,30 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
           setStoreName(storeDoc.data().name)
         }
 
-        const productsSnapshot = await getDocs(collection(db, 'products'))
-        const unassignedProducts = productsSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as UnassignedProduct))
-          .filter(product => !product.exhibition || !product.exhibition[params.id])
+        const warehousesSnapshot = await getDocs(collection(db, 'warehouses'))
+        const unassignedProducts: UnassignedProduct[] = []
+
+        for (const warehouseDoc of warehousesSnapshot.docs) {
+          const warehouseId = warehouseDoc.id
+          const productsSnapshot = await getDocs(collection(db, 'warehouses', warehouseId, 'products'))
+
+          productsSnapshot.forEach(doc => {
+            const data = doc.data()
+            if (!data.exhibition || !data.exhibition[params.id]) {
+              unassignedProducts.push({
+                id: doc.id,
+                brand: data.brand,
+                reference: data.reference,
+                color: data.color,
+                gender: data.gender,
+                imageUrl: data.imageUrl,
+                warehouseId,
+                exhibition: data.exhibition
+              })
+            }
+          })
+        }
+
         setProducts(unassignedProducts)
       } catch (error) {
         console.error('Error fetching store and products:', error)
@@ -117,6 +138,7 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
       'Reference': product.reference,
       'Color': product.color,
       'Gender': product.gender,
+      'Warehouse': product.warehouseId,
     }))
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData)
@@ -138,13 +160,14 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
     doc.setFontSize(12)
     doc.text(`Total Items: ${filteredProducts.length}`, 14, 30)
 
-    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender"]
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Warehouse"]
     const tableRows = filteredProducts.map((product, index) => [
       index + 1,
       product.brand,
       product.reference,
       product.color,
       product.gender,
+      product.warehouseId,
     ])
 
     doc.autoTable({
@@ -234,7 +257,7 @@ export default function UnassignedExhibitionPage({ params }: { params: { id: str
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/update-product/${product.id}`)}>
+                        <DropdownMenuItem onClick={() => router.push(`/update-product/${product.id}?warehouseId=${product.warehouseId}`)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           <span>Update</span>
                         </DropdownMenuItem>

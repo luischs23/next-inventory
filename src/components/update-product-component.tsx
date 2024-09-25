@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, updateDoc, collection, getDocs, setDoc, deleteDoc } from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, getDocs} from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
@@ -50,7 +50,7 @@ const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
 export default function UpdateProductComponent({ productId, warehouseId }: UpdateProductComponentProps) {
-  const [product, setProduct] = useState<Product | null>(null)
+  const [product,   setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [newImage, setNewImage] = useState<File | null>(null)
   const [newSize, setNewSize] = useState('')
@@ -160,7 +160,7 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
 
       try {
         // Update Firestore
-        await updateDoc(doc(db, 'products', product.id), updatedProduct)
+        await updateDoc(doc(db, 'warehouses', warehouseId, 'products', product.id), updatedProduct)
 
         // Update local state
         setProduct(updatedProduct)
@@ -240,7 +240,7 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
       const size = Object.entries(product.sizes).find(([_, sizeData]) => 
         sizeData.barcodes.includes(exhibitionBarcode)
       )?.[0]
-
+  
       if (size) {
         const updatedSizes = { ...product.sizes }
         updatedSizes[size] = {
@@ -248,7 +248,7 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
           quantity: updatedSizes[size].quantity - 1,
           barcodes: updatedSizes[size].barcodes.filter(b => b !== exhibitionBarcode)
         }
-
+  
         const updatedProduct = {
           ...product,
           sizes: updatedSizes,
@@ -258,31 +258,15 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
             [selectedStore]: { size, barcode: exhibitionBarcode }
           }
         }
-
+  
         try {
-          // Update the product in the main products collection
-          await updateDoc(doc(db, 'products', product.id), updatedProduct)
-
-          // Add to the exhibition collection
-          const exhibitionProductData = {
-            id: product.id,
-            brand: product.brand,
-            reference: product.reference,
-            color: product.color,
-            gender: product.gender,
-            imageUrl: product.imageUrl,
-            baseprice: parseFormattedNumber(product.baseprice),
-            saleprice: parseFormattedNumber(product.saleprice),
-            exhibitionSize: size,
-            exhibitionBarcode: exhibitionBarcode
-          }
-
-          await setDoc(doc(db, 'exhibition', selectedStore, 'products', product.id), exhibitionProductData)
-
+          // Update the product in the warehouses/products subcollection
+          await updateDoc(doc(db, 'warehouses', warehouseId, 'products', product.id), updatedProduct)
+  
           setProduct(updatedProduct)
           setSelectedStore('')
           setExhibitionBarcode('')
-
+  
           toast({
             title: "Added to Exhibition",
             description: `Product added to exhibition in ${stores.find(s => s.id === selectedStore)?.name}.`,
@@ -333,29 +317,23 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
             Object.entries(product.exhibition).filter(([key]) => key !== storeId)
           )
         }
-  
-        try {
-          // Update the product in Firestore
-          await updateDoc(doc(db, 'products', product.id), updatedProduct)
-  
-          // Remove from the exhibition collection
-          await deleteDoc(doc(db, 'exhibition', storeId, 'products', product.id))
-  
+
           // Update local state
           setProduct(updatedProduct)
   
-        } catch (error) {
-          console.error('Error returning from exhibition:', error)
           toast({
-            title: "Error",
-            description: "Failed to return product from exhibition. Please try again.",
+            title: "Returned from Exhibition",
+            description: "Product has been returned from exhibition. Remember to save changes.",
             duration: 3000,
-            variant: "destructive",
+            style: {
+              background: "#4CAF50",
+              color: "white",
+              fontWeight: "bold",
+            },
           })
         }
       }
     }
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -558,22 +536,22 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
               <Button type="button" onClick={handleAddExhibition}>Add to Exh</Button>
             </div>
             <div className="mt-2 space-y-2">
-              {Object.entries(product.exhibition).map(([storeId, { size, barcode }]) => {
-                const storeName = stores.find(s => s.id === storeId)?.name || storeId
-                return (
-                  <div key={storeId} className="flex items-center justify-between text-sm bg-gray-100 p-2 rounded">
-                    <span>{storeName}: {size} - Bc: {barcode}</span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleReturnFromExhibition(storeId)}
-                    >
-                      <RotateCcwIcon className="w-4 h-4 mr-2" />
-                      Return
-                    </Button>
-                  </div>
-                )
-              })}
+                 {product && product.exhibition && Object.entries(product.exhibition).map(([storeId, exhibitionData]) => {
+                    const storeName = stores.find(s => s.id === storeId)?.name || storeId
+                    return (
+                        <div key={storeId} className="flex items-center justify-between text-sm bg-gray-100 p-2 rounded">
+                        <span>{storeName}: {exhibitionData.size} - Bc: {exhibitionData.barcode}</span>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleReturnFromExhibition(storeId)}
+                        >
+                            <RotateCcwIcon className="w-4 h-4 mr-2" />
+                            Return
+                        </Button>
+                        </div>
+                    )
+                    })}
             </div>
           </div>
           

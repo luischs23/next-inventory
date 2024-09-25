@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
@@ -27,6 +27,7 @@ interface ExhibitionProduct {
   imageUrl: string
   baseprice: number
   saleprice: number
+  warehouseId: string
 }
 
 export default function InventoryExbPage({ params }: { params: { id: string } }) {
@@ -46,17 +47,39 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
           setStoreName(storeDoc.data().name)
         }
 
-        const productsSnapshot = await getDocs(collection(db, 'exhibition', params.id, 'products'))
-        const productsData = productsSnapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            ...data,
-            baseprice: Number(data.baseprice),
-            saleprice: Number(data.saleprice)
-          } as ExhibitionProduct
-        })
-        setProducts(productsData)
+        const warehousesSnapshot = await getDocs(collection(db, 'warehouses'))
+        const exhibitionProducts: ExhibitionProduct[] = []
+
+        for (const warehouseDoc of warehousesSnapshot.docs) {
+          const warehouseId = warehouseDoc.id
+          const productsQuery = query(
+            collection(db, 'warehouses', warehouseId, 'products'),
+            where(`exhibition.${params.id}`, '!=', null)
+          )
+          const productsSnapshot = await getDocs(productsQuery)
+
+          productsSnapshot.forEach(doc => {
+            const data = doc.data()
+            const exhibitionData = data.exhibition[params.id]
+            if (exhibitionData) {
+              exhibitionProducts.push({
+                id: doc.id,
+                brand: data.brand,
+                reference: data.reference,
+                color: data.color,
+                gender: data.gender,
+                exhibitionSize: exhibitionData.size,
+                exhibitionBarcode: exhibitionData.barcode,
+                imageUrl: data.imageUrl,
+                baseprice: Number(data.baseprice),
+                saleprice: Number(data.saleprice),
+                warehouseId
+              })
+            }
+          })
+        }
+
+        setProducts(exhibitionProducts)
       } catch (error) {
         console.error('Error fetching store and products:', error)
       } finally {
@@ -313,7 +336,7 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => router.push(`/update-product/${product.id}`)}>
+                        <DropdownMenuItem onClick={() => router.push(`/update-product/${product.id}?warehouseId=${product.warehouseId}`)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           <span>Update</span>
                         </DropdownMenuItem>
@@ -336,11 +359,9 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
                       <p className="text-sm">{product.color} - {product.gender}</p>
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <div className='flex space-x-9'>
-                      <span className="font-medium">Size:</span> {formatSize(product.exhibitionSize)}
+                  <div className="mt-4 flex text-sm space-x-3">
+                      <div className="font-medium">Size:</div> {formatSize(product.exhibitionSize)}
                       <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
-                    </div>
                   </div>
                   <div className="mt-2">
                     <span className="font-medium text-sm">Barcode:</span> {product.exhibitionBarcode}

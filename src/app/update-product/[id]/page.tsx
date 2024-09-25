@@ -15,8 +15,7 @@ export default function UpdateProductPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">Update Product</h1>
+    <div className="container mx-auto px-4">
       <UpdateProductComponent productId={productId} warehouseId={warehouseId} />
     </div>
   )

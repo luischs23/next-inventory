@@ -34,7 +34,7 @@ interface ProductWithBarcode extends Product {
   size: string
   barcode: string
   exhibitionStore?: string
-  warehouseId?: string
+  warehouseId: string
   quantity: number
   isBox?: boolean
   comments?: string
@@ -147,56 +147,35 @@ export default function StorePage({ params }: { params: { id: string } }) {
   const handleSearch = async () => {
     if (!searchBarcode) return
 
-    // Search in regular inventory
-    const productsRef = collection(db, 'products')
-    const q = query(productsRef, where('sizes', '!=', null))
-    const querySnapshot = await getDocs(q)
-    
     let foundProduct: ProductWithBarcode | null = null
 
-    for (const doc of querySnapshot.docs) {
-      const productData = doc.data() as Product
-      for (const [size, sizeData] of Object.entries(productData.sizes)) {
-        if (sizeData.barcodes.includes(searchBarcode)) {
-          foundProduct = {
-            ...productData,
-            id: doc.id,
-            size,
-            barcode: searchBarcode,
-            quantity: sizeData.quantity,
-            isBox: false
+    // Search in all warehouses
+    for (const warehouseId of Object.keys(warehouses)) {
+      const productsRef = collection(db, 'warehouses', warehouseId, 'products')
+      const querySnapshot = await getDocs(productsRef)
+
+      for (const doc of querySnapshot.docs) {
+        const productData = doc.data() as Product
+        for (const [size, sizeData] of Object.entries(productData.sizes)) {
+          if (sizeData.barcodes.includes(searchBarcode)) {
+            foundProduct = {
+              ...productData,
+              id: doc.id,
+              size,
+              barcode: searchBarcode,
+              quantity: sizeData.quantity,
+              warehouseId,
+              isBox: false
+            }
+            break
           }
-          break
         }
+        if (foundProduct) break
       }
       if (foundProduct) break
     }
 
-    // If not found in regular inventory, search in all exhibition collections
-    if (!foundProduct) {
-      for (const storeId of Object.keys(stores)) {
-        const exhibitionRef = collection(db, 'exhibition', storeId, 'products')
-        const exhibitionQuery = query(exhibitionRef, where('exhibitionBarcode', '==', searchBarcode))
-        const exhibitionSnapshot = await getDocs(exhibitionQuery)
-
-        if (!exhibitionSnapshot.empty) {
-          const exhibitionDoc = exhibitionSnapshot.docs[0]
-          const exhibitionData = exhibitionDoc.data()
-          foundProduct = {
-            ...exhibitionData,
-            id: exhibitionDoc.id,
-            size: exhibitionData.exhibitionSize,
-            barcode: exhibitionData.exhibitionBarcode,
-            exhibitionStore: storeId,
-            quantity: 1,
-            isBox: false
-          } as ProductWithBarcode
-          break
-        }
-      }
-    }
-
-    // If still not found, search in all warehouse boxes
+    // If not found in regular inventory, search in boxes
     if (!foundProduct) {
       for (const warehouseId of Object.keys(warehouses)) {
         const boxesRef = collection(db, `warehouses/${warehouseId}/boxes`)
