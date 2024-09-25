@@ -1,9 +1,10 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { collection, getDocs } from 'firebase/firestore'
+import { collection, getDocs, query} from 'firebase/firestore'
 import { db } from 'app/services/firebase/firebase.config'
 import { FieldValue } from 'firebase/firestore'
+import { useAuth } from './AuthContext'
 
 interface Product {
   id: string
@@ -19,12 +20,14 @@ interface Product {
   createdAt: number | FieldValue
   comments: string
   exhibition: { [store: string]: string }
+  warehouseId: string
 }
 
 interface ProductContextType {
   products: Product[]
   addNewProduct: (product: Product) => void
   removeProduct: (id: string) => void
+  loading: boolean
 }
 
 const ProductContext = createContext<ProductContextType | undefined>(undefined)
@@ -39,19 +42,39 @@ export const useProducts = () => {
 
 export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const { user, userRole } = useAuth()
 
   useEffect(() => {
     const fetchProducts = async () => {
-      const productsCollection = collection(db, 'products')
-      const productsSnapshot = await getDocs(productsCollection)
-      const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))
-      setProducts(productsList)
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        const productsCollection = collection(db, 'products')
+        const productsQuery = query(productsCollection)
+        const productsSnapshot = await getDocs(productsQuery)
+        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))
+        setProducts(productsList)
+      } catch (error) {
+        console.error('Error fetching products:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
     fetchProducts()
-  }, [])
+  }, [user])
 
   const addNewProduct = (product: Product) => {
+    if (userRole !== 'admin') {
+      console.error('Only admins can add products')
+      return
+    }
+
     setProducts(prevProducts => {
       const newProduct = {
         ...product,
@@ -72,11 +95,16 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   } 
 
   const removeProduct = (id: string) => {
+    if (userRole !== 'admin') {
+      console.error('Only admins can remove products')
+      return
+    }
+
     setProducts(prevProducts => prevProducts.filter(product => product.id !== id))
   }
 
   return (
-    <ProductContext.Provider value={{ products, addNewProduct, removeProduct }}>
+    <ProductContext.Provider value={{ products, addNewProduct, removeProduct, loading }}>
       {children}
     </ProductContext.Provider>
   )

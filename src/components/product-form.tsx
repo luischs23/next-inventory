@@ -41,7 +41,11 @@ interface ProductFormData {
   exhibition: { [store: string]: string }
 }
 
-export const ProductFormComponent: React.FC = () => {
+interface ProductFormComponentProps {
+  warehouseId: string
+}
+
+export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ warehouseId }) => {
   const router = useRouter()
   const { toast } = useToast()
   const { addNewProduct } = useProducts()
@@ -77,9 +81,7 @@ export const ProductFormComponent: React.FC = () => {
   }, [formData.sizes])
 
   const formatNumber = (value: string) => {
-    // Remove any non-digit characters
     const number = value.replace(/[^\d]/g, '')
-    // Format with thousands separators
     return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   }
 
@@ -136,7 +138,7 @@ export const ProductFormComponent: React.FC = () => {
         color: formData.color,
         gender: formData.gender,
         sizes: Object.fromEntries(
-          Object.entries(formData.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
+        Object.entries(formData.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
         ),
         total,
         comments: formData.comments,
@@ -147,10 +149,10 @@ export const ProductFormComponent: React.FC = () => {
         createdAt: serverTimestamp(),
       }
 
-      const docRef = await addDoc(collection(db, 'products'), productData)
+      const docRef = await addDoc(collection(db, `warehouses/${warehouseId}/products`), productData)
 
       // Add the new product to the local state
-      addNewProduct({ id: docRef.id, ...productData })
+      addNewProduct({ id: docRef.id, ...productData, warehouseId })
 
       setFormData({
         brand: 'Nike',
@@ -178,7 +180,7 @@ export const ProductFormComponent: React.FC = () => {
         },
       })
 
-      router.push('/inventory')
+      router.push(`/inventory/${warehouseId}`)
     } catch (error) {
       console.error('Error adding product:', error)
       toast({

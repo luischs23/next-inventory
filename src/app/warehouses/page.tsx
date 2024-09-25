@@ -73,7 +73,14 @@ export default function WarehousesPage() {
                 onClick={() => router.push(`/warehouse-inventory/${warehouse.id}`)}
                 className="w-full"
               >
-                View Inventory
+                Bodega Inventory
+              </Button>
+              <Button 
+                onClick={() => router.push(`/inventory/${warehouse.id}`)}
+                className="w-full"
+                variant="outline"
+              >
+                Pares Inventory
               </Button>
             </CardContent>
           </Card>

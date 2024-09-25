@@ -46,13 +46,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <Image
             src={product.imageUrl}
             alt={`${product.brand} ${product.reference}`}
-            layout="fill"
-            objectFit="cover"
+            fill
+            className="object-cover rounded-md"
           />
         </div>
       </CardContent>
     </Card>
-  )
+  )  
 }
 
 export default ProductCard

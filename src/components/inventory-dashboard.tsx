@@ -9,13 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { PlusIcon, Pencil, Trash2, MoreHorizontal, FileDown } from 'lucide-react'
 import { db, storage } from '../services/firebase/firebase.config'
-import { collection, getDocs, deleteDoc, doc} from 'firebase/firestore'
+import { collection, getDocs, deleteDoc, doc , query, Timestamp, FieldValue} from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import Image from 'next/image'
 import { useProducts } from 'app/app/context/ProductContext'
-import { FieldValue } from 'firebase/firestore'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
+import { useAuth } from 'app/app/context/AuthContext'
 
 interface SizeInput {
   quantity: number
@@ -33,47 +33,55 @@ interface Product {
   total: number
   baseprice: number
   saleprice: number
-  createdAt: number 
+  createdAt: number | Timestamp | FieldValue
   comments: string 
   exhibition: { [store: string]: string } 
+  warehouseId: string
 }
 
-export function InventoryDashboardComponent() {
+interface InventoryDashboardComponentProps {
+  warehouseId: string
+}
+
+export default function InventoryDashboardComponent({ warehouseId }: InventoryDashboardComponentProps) {
   const router = useRouter()
   const { products, addNewProduct, removeProduct } = useProducts()
   const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [loading, setLoading] = useState(true)
+  const { user, userRole } = useAuth()
 
   useEffect(() => {
     const fetchProducts = async () => {
+      if (!user) {
+        console.error('User not authenticated')
+        setLoading(false)
+        return
+      }
       try {
-        const productsCollection = collection(db, 'products')
-        const productsSnapshot = await getDocs(productsCollection)
+        const productsQuery = query(
+          collection(db, 'warehouses', warehouseId, 'products')
+        )
+        const productsSnapshot = await getDocs(productsQuery)
         const productsList = productsSnapshot.docs.map(doc => {
           const data = doc.data()
-          let createdAtTimestamp = 0
-  
-          // Handle different possible formats of createdAt
-          if (data.createdAt) {
-            if (typeof data.createdAt.toMillis === 'function') {
-              // It's a Firestore Timestamp
-              createdAtTimestamp = data.createdAt.toMillis()
-            } else if (data.createdAt.seconds) {
-              // It's an object with seconds
-              createdAtTimestamp = data.createdAt.seconds * 1000
-            } else if (typeof data.createdAt === 'number') {
-              // It's already a number (milliseconds or seconds)
-              createdAtTimestamp = data.createdAt > 100000000000 ? data.createdAt : data.createdAt * 1000
-            }
+          let createdAtValue: number | Timestamp | FieldValue = data.createdAt
+
+          if (createdAtValue instanceof Timestamp) {
+            createdAtValue = createdAtValue.toMillis()
+          } else if (typeof createdAtValue === 'number') {
+            createdAtValue = createdAtValue
+          } else {
+            createdAtValue = Timestamp.now().toMillis()
           }
-  
+
           return { 
             id: doc.id, 
             ...data,
-            createdAt: createdAtTimestamp,
+            createdAt: createdAtValue,
             comments: data.comments || '',
-            exhibition: data.exhibition || {}
+            exhibition: data.exhibition || {},
+            warehouseId
           } as Product
         })
         productsList.forEach(product => addNewProduct(product))
@@ -83,9 +91,12 @@ export function InventoryDashboardComponent() {
         setLoading(false)
       }
     }
-  
-    fetchProducts()
-  }, [addNewProduct])
+    if (user) {
+      fetchProducts()
+    } else {
+      setLoading(false)
+    }
+  }, [addNewProduct, warehouseId, user])
 
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new()
@@ -101,9 +112,11 @@ export function InventoryDashboardComponent() {
       'Base Price': product.baseprice,
       'Sale Price': product.saleprice,
       'Exhibition': JSON.stringify(product.exhibition),
-      'Created At': product.createdAt instanceof FieldValue 
-        ? new Date().toISOString()
-        : new Date(product.createdAt).toISOString(),
+      'Created At': product.createdAt instanceof Timestamp 
+        ? product.createdAt.toDate().toISOString()
+        : typeof product.createdAt === 'number'
+          ? new Date(product.createdAt).toISOString()
+          : new Date().toISOString(),
       'Image URL': product.imageUrl
     }))
 
@@ -131,7 +144,6 @@ export function InventoryDashboardComponent() {
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     
-    // Save the file
     saveAs(data, 'inventory.xlsx')
   }
 
@@ -148,21 +160,29 @@ export function InventoryDashboardComponent() {
     )
   })
 
-  const handleDelete = async (id: string, imageUrl: string) => {
+  const handleDelete = async (product: Product) => {
+    if (userRole !== 'admin') {
+      console.error('Only admins can delete products')
+      return
+    }
     try {
-      await deleteDoc(doc(db, 'products', id))
-      const imageRef = ref(storage, imageUrl)
+      await deleteDoc(doc(db, 'warehouses', product.warehouseId, 'products', product.id))
+      const imageRef = ref(storage, product.imageUrl)
       await deleteObject(imageRef)
       
       // Use the removeProduct function from the context to update the state
-      removeProduct(id)
+      removeProduct(product.id)
     } catch (error) {
       console.error('Error deleting product:', error)
     }
   }
 
-  const handleUpdate = (id: string) => {
-    router.push(`/update-product/${id}`)
+  const handleUpdate = (product: Product) => {
+    if (userRole !== 'admin') {
+      console.error('Only admins can update products')
+      return
+    }
+    router.push(`/update-product/${product.id}?warehouseId=${product.warehouseId}`)
   }
 
   const sortSizes = (sizes: { [key: string]: SizeInput }) => {
@@ -189,8 +209,10 @@ export function InventoryDashboardComponent() {
         return a.brand.localeCompare(b.brand)
       }
       // Sort by entry order (newest first)
-      const aCreatedAt = a.createdAt instanceof FieldValue ? Date.now() : a.createdAt
-      const bCreatedAt = b.createdAt instanceof FieldValue ? Date.now() : b.createdAt
+      const aCreatedAt = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 
+                         typeof a.createdAt === 'number' ? a.createdAt : Date.now()
+      const bCreatedAt = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 
+                         typeof b.createdAt === 'number' ? b.createdAt : Date.now()
       return (bCreatedAt as number) - (aCreatedAt as number)
     })
   }, [filteredProducts, sortOrder])
@@ -204,6 +226,10 @@ export function InventoryDashboardComponent() {
 
   if (loading) {
     return <div>Loading...</div>
+  }
+
+  if (!user) {
+    return <div>Please log in to view this page.</div>
   }
 
   return (
@@ -271,9 +297,11 @@ export function InventoryDashboardComponent() {
         <div className="flex justify-between items-center mb-4 space-x-4">
         <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
           <div className="flex space-x-2">
-            <Button onClick={() => router.push('/form-product')}>
-              <PlusIcon className="mr-2 h-4 w-4" /> Add
-            </Button>
+          {userRole === 'admin' && (
+              <Button onClick={() => router.push(`/form-product/${warehouseId}`)}>
+                <PlusIcon className="mr-2 h-4 w-4" /> Add
+              </Button>
+            )}
           </div>
         </div>
         <Button onClick={exportToExcel}>
@@ -305,14 +333,18 @@ export function InventoryDashboardComponent() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleUpdate(product.id)}>
+                    {userRole === 'admin' && (
+                    <>
+                      <DropdownMenuItem onClick={() => handleUpdate(product)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         <span>Update</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(product.id, product.imageUrl)}>
+                      <DropdownMenuItem onClick={() => handleDelete(product)}>
                         <Trash2 className="mr-2 h-4 w-4" />
                         <span>Delete</span>
                       </DropdownMenuItem>
+                      </>
+                    )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
