@@ -62,8 +62,8 @@ export default function HomePage() {
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
+    <div className="container mx-auto p-2">
+      <div className="flex justify-between items-center mb-2">
         <h1 className="text-2xl font-bold">Your Stores</h1>
       </div>
       {stores.length === 0 ? (

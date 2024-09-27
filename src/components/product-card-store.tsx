@@ -22,7 +22,7 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const formatDate = (date: Timestamp | Date | undefined) => {
-    if (!date) return 'N/A'
+    if (!date) return null 
     if (date instanceof Timestamp) {
       return date.toDate().toLocaleString()
     }
@@ -32,6 +32,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     return 'Invalid Date'
   }
 
+  const formattedDate = formatDate(product.addedAt)
+
   return (
     <Card className="w-full">
       <CardContent className="p-2 flex items-center justify-between">
@@ -40,7 +42,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <p>Color: {product.color}</p>
           <p>{product.isBox ? 'Box' : 'Size'}: {product.isBox ? product.quantity : product.size}</p>
           <p>Barcode: {product.barcode}</p>
-          <p>Added: {formatDate(product.addedAt)}</p>
+          {formattedDate && <p>Added: {formattedDate}</p>}
         </div>
         <div className="w-24 h-24 relative">
           <Image

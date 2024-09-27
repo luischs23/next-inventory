@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, FileText, Package, User } from 'lucide-react'
 import { cn } from "app/lib/utils"
-import { ThemeToggle } from './ThemeToggle'
+import { ThemeToggle } from '../../ThemeToggle'
 
 const Navbar = () => {
   const pathname = usePathname()

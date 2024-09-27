@@ -12,6 +12,8 @@
   import ProductCard from 'app/components/product-card-store'
   import { MoreVertical, Save, Search } from 'lucide-react'
   import { useToast } from "app/components/ui/use-toast"
+  import { format } from 'date-fns'
+  import { Lock, Unlock } from 'lucide-react'
 
   interface Size {
     quantity: number
@@ -69,12 +71,51 @@
     const [totalSold, setTotalSold] = useState(0)
     const [customerName, setCustomerName] = useState('')
     const [customerPhone, setCustomerPhone] = useState('')
+    const [nameError, setNameError] = useState('')
+    const [phoneError, setPhoneError] = useState('')
     const [storeName, setStoreName] = useState<string>('')
     const [searchBarcode, setSearchBarcode] = useState('')
     const [searchedProduct, setSearchedProduct] = useState<ProductWithBarcode | null>(null)
     const [stores, setStores] = useState<{[id: string]: string}>({})
     const [warehouses, setWarehouses] = useState<{[id: string]: string}>({})
+    const [salePrices, setSalePrices] = useState<{ [key: string]: string }>({})
+    const [enabledItems, setEnabledItems] = useState<{ [key: string]: boolean }>({})
+    const [previousSalePrices, setPreviousSalePrices] = useState<{ [key: string]: number }>({})
 
+    const toggleItemEnabled = (invoiceId: string) => {
+      setEnabledItems(prev => ({
+        ...prev,
+        [invoiceId]: !prev[invoiceId]
+      }))
+    }
+    
+    const validateInputs = () => {
+      let isValid = true
+      if (!customerName.trim()) {
+        setNameError('Please enter the customer name.')
+        isValid = false
+      } else {
+        setNameError('')
+      }
+      if (!customerPhone.trim()) {
+        setPhoneError('Please enter the customer phone number.')
+        isValid = false
+      } else {
+        setPhoneError('')
+      }
+      return isValid
+    }    
+    
+    const formatPrice = (price: number): string => {
+      return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    }
+  
+    const parsePrice = (price: string): number => {
+      return parseInt(price.replace(/\./g, ''), 10)
+    }
+    
+    const formattedDate = format(new Date(), 'dd-MM-yyyy')
+  
     useEffect(() => {
       if (!user) {
         router.push('/login')
@@ -115,27 +156,25 @@
 
       const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
       const invoiceSnapshot = await getDocs(invoiceRef)
+
       const invoiceItems = invoiceSnapshot.docs.map(doc => {
         const data = doc.data()
-        if ('comments' in data && 'gender' in data && 'baseprice' in data) {
-          return {
-            ...data,
-            invoiceId: doc.id,
-            salePrice: Number(data.salePrice) || 0,
-            sold: data.sold || false,
-            addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date(),
-            baseprice: Number(data.baseprice)
-          } as BoxItem
-        } else {
-          return {
-            ...data,
-            invoiceId: doc.id,
-            salePrice: Number(data.salePrice) || 0,
-            sold: data.sold || false,
-            addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date()
-          } as InvoiceItem
-        }
+        const item = {
+          ...data,
+          invoiceId: doc.id,
+          salePrice: Number(data.salePrice) || 0,
+          sold: data.sold || false,
+          addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date(),
+        } as InvoiceItem | BoxItem
+  
+        // Initialize enabledItems and salePrices for each item
+        setEnabledItems(prev => ({ ...prev, [item.invoiceId]: true }))
+        setSalePrices(prev => ({ ...prev, [item.invoiceId]: formatPrice(item.salePrice) }))
+        setPreviousSalePrices(prev => ({ ...prev, [item.invoiceId]: item.salePrice }))
+  
+        return item
       })
+  
       setInvoice(invoiceItems)
       calculateTotalSold(invoiceItems)
     }
@@ -288,14 +327,12 @@
       setSearchedProduct(null)
       setSearchBarcode('')
 
-      console.log('Added to invoice:', newInvoiceItem)
-
       toast({
         title: "Product Added",
         description: product.exhibitionStore 
           ? "The exhibition product has been added to the invoice." 
           : "The product has been added to the invoice.",
-        duration: 3000,
+        duration: 1500,
         style: {
           background: "#4CAF50",
           color: "white",
@@ -315,9 +352,7 @@
     const handleReturn = async (item: InvoiceItem | BoxItem) => {
       if (!user) return
 
-      try {
-        console.log('Returning item:', item)
-  
+      try { 
         // Remove the item from the invoice
         await deleteDoc(doc(db, 'stores', params.id, 'invoices', user.uid, 'items', item.invoiceId))
   
@@ -377,8 +412,7 @@
               sizes: updatedSizes,
               total: newTotal
             })
-            console.log('Updated product:', { id: item.id, sizes: updatedSizes, total: newTotal })
-          } else {
+            } else {
             console.error('Product not found:', item.id)
           }
         }
@@ -386,7 +420,6 @@
         // Update the local state
         setInvoice(prevInvoice => {
           const updatedInvoice = prevInvoice.filter(i => i.invoiceId !== item.invoiceId)
-          console.log('Updated invoice after return:', updatedInvoice)
           return updatedInvoice
         })
   
@@ -399,7 +432,7 @@
           description: item.exhibitionStore 
             ? "The exhibition product has been returned to inventory."
             : "The product has been returned to inventory.",
-          duration: 3000,
+          duration: 1500,
           style: {
             background: "#2196F3",
             color: "white",
@@ -417,50 +450,75 @@
       }
     }
 
-    const handleSalePriceChange = (invoiceId: string, price: number) => {
-      setInvoice(prevInvoice => 
-        prevInvoice.map(item => 
-          item.invoiceId === invoiceId ? { ...item, salePrice: Number(price) } : item
-        )
-      )
+    const handleSalePriceChange = (invoiceId: string, value: string) => {
+      if (enabledItems[invoiceId]) {
+        const numericValue = value.replace(/\D/g, '')
+        const formattedValue = formatPrice(parseInt(numericValue, 10))
+        setSalePrices(prev => ({ ...prev, [invoiceId]: formattedValue }))
+      }
     }
 
     const handleSold = async (item: InvoiceItem | BoxItem) => {
-      if (!user) return
-
-      const updatedItem = { ...item, sold: true }
-      await updateDoc(doc(db, 'stores', params.id, 'invoices', user.uid, 'items', item.invoiceId), updatedItem)
-
-      const productRef = doc(db, 'products', item.id)
-      const productDoc = await getDoc(productRef)
-      if (productDoc.exists()) {
-        const productData = productDoc.data() as Product
-        const updatedExhibition = { ...productData.exhibition }
-        if (item.exhibitionStore) {
-          delete updatedExhibition[item.exhibitionStore]
-        }
-
-        await updateDoc(productRef, {
-          exhibition: updatedExhibition,
-          total: productData.total - 1
+      if (!user) {
+        console.error('User not authenticated');
+        toast({
+          title: "Error",
+          description: "You must be logged in to perform this action.",
+          duration: 1500,
+          variant: "destructive",
+        });
+        return;
+      }
+      const newSalePrice = parsePrice(salePrices[item.invoiceId] || String(item.salePrice))
+      if (isNaN(newSalePrice)) {
+        toast({
+          title: "Invalid Price",
+          duration: 1000,
+          description: "Please enter a valid price before marking as sold.",
+          variant: "destructive",
+        })
+        return
+      }
+      try {
+        
+        const itemRef = doc(db, 'stores', params.id, 'invoices', user.uid, 'items', item.invoiceId);
+        await updateDoc(itemRef, { 
+          sold: true,
+          salePrice: newSalePrice,
+          soldAt: serverTimestamp()
+        })
+  
+        setInvoice(prevInvoice => 
+          prevInvoice.map(i => 
+            i.invoiceId === item.invoiceId 
+              ? { ...i, sold: true, salePrice: newSalePrice } 
+              : i
+          )
+        )
+  
+        // Update total sold
+        setTotalSold(prevTotal => {
+          const oldPrice = previousSalePrices[item.invoiceId] || 0
+          const priceDifference = newSalePrice - oldPrice
+          return prevTotal + priceDifference
+        })
+        // Update previous sale price
+        setPreviousSalePrices(prev => ({ ...prev, [item.invoiceId]: newSalePrice }))
+        // Disable the item after marking as sold
+        setEnabledItems(prev => ({ ...prev, [item.invoiceId]: false }))
+        
+      } catch (error) {
+        console.error('Error marking item as sold:', error)
+        toast({
+          title: "Error",
+          description: "Failed to mark item as sold. Please try again.",
+          variant: "destructive",
         })
       }
-
-      setInvoice(prevInvoice => 
-        prevInvoice.map(i => 
-          i.invoiceId === item.invoiceId ? updatedItem : i
-        )
-      )
-
-      setTotalSold(prevTotal => prevTotal + Number(item.salePrice))
-
-      toast({
-        title: "Product Sold",
-        description: "The product has been marked as sold.",
-      })
     }
 
     const handleSaveInvoice = async () => {
+      if (validateInputs()) {
       if (!user) {
         toast({
           title: "Error",
@@ -516,7 +574,16 @@
         toast({
           title: "Success",
           description: "Invoice saved successfully.",
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
         })
+        // Reset form fields
+        setCustomerName('')
+        setCustomerPhone('')
 
         router.push(`/saved-invoice/${savedInvoiceDoc.id}`)
       } catch (error) {
@@ -528,6 +595,7 @@
         })
       }
     }
+  }
 
     return (
       <div className="container mx-auto p-4">
@@ -563,16 +631,24 @@
             <CardTitle>Customer Information</CardTitle>
           </CardHeader>
           <CardContent className="flex space-x-4">
-            <Input
-              placeholder="Name"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-            />
+          <div>
+          <Input
+            placeholder="Name"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            className={nameError ? "border-red-500" : ""}
+          />
+          {nameError && <p className="text-red-500 text-sm mt-1">{nameError}</p>}
+          </div>
+          <div>
             <Input
               placeholder="Phone"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
+              className={phoneError ? "border-red-500" : ""}
             />
+            {phoneError && <p className="text-red-500 text-sm mt-1">{phoneError}</p>}
+          </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline"><MoreVertical className="h-4 w-4" /></Button>
@@ -591,32 +667,45 @@
           <CardHeader>
             <CardTitle>Invoice</CardTitle>
             <div className="text-sm text-gray-500">
-              Items: {invoice.length} | Total Sold: ${totalSold.toFixed(2)} | Date: {new Date().toLocaleString()}
+            Items: {invoice.length} | Total Sold: ${formatPrice(totalSold)} | Date: {formattedDate}
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {invoice.map((item) => (
+              {invoice.map((item, index) => (
                 <div key={item.invoiceId} className="space-y-2">
-                  <ProductCard product={item} />
+                  <div className="flex">
+                    <span className="text-sm font-normal text-gray-600 pt-1 pr-1">{index + 1}</span>
+                    <ProductCard product={item} />
+                  </div>
                   <div className="flex items-center space-x-2">
                     <Button onClick={() => handleReturn(item)}>Return</Button>
                     <Input
-                      type="number"
-                      value={item.salePrice}
-                      onChange={(e) => handleSalePriceChange(item.invoiceId, parseFloat(e.target.value))}
-                      disabled={item.sold}
+                      value={salePrices[item.invoiceId] ?? formatPrice(item.salePrice)}
+                      onChange={(e) => handleSalePriceChange(item.invoiceId, e.target.value)}
+                      disabled={!enabledItems[item.invoiceId]}
                       className="w-24"
                     />
-                    <Button onClick={() => handleSold(item)} disabled={item.sold}>Sold</Button>
-                    <span className="ml-auto">${Number(item.salePrice).toFixed(2)}</span>
+                    <Button 
+                      onClick={() => toggleItemEnabled(item.invoiceId)}
+                      variant="outline"
+                      size="icon"
+                    >
+                      {!enabledItems[item.invoiceId] ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                    </Button>
+                    <Button 
+                      onClick={() => handleSold(item)} 
+                      disabled={!enabledItems[item.invoiceId]}
+                    >
+                      Sold
+                    </Button>
                   </div>
                   {item.exhibitionStore && (
                     <div className="text-sm text-gray-500">
                       Exhibition: {stores[item.exhibitionStore]}
                     </div>
                   )}
-                  {item.warehouseId && (
+                  {!item.exhibitionStore && item.warehouseId && (
                     <div className="text-sm text-gray-500">
                       Warehouse: {warehouses[item.warehouseId]}
                     </div>

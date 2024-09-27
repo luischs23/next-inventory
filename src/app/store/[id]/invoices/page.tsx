@@ -14,6 +14,7 @@ interface Invoice {
   customerName: string
   createdAt: Timestamp
   totalSold: number
+  customerPhone: string
 }
 
 interface Store {
@@ -86,7 +87,7 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Invoices for {storeName}</h1>
         <Link href={`/store/${params.id}`}>
-          <Button>Add New Invoice</Button>
+          <Button>New Invoice</Button>
         </Link>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -94,10 +95,11 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
           <Card key={invoice.id}>
             <CardHeader>
               <CardTitle>{invoice.customerName}</CardTitle>
+              <p className="text-sm text-gray-700">{invoice.customerPhone}</p>
               <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
             </CardHeader>
             <CardContent>
-              <p>Total: ${invoice.totalSold.toFixed(2)}</p>
+              <p>Total: ${invoice.totalSold}</p>
               <Button className="mt-2" onClick={() => router.push(`/store/${params.id}/saved-invoice/${invoice.id}`)}>
                 View Details
               </Button>

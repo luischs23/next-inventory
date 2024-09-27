@@ -23,6 +23,7 @@
     "app": "^0.1.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "file-saver": "^2.0.5",
     "firebase": "^10.13.2",
     "jspdf": "^2.5.2",
