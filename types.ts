@@ -7,6 +7,7 @@ export interface Product {
     sizes: { [key: string]: number }
     imageUrl: string
     total: number
+    isActive: boolean
   }
   
   export interface ProductCardProps {

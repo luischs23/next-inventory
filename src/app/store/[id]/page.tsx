@@ -538,8 +538,9 @@
       }
 
       try {
-        const savedInvoiceRef = collection(db, 'savedInvoices')
-        const savedInvoiceDoc = await addDoc(savedInvoiceRef, {
+        const storeRef = doc(db, 'stores', params.id)
+        const invoicesRef = collection(storeRef, 'invoices')
+        const newInvoiceDoc = await addDoc(invoicesRef, {
           storeId: params.id,
           userId: user.uid,
           customerName: customerName || "Unknown",
@@ -560,12 +561,13 @@
             isBox: 'comments' in item
           }))
         })
-
+        // Clear the current invoice
         setInvoice([])
         setTotalSold(0)
         setCustomerName('')
         setCustomerPhone('')
 
+        // Delete the temporary invoice items
         const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
         const invoiceSnapshot = await getDocs(invoiceRef)
         const deletePromises = invoiceSnapshot.docs.map(doc => deleteDoc(doc.ref))
@@ -584,8 +586,8 @@
         // Reset form fields
         setCustomerName('')
         setCustomerPhone('')
-
-        router.push(`/saved-invoice/${savedInvoiceDoc.id}`)
+      // Navigate to the new invoice page
+      router.push(`/store/${params.id}/invoices/${newInvoiceDoc.id}`)
       } catch (error) {
         console.error("Error saving invoice:", error)
         toast({

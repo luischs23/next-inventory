@@ -18,13 +18,13 @@ import {
 } from "app/components/ui/dropdown-menu"
 
 const stores = [
-  { name: 'Store 1', invoices: true, exbInventory: true, unassignableExb: true },
-  { name: 'Store 2', invoices: true, exbInventory: true, unassignableExb: false },
+  { id: 's1', name: 'Store 1', invoices: true, exbInventory: true, unassignableExb: true },
+  { id: 's2', name: 'Store 2', invoices: true, exbInventory: true, unassignableExb: false },
 ]
 
 const warehouses = [
-  { name: 'Warehouse 1', boxesInventory: true, productInventory: true },
-  { name: 'Warehouse 2', boxesInventory: true, productInventory: false },
+  { id: 'w1', name: 'Warehouse 1', boxesInventory: true, productInventory: true },
+  { id: 'w2', name: 'Warehouse 2', boxesInventory: true, productInventory: false },
 ]
 
 const routes = [
