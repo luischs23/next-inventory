@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from "./ui/button"
-import { Input } from "./ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
+import { Button } from "app/components/ui/button"
+import { Input } from "app/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
+import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
+import { Switch } from "app/components/ui/switch"
 import { PlusIcon, Pencil, Trash2, MoreHorizontal, FileDown } from 'lucide-react'
-import { db, storage } from '../services/firebase/firebase.config'
-import { collection, getDocs, deleteDoc, doc , query, Timestamp, FieldValue} from 'firebase/firestore'
+import { db, storage } from 'app/services/firebase/firebase.config'
+import { collection, getDocs, deleteDoc, doc, query, Timestamp, FieldValue } from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import Image from 'next/image'
 import { useProducts } from 'app/app/context/ProductContext'
@@ -20,7 +21,7 @@ import { useAuth } from 'app/app/context/AuthContext'
 interface SizeInput {
   quantity: number
   barcodes: string[]
-} 
+}
 
 interface Product {
   id: string
@@ -34,20 +35,18 @@ interface Product {
   baseprice: number
   saleprice: number
   createdAt: number | Timestamp | FieldValue
-  comments: string 
-  exhibition: { [store: string]: string } 
+  comments: string
+  exhibition: { [store: string]: string }
   warehouseId: string
 }
 
-interface InventoryDashboardComponentProps {
-  warehouseId: string
-}
-
-export default function InventoryDashboardComponent({ warehouseId }: InventoryDashboardComponentProps) {
+export default function InventoryDashboard({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const warehouseId = params.id
   const { products, addNewProduct, removeProduct } = useProducts()
   const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
+  const [showInactive, setShowInactive] = useState(false)
   const [loading, setLoading] = useState(true)
   const { user, userRole } = useAuth()
 
@@ -98,10 +97,89 @@ export default function InventoryDashboardComponent({ warehouseId }: InventoryDa
     }
   }, [addNewProduct, warehouseId, user])
 
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const isInactive = product.total === 0 || Object.keys(product.sizes).length === 0
+      const matchesFilters = (
+        (filters.brand === '' || product.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
+        (filters.reference === '' || product.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
+        (filters.color === '' || product.color.toLowerCase().includes(filters.color.toLowerCase())) &&
+        (filters.gender === '' || filters.gender === 'all' || product.gender === filters.gender)
+      )
+      return matchesFilters && (showInactive ? isInactive : !isInactive)
+    })
+  }, [products, filters, showInactive])
+
+  const handleDelete = async (product: Product) => {
+    if (userRole !== 'admin') {
+      console.error('Only admins can delete products')
+      return
+    }
+    try {
+      await deleteDoc(doc(db, 'warehouses', product.warehouseId, 'products', product.id))
+      const imageRef = ref(storage, product.imageUrl)
+      await deleteObject(imageRef)
+      
+      removeProduct(product.id)
+    } catch (error) {
+      console.error('Error deleting product:', error)
+    }
+  }
+
+  const handleUpdate = (product: Product) => {
+    if (userRole !== 'admin') {
+      console.error('Only admins can update products')
+      return
+    }
+    router.push(`/update-product/${product.id}?warehouseId=${product.warehouseId}`)
+  }
+
+  const sortSizes = (sizes: { [key: string]: SizeInput }) => {
+    return Object.entries(sizes).sort((a, b) => {
+      const sizeA = a[0].toLowerCase().replace('t-', '')
+      const sizeB = b[0].toLowerCase().replace('t-', '')
+      
+      if (!isNaN(Number(sizeA)) && !isNaN(Number(sizeB))) {
+        return Number(sizeA) - Number(sizeB)
+      }
+      
+      return sizeA.localeCompare(sizeB)
+    })
+  }
+
+  const formatNumber = (value: number) => {
+    return value.toLocaleString('es-ES')
+  }
+
+  const sortedProducts = useMemo(() => {
+    return [...filteredProducts].sort((a, b) => {
+      if (sortOrder === 'alphabetical') {
+        return a.brand.localeCompare(b.brand)
+      }
+      const aCreatedAt = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 
+                         typeof a.createdAt === 'number' ? a.createdAt : Date.now()
+      const bCreatedAt = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 
+                         typeof b.createdAt === 'number' ? b.createdAt : Date.now()
+      return (bCreatedAt as number) - (aCreatedAt as number)
+    })
+  }, [filteredProducts, sortOrder])
+
+  const summaryInfo = useMemo(() => {
+    const totalItems = filteredProducts.length
+    const totalPares = filteredProducts.reduce((sum, product) => sum + product.total, 0)
+    const totalBase = filteredProducts.reduce((sum, product) => sum + product.baseprice * product.total, 0)
+    const totalSale = filteredProducts.reduce((sum, product) => sum + product.saleprice * product.total, 0)
+    return { totalItems, totalPares, totalBase, totalSale }
+  }, [filteredProducts])
+
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new()
     
-    const worksheetData = products.map(product => ({
+    const worksheetData = filteredProducts.map(product => ({
       'Brand': product.brand,
       'Reference': product.reference,
       'Color': product.color,
@@ -122,107 +200,19 @@ export default function InventoryDashboardComponent({ warehouseId }: InventoryDa
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData)
 
-    // Set column widths
     worksheet['!cols'] = [
-      { width: 15 }, // Brand
-      { width: 15 }, // Reference
-      { width: 15 }, // Color
-      { width: 10 }, // Gender
-      { width: 30 }, // Sizes
-      { width: 15 }, // Total Quantity
-      { width: 20 }, // Comments
-      { width: 15 }, // Base Price
-      { width: 15 }, // Sale Price
-      { width: 30 }, // Exhibition
-      { width: 20 }, // Created At
-      { width: 30 }  // Image URL
+      { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 },
+      { width: 30 }, { width: 15 }, { width: 20 }, { width: 15 },
+      { width: 15 }, { width: 30 }, { width: 20 }, { width: 30 }
     ]
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory')
+    XLSX.utils.book_append_sheet(workbook, worksheet, showInactive ? 'Inactive Inventory' : 'Active Inventory')
 
-    // Generate Excel file
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     
-    saveAs(data, 'inventory.xlsx')
+    saveAs(data, showInactive ? 'inactive_inventory.xlsx' : 'active_inventory.xlsx')
   }
-
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const filteredProducts = products.filter((product) => {
-    return (
-      (filters.brand === '' || product.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
-      (filters.reference === '' || product.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
-      (filters.color === '' || product.color.toLowerCase().includes(filters.color.toLowerCase())) &&
-      (filters.gender === '' || filters.gender === 'all' || product.gender === filters.gender)
-    )
-  })
-
-  const handleDelete = async (product: Product) => {
-    if (userRole !== 'admin') {
-      console.error('Only admins can delete products')
-      return
-    }
-    try {
-      await deleteDoc(doc(db, 'warehouses', product.warehouseId, 'products', product.id))
-      const imageRef = ref(storage, product.imageUrl)
-      await deleteObject(imageRef)
-      
-      // Use the removeProduct function from the context to update the state
-      removeProduct(product.id)
-    } catch (error) {
-      console.error('Error deleting product:', error)
-    }
-  }
-
-  const handleUpdate = (product: Product) => {
-    if (userRole !== 'admin') {
-      console.error('Only admins can update products')
-      return
-    }
-    router.push(`/update-product/${product.id}?warehouseId=${product.warehouseId}`)
-  }
-
-  const sortSizes = (sizes: { [key: string]: SizeInput }) => {
-    return Object.entries(sizes).sort((a, b) => {
-      const sizeA = a[0].toLowerCase().replace('t-', '')
-      const sizeB = b[0].toLowerCase().replace('t-', '')
-      
-      // Check if both sizes are numeric
-      if (!isNaN(Number(sizeA)) && !isNaN(Number(sizeB))) {
-        return Number(sizeA) - Number(sizeB)
-      }
-      
-      // If one or both are not numeric, sort alphabetically
-      return sizeA.localeCompare(sizeB)
-    })
-  }
-  const formatNumber = (value: number) => {
-    return value.toLocaleString('es-ES')
-  }
-
-  const sortedProducts = useMemo(() => {
-    return [...filteredProducts].sort((a, b) => {
-      if (sortOrder === 'alphabetical') {
-        return a.brand.localeCompare(b.brand)
-      }
-      // Sort by entry order (newest first)
-      const aCreatedAt = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 
-                         typeof a.createdAt === 'number' ? a.createdAt : Date.now()
-      const bCreatedAt = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 
-                         typeof b.createdAt === 'number' ? b.createdAt : Date.now()
-      return (bCreatedAt as number) - (aCreatedAt as number)
-    })
-  }, [filteredProducts, sortOrder])
-  const summaryInfo = useMemo(() => {
-    const totalItems = filteredProducts.length
-    const totalPares = filteredProducts.reduce((sum, product) => sum + product.total, 0)
-    const totalBase = filteredProducts.reduce((sum, product) => sum + product.baseprice * product.total, 0)
-    const totalSale = filteredProducts.reduce((sum, product) => sum + product.saleprice * product.total, 0)
-    return { totalItems, totalPares, totalBase, totalSale }
-  }, [filteredProducts])
 
   if (loading) {
     return <div>Loading...</div>
@@ -295,18 +285,28 @@ export default function InventoryDashboardComponent({ warehouseId }: InventoryDa
       </Card>
       <div className="w-full md:w-3/4">
         <div className="flex justify-between items-center mb-4 space-x-4">
-        <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
-          <div className="flex space-x-2">
-          {userRole === 'admin' && (
+          <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
+          <div className="flex items-center space-x-4">
+              <Switch
+                id="show-inactive"
+                checked={showInactive}
+                onCheckedChange={setShowInactive}
+              />
+              <label htmlFor="show-inactive" className="text-sm font-medium">
+                {showInactive ? 'Showing Inactive' : 'Showing Active'}
+              </label>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+        <Button onClick={exportToExcel} className="mb-4">
+          <FileDown className="mr-2 h-4 w-4" /> Export Excel
+        </Button>
+        {userRole === 'admin' && (
               <Button onClick={() => router.push(`/form-product/${warehouseId}`)}>
                 <PlusIcon className="mr-2 h-4 w-4" /> Add
               </Button>
             )}
-          </div>
         </div>
-        <Button onClick={exportToExcel}>
-          <FileDown className="mr-2 h-4 w-4" /> Export Excel
-        </Button>
         <Card className="mb-6">
           <CardContent className="p-4">
             <div className="grid grid-cols-2 gap-4">
@@ -319,69 +319,78 @@ export default function InventoryDashboardComponent({ warehouseId }: InventoryDa
         </Card>
 
         <div className="space-y-4">
-        {sortedProducts.map((product, index) => (
+          {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
               <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
               <Card className="flex-grow relative">
-              <CardContent className="p-4">
-                <div className="absolute top-2 right-2">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                    {userRole === 'admin' && (
-                    <>
-                      <DropdownMenuItem onClick={() => handleUpdate(product)}>
-                        <Pencil className="mr-2 h-4 w-4" />
-                        <span>Update</span>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleDelete(product)}>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        <span>Delete</span>
-                      </DropdownMenuItem>
-                      </>
-                    )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="relative w-16 h-16 flex-shrink-0">
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.reference}
-                      fill
-                      sizes="(max-width: 64px) 100vw, 64px"
-                      className="object-cover rounded-md"
-                    />
+                <CardContent className="p-4">
+                  <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Open menu</span>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {userRole === 'admin' && (
+                          <>
+                            <DropdownMenuItem onClick={() => handleUpdate(product)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              <span>Update</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(product)}>
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              <span>Delete</span>
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <div className="flex-grow">
-                    <h3 className="font-semibold">{product.brand}</h3>
-                    <p className="text-sm text-gray-500">{product.reference}</p>
-                    <p className="text-sm">{product.color} - {product.gender}</p>
+                  <div className="flex items-center space-x-4">
+                    <div className="relative w-16 h-16 flex-shrink-0">
+                      <Image
+                        src={product.imageUrl}
+                        alt={product.reference}
+                        fill
+                        sizes="(max-width: 64px) 100vw, 64px"
+                        className="object-cover rounded-md"
+                      />
+                    </div>
+                    <div className="flex-grow">
+                      <h3 className="font-semibold">{product.brand}</h3>
+                      <p className="text-sm text-gray-500">{product.reference}</p>
+                      <p className="text-sm">{product.color} - {product.gender}</p>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                  <div className='flex space-x-9'>
-                    <span className="font-medium">Total:</span> {product.total}
-                    <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+                    <div className='flex space-x-9'>
+                      <span className="font-medium">Total:</span> {product.total}
+                      <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
+                    </div>
                   </div>
-                </div>
-                <div className="mt-2">
-                  <span className="font-medium text-sm">Sizes:</span>
-                  <div className="grid grid-cols-3 gap-1 mt-1">
-                    {sortSizes(product.sizes).map(([size, { quantity }]) => (
-                      <div key={size} className="text-xs bg-gray-100 p-1 rounded">
-                        {size}: {quantity}
-                      </div>
-                    ))}
+                  <div className="mt-2">
+                    <span className="font-medium text-sm">Sizes:</span>
+                    <div className="grid grid-cols-3 gap-1 mt-1">
+                      {Object.keys(product.sizes).length > 0 ? (
+                        sortSizes(product.sizes).map(([size, { quantity }]) => (
+                          <div key={size} className="text-xs bg-gray-100 p-1 rounded">
+                            {size}: {quantity}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-xs text-red-500">No sizes available</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                  {product.total === 0 && (
+                    <div className="mt-2 text-sm text-red-500">
+                      This product is out of stock.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           ))}
         </div>
