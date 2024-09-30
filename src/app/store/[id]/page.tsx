@@ -1,6 +1,6 @@
   'use client'
 
-  import { useState, useEffect } from 'react'
+  import { useState, useEffect, useCallback } from 'react'
   import { useAuth } from 'app/app/context/AuthContext'
   import { useRouter } from 'next/navigation'
   import { db } from 'app/services/firebase/firebase.config'
@@ -10,10 +10,9 @@
   import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
   import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
   import ProductCard from 'app/components/product-card-store'
-  import { MoreVertical, Save, Search } from 'lucide-react'
+  import { MoreVertical, Save, Search, Lock, Unlock} from 'lucide-react'
   import { useToast } from "app/components/ui/use-toast"
   import { format } from 'date-fns'
-  import { Lock, Unlock } from 'lucide-react'
 
   interface Size {
     quantity: number
@@ -81,7 +80,64 @@
     const [salePrices, setSalePrices] = useState<{ [key: string]: string }>({})
     const [enabledItems, setEnabledItems] = useState<{ [key: string]: boolean }>({})
     const [previousSalePrices, setPreviousSalePrices] = useState<{ [key: string]: number }>({})
+    const [totalEarn, setTotalEarn] = useState(0)
 
+    const fetchInvoiceData = useCallback(async () => {
+      if (!user) return
+  
+      const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
+      const invoiceSnapshot = await getDocs(invoiceRef)
+  
+      const invoiceItems = invoiceSnapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          ...data,
+          invoiceId: doc.id,
+          salePrice: Number(data.salePrice) || 0,
+          sold: data.sold || false,
+          addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date(),
+        } as InvoiceItem | BoxItem
+      })
+  
+      setInvoice(invoiceItems)
+      calculateTotals(invoiceItems)
+      initializeItemStates(invoiceItems)
+    }, [user, params.id])
+  
+    const calculateTotals = useCallback((items: (InvoiceItem | BoxItem)[]) => {
+      const totalSold = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) : 0), 0)
+      const totalEarn = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) - Number(item.baseprice) : 0), 0)
+      
+      setTotalSold(totalSold)
+      setTotalEarn(totalEarn)
+    }, [])
+  
+    const initializeItemStates = useCallback((items: (InvoiceItem | BoxItem)[]) => {
+      const newSalePrices: { [key: string]: string } = {}
+      const newEnabledItems: { [key: string]: boolean } = {}
+      const newPreviousSalePrices: { [key: string]: number } = {}
+  
+      items.forEach(item => {
+        newSalePrices[item.invoiceId] = formatPrice(item.salePrice)
+        newEnabledItems[item.invoiceId] = !item.sold
+        newPreviousSalePrices[item.invoiceId] = item.salePrice
+      })
+  
+      setSalePrices(newSalePrices)
+      setEnabledItems(newEnabledItems)
+      setPreviousSalePrices(newPreviousSalePrices)
+    }, [])
+  
+    useEffect(() => {
+      if (!user) {
+        router.push('/login')
+      } else {
+        fetchInvoiceData()
+        fetchStores()
+        fetchWarehouses()
+      }
+    }, [user, router, fetchInvoiceData]) 
+    
     const toggleItemEnabled = (invoiceId: string) => {
       setEnabledItems(prev => ({
         ...prev,
@@ -113,18 +169,6 @@
     const parsePrice = (price: string): number => {
       return parseInt(price.replace(/\./g, ''), 10)
     }
-    
-    const formattedDate = format(new Date(), 'dd-MM-yyyy')
-  
-    useEffect(() => {
-      if (!user) {
-        router.push('/login')
-      } else {
-        fetchStoreAndInvoiceItems()
-        fetchStores()
-        fetchWarehouses()
-      }
-    }, [user, router])
 
     const fetchStores = async () => {
       const storesSnapshot = await getDocs(collection(db, 'stores'))
@@ -182,6 +226,9 @@
     const calculateTotalSold = (items: (InvoiceItem | BoxItem)[]) => {
       const total = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) : 0), 0)
       setTotalSold(total)
+
+      const totalProfit = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) - Number(item.baseprice) : 0), 0)
+      setTotalEarn(totalProfit)
     }
 
     const handleSearch = async () => {
@@ -305,25 +352,30 @@
           })
         }
       }
-
       const invoiceRef = doc(collection(db, 'stores', params.id, 'invoices', user.uid, 'items'))
+
       const newInvoiceItem: InvoiceItem | BoxItem = {
         ...product,
         invoiceId: invoiceRef.id,
         salePrice: Number(product.saleprice),
         sold: false,
         addedAt: serverTimestamp() as Timestamp,
-        sizes: { [product.size]: { quantity: 1, barcodes: [product.barcode] } },
+        imageUrl: product.imageUrl, 
+        isBox: product.isBox || false,
         ...(product.exhibitionStore && { exhibitionStore: product.exhibitionStore }),
         ...(product.isBox && {
           comments: (product as BoxItem).comments || '',
           gender: (product as BoxItem).gender || '',
-          baseprice: (product as BoxItem).baseprice || 0
+          baseprice: (product as BoxItem).baseprice || 0,
+          size: (product as BoxItem).size || ''
       })
     }
+      
       await setDoc(invoiceRef, newInvoiceItem)
 
-      setInvoice(prevInvoice => [...prevInvoice, {...newInvoiceItem, addedAt: new Date()}])
+      // Re-fetch invoice data to ensure all totals and states are up-to-date
+      await fetchInvoiceData()
+
       setSearchedProduct(null)
       setSearchBarcode('')
 
@@ -488,34 +540,28 @@
           soldAt: serverTimestamp()
         })
   
-        setInvoice(prevInvoice => 
-          prevInvoice.map(i => 
-            i.invoiceId === item.invoiceId 
-              ? { ...i, sold: true, salePrice: newSalePrice } 
-              : i
-          )
-        )
-  
-        // Update total sold
-        setTotalSold(prevTotal => {
-          const oldPrice = previousSalePrices[item.invoiceId] || 0
-          const priceDifference = newSalePrice - oldPrice
-          return prevTotal + priceDifference
-        })
-        // Update previous sale price
-        setPreviousSalePrices(prev => ({ ...prev, [item.invoiceId]: newSalePrice }))
-        // Disable the item after marking as sold
-        setEnabledItems(prev => ({ ...prev, [item.invoiceId]: false }))
-        
-      } catch (error) {
-        console.error('Error marking item as sold:', error)
-        toast({
-          title: "Error",
-          description: "Failed to mark item as sold. Please try again.",
-          variant: "destructive",
-        })
-      }
+        // Re-fetch invoice data to ensure all totals are up-to-date
+      await fetchInvoiceData()
+
+      toast({
+        title: "Success",
+        description: "Item marked as sold successfully.",
+        duration: 1500,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
+    } catch (error) {
+      console.error('Error marking item as sold:', error)
+      toast({
+        title: "Error",
+        description: "Failed to mark item as sold. Please try again.",
+        variant: "destructive",
+      })
     }
+  }
 
     const handleSaveInvoice = async () => {
       if (validateInputs()) {
@@ -558,7 +604,13 @@
             addedAt: item.addedAt || serverTimestamp(),
             exhibitionStore: item.exhibitionStore || null,
             warehouseId: item.warehouseId || null,
-            isBox: 'comments' in item
+            imageUrl: item.imageUrl || "", // Add this line to include the image URL
+            isBox: item.isBox || false, // Change this line to correctly set isBox
+            ...(item.isBox ? {
+            comments: (item as BoxItem).comments || "",
+            gender: (item as BoxItem).gender || "",
+            baseprice: (item as BoxItem).baseprice || 0
+          } : {})
           }))
         })
         // Clear the current invoice
@@ -601,7 +653,7 @@
 
     return (
       <div className="container mx-auto p-4">
-        <Card className="mb-8">
+        <Card className="mb-2">
           <CardHeader>
             <CardTitle>{storeName}</CardTitle>
           </CardHeader>
@@ -628,7 +680,7 @@
           </CardContent>
         </Card>
 
-        <Card className="mb-8">
+        <Card className="mb-2">
           <CardHeader>
             <CardTitle>Customer Information</CardTitle>
           </CardHeader>
@@ -669,7 +721,7 @@
           <CardHeader>
             <CardTitle>Invoice</CardTitle>
             <div className="text-sm text-gray-500">
-            Items: {invoice.length} | Total Sold: ${formatPrice(totalSold)} | Date: {formattedDate}
+            Items: {invoice.length} | Total Sold: ${formatPrice(totalSold)} | Earn Total: ${formatPrice(totalEarn)} | Date: {format(new Date(), 'dd-MM-yyyy')}
             </div>
           </CardHeader>
           <CardContent>
@@ -679,6 +731,21 @@
                   <div className="flex">
                     <span className="text-sm font-normal text-gray-600 pt-1 pr-1">{index + 1}</span>
                     <ProductCard product={item} />
+                  </div>
+                  <div className='flex space-x-1 pl-3'>
+                  {item.exhibitionStore && (
+                    <div className="text-sm text-gray-500">
+                      Exhibition: {stores[item.exhibitionStore]}
+                    </div>
+                  )}
+                  {!item.exhibitionStore && item.warehouseId && (
+                    <div className="text-sm text-gray-500">
+                      Warehouse: {warehouses[item.warehouseId]}
+                    </div>
+                  )}
+                  <div className="text-sm text-gray-500">
+                  | Earn: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}
+                  </div>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Button onClick={() => handleReturn(item)}>Return</Button>
@@ -702,16 +769,6 @@
                       Sold
                     </Button>
                   </div>
-                  {item.exhibitionStore && (
-                    <div className="text-sm text-gray-500">
-                      Exhibition: {stores[item.exhibitionStore]}
-                    </div>
-                  )}
-                  {!item.exhibitionStore && item.warehouseId && (
-                    <div className="text-sm text-gray-500">
-                      Warehouse: {warehouses[item.warehouseId]}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>

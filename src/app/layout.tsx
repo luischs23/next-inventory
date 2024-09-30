@@ -35,7 +35,7 @@ export default function RootLayout({
                 <CreativeHeader />
                 <div className="flex flex-1">
                   <Navbar />
-                  <main className="flex-1 p-4 pb-10 md:ml-16">{children}</main>
+                  <main className="flex-1 p-1 pb-10 md:ml-16">{children}</main>
                 </div>
               </div>
               <Toaster />

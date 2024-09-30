@@ -38,11 +38,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     <Card className="w-full">
       <CardContent className="p-2 flex items-center justify-between">
         <div className="flex-1">
-          <h3 className="text-lg font-semibold">{product.brand} - {product.reference}</h3>
+          <h3 className="font-semibold">{product.brand} - {product.reference}</h3>
           <p>Color: {product.color}</p>
           <p>{product.isBox ? 'Box' : 'Size'}: {product.isBox ? product.quantity : product.size}</p>
           <p>Barcode: {product.barcode}</p>
-          {formattedDate && <p>Added: {formattedDate}</p>}
+          {formattedDate && <p className='text-sm text-gray-500'>Added: {formattedDate}</p>}
         </div>
         <div className="w-24 h-24 relative">
           <Image

@@ -10,6 +10,7 @@ import { Button } from "app/components/ui/button"
 import Link from 'next/link'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
+import Image from 'next/image'
 
 interface InvoiceItem {
   brand: string
@@ -23,6 +24,7 @@ interface InvoiceItem {
   exhibitionStore: string | null
   warehouseId: string | null
   isBox: boolean
+  imageUrl: string 
 }
 
 interface Invoice {
@@ -165,13 +167,25 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
             {invoice.items.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-sm font-semibold text-gray-500 mr-2 mt-1">{index + 1}</span>
-                <Card className="flex-grow p-4">
-                  <h3 className="text-lg font-semibold mb-2">{item.brand} - {item.reference}</h3>
-                  <p className="mb-1">Color: {item.color}</p>
-                  <p className="mb-1">Size: {item.size}</p>
-                  <p className="mb-1">Barcode: {item.barcode}</p>
-                  <p className="mb-1 font-semibold">Sale Price: ${formatPrice(item.salePrice)}</p>
-                  <p className="text-sm text-gray-500">Added At: {formatDate(item.addedAt)}</p>
+                <Card className="w-full">
+                <CardContent className="p-2 flex items-center justify-between">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{item.brand} - {item.reference}</h3>
+                      <p>Color: {item.color}</p>
+                      <p>Size: {item.size}</p>
+                      <p>Barcode: {item.barcode}</p>
+                      <p>Sale Price: ${formatPrice(item.salePrice)}</p>
+                      <p className="text-sm text-gray-500">Added At: {formatDate(item.addedAt)}</p>
+                    </div>
+                    <div className="w-24 h-24 relative">
+                      <Image
+                        src={item.imageUrl || '/placeholder.svg'}
+                        alt={`${item.brand} - ${item.reference}`}
+                        fill
+                        className="object-cover rounded-md"
+                      />
+                    </div>
+                  </CardContent>
                 </Card>
               </div>
             ))}
