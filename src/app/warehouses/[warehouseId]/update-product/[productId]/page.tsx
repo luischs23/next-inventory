@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams, useSearchParams } from 'next/navigation'
-import UpdateProductComponent from 'app/components/update-product-component'
+import UpdateProduct from 'app/components/product/UpdateProduct'
 
 export default function UpdateProductPage() {
   const params = useParams()
@@ -16,7 +16,7 @@ export default function UpdateProductPage() {
 
   return (
     <div className="container mx-auto px-4">
-      <UpdateProductComponent productId={productId} warehouseId={warehouseId} />
+      <UpdateProduct productId={productId} warehouseId={warehouseId} />
     </div>
   )
 }

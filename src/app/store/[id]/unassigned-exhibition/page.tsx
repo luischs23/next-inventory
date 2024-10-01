@@ -3,40 +3,48 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, doc, getDoc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc} from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { Pencil, MoreHorizontal, FileDown, ImageIcon } from 'lucide-react'
+import { Pencil, MoreHorizontal, ImageIcon, FileDown } from 'lucide-react'
 import Image from 'next/image'
+import { ImageProps } from 'next/image'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 
-interface ExhibitionProduct {
+interface UnassignedProduct {
   id: string
   brand: string
   reference: string
   color: string
   gender: 'Dama' | 'Hombre'
-  exhibitionSize: string
-  exhibitionBarcode: string
   imageUrl: string
-  baseprice: number
-  saleprice: number
+  sizes: { [key: string]: { quantity: number, barcodes: string[] } }
+  exhibition?: {
+    [storeId: string]: {
+      size: string
+      barcode: string
+    }
+  }
   warehouseId: string
 }
 
-export default function InventoryExbPage({ params }: { params: { id: string } }) {
+interface ImageWithFallbackProps extends Omit<ImageProps, 'src' | 'alt'> {
+  src: string
+  alt: string
+}
+
+export default function UnassignedExhibitionPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const [products, setProducts] = useState<ExhibitionProduct[]>([])
+  const [products, setProducts] = useState<UnassignedProduct[]>([])
   const [storeName, setStoreName] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
-  const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
+  const [filters, setFilters] = useState({ brand: '', reference: '', gender: '' })
 
   useEffect(() => {
     const fetchStoreAndProducts = async () => {
@@ -48,44 +56,41 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
         }
 
         const warehousesSnapshot = await getDocs(collection(db, 'warehouses'))
-        const exhibitionProducts: ExhibitionProduct[] = []
+        const unassignedProducts: UnassignedProduct[] = []
 
         for (const warehouseDoc of warehousesSnapshot.docs) {
           const warehouseId = warehouseDoc.id
-          const productsQuery = query(
-            collection(db, 'warehouses', warehouseId, 'products'),
-            where(`exhibition.${params.id}`, '!=', null)
-          )
-          const productsSnapshot = await getDocs(productsQuery)
+          const productsSnapshot = await getDocs(collection(db, 'warehouses', warehouseId, 'products'))
 
           productsSnapshot.forEach(doc => {
             const data = doc.data()
-            const exhibitionData = data.exhibition[params.id]
-            if (exhibitionData) {
-              exhibitionProducts.push({
+            if (
+              (!data.exhibition || !data.exhibition[params.id]) &&
+              data.sizes && Object.keys(data.sizes).length > 0
+            ) {
+              unassignedProducts.push({
                 id: doc.id,
                 brand: data.brand,
                 reference: data.reference,
                 color: data.color,
                 gender: data.gender,
-                exhibitionSize: exhibitionData.size,
-                exhibitionBarcode: exhibitionData.barcode,
                 imageUrl: data.imageUrl,
-                baseprice: Number(data.baseprice),
-                saleprice: Number(data.saleprice),
-                warehouseId
+                sizes: data.sizes,
+                warehouseId,
+                exhibition: data.exhibition
               })
             }
           })
         }
 
-        setProducts(exhibitionProducts)
+        setProducts(unassignedProducts)
       } catch (error) {
         console.error('Error fetching store and products:', error)
       } finally {
         setLoading(false)
       }
     }
+
     fetchStoreAndProducts()
   }, [params.id])
 
@@ -98,13 +103,13 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
       return (
         (filters.brand === '' || product.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
         (filters.reference === '' || product.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
-        (filters.color === '' || product.color.toLowerCase().includes(filters.color.toLowerCase())) &&
         (filters.gender === '' || filters.gender === 'all' || product.gender === filters.gender)
       )
     })
+    .sort((a, b) => a.brand.localeCompare(b.brand)) // Sort alphabetically by brand
   }, [products, filters])
 
-  const ImageWithFallback = ({ src, alt, ...props }) => {
+  const ImageWithFallback: React.FC<ImageWithFallbackProps> = ({ src, alt, ...props }) => {
     const [error, setError] = useState(false)
 
     const handleError = () => {
@@ -129,109 +134,60 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
     )
   }
 
-  const sortedProducts = useMemo(() => {
-    return [...filteredProducts].sort((a, b) => {
-      if (sortOrder === 'alphabetical') {
-        return a.brand.localeCompare(b.brand)
-      }
-      // Sort by entry order (assuming id is used for ordering)
-      return a.id.localeCompare(b.id)
-    })
-  }, [filteredProducts, sortOrder])
-
-  const summaryInfo = useMemo(() => {
-    const totalItems = filteredProducts.length
-    const totalPares = filteredProducts.length
-    const totalBase = filteredProducts.reduce((sum, product) => sum + product.baseprice, 0)
-    const totalSale = filteredProducts.reduce((sum, product) => sum + product.saleprice, 0)
-    return { totalItems, totalPares, totalBase, totalSale }
-  }, [filteredProducts])
-
-  const formatNumber = (value: number) => {
-    return value.toLocaleString('es-ES')
-  }
-
-  const formatSize = (size: string) => {
-    const match = size.match(/^T-?(\d+)$/)
-    return match ? `T-${match[1]}` : size
-  }
-
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new()
     
-    const worksheetData = products.map(product => ({
+    const worksheetData = filteredProducts.map((product, index) => ({
+      'No.': index + 1,
       'Brand': product.brand,
       'Reference': product.reference,
       'Color': product.color,
       'Gender': product.gender,
-      'Exhibition Size': formatSize(product.exhibitionSize),
-      'Exhibition Barcode': product.exhibitionBarcode,
-      'Base Price': product.baseprice,
-      'Sale Price': product.saleprice,
+      'Warehouse': product.warehouseId,
+      'Sizes': Object.keys(product.sizes).join(', ')
     }))
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData)
 
-    // Set column widths
-    worksheet['!cols'] = [
-      { width: 15 }, // Brand
-      { width: 15 }, // Reference
-      { width: 15 }, // Color
-      { width: 10 }, // Gender
-      { width: 15 }, // Exhibition Size
-      { width: 20 }, // Exhibition Barcode
-      { width: 15 }, // Base Price
-      { width: 15 }, // Sale Price
-    ]
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Unassigned Products')
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Exhibition Inventory')
-
-    // Generate Excel file
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     
-    // Save the file
-    saveAs(data, `${storeName}_exhibition_inventory.xlsx`)
+    saveAs(data, `${storeName}_unassigned_exhibition_products.xlsx`)
   }
 
   const exportToPDF = () => {
     const doc = new jsPDF()
 
-    // Add title
     doc.setFontSize(18)
-    doc.text('Inventory Report', 14, 22)
+    doc.text(`${storeName} Unassigned Exhibition Products`, 14, 22)
 
-    // Add summary information
     doc.setFontSize(12)
-    doc.text(`Total Items: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
-    doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
-    doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
-    doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+    doc.text(`Total Items: ${filteredProducts.length}`, 14, 30)
 
-    // Add table
-    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Base Price", "Sale Price"]
-    const tableRows = sortedProducts.map((box, index) => [
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Warehouse", "Sizes"]
+    const tableRows = filteredProducts.map((product, index) => [
       index + 1,
-      box.brand,
-      box.reference,
-      box.color,
-      box.gender,
-      formatNumber(box.baseprice),
-      formatNumber(box.saleprice)
+      product.brand,
+      product.reference,
+      product.color,
+      product.gender,
+      product.warehouseId,
+      Object.keys(product.sizes).join(', ')
     ])
 
     doc.autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 65,
+      startY: 40,
       theme: 'grid',
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185], textColor: 255 },
       alternateRowStyles: { fillColor: [224, 224, 224] }
     })
 
-    // Save the PDF
-    doc.save('inventory_report.pdf')
+    doc.save(`${storeName}_unassigned_exhibition_products.pdf`)
   }
 
   if (loading) {
@@ -264,15 +220,6 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
             />
           </div>
           <div>
-            <label htmlFor="color" className="text-sm font-medium">Color</label>
-            <Input
-              id="color"
-              placeholder="Filter by color"
-              value={filters.color}
-              onChange={(e) => handleFilterChange('color', e.target.value)}
-            />
-          </div>
-          <div>
             <label htmlFor="gender" className="text-sm font-medium">Gender</label>
             <Select onValueChange={(value) => handleFilterChange('gender', value)}>
               <SelectTrigger id="gender">
@@ -285,24 +232,12 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <label htmlFor="sortOrder" className="text-sm font-medium">Sort Order</label>
-            <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
-              <SelectTrigger id="sortOrder">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="entry">Entry Order</SelectItem>
-                <SelectItem value="alphabetical">Alphabetical</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </CardContent>
       </Card>
       <div className="w-full md:w-3/4">
-      <h2 className="text-2xl font-bold">{storeName} Exhibition Inventory</h2>
-        <div className="flex justify-between items-center mb-4 space-x-4">
-          <div className="flex space-x-2">
+        <h2 className="text-2xl font-bold">{storeName} Unassigned Exhibition Products</h2>
+        <div className="flex justify-between items-center mb-4">
+          <div className="space-x-2">
             <Button onClick={exportToExcel}>
               <FileDown className="mr-2 h-4 w-4" /> Export Excel
             </Button>
@@ -311,20 +246,13 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
             </Button>
           </div>
         </div>
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
-              <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
-              <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
-              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mb-4 p-4 bg-gray-100 rounded-lg">
+          <div>Items: {filteredProducts.length}</div>
+        </div>
         <div className="space-y-4">
-          {sortedProducts.map((product, index) => (
+          {filteredProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
-              <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
+              <div className="text-sm font-semibold mr-2 mt-2">{index + 1}</div>
               <Card className="flex-grow relative">
                 <CardContent className="p-4">
                   <div className="absolute top-2 right-2">
@@ -345,7 +273,7 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
                   </div>
                   <div className="flex items-center space-x-4">
                     <div className="relative w-16 h-16 flex-shrink-0">
-                       <ImageWithFallback
+                      <ImageWithFallback
                         src={product.imageUrl}
                         alt={product.reference}
                         fill
@@ -357,14 +285,8 @@ export default function InventoryExbPage({ params }: { params: { id: string } })
                       <h3 className="font-semibold">{product.brand}</h3>
                       <p className="text-sm text-gray-500">{product.reference}</p>
                       <p className="text-sm">{product.color} - {product.gender}</p>
+                      <p className="text-sm mt-1">Sizes: {Object.keys(product.sizes).join(', ')}</p>
                     </div>
-                  </div>
-                  <div className="mt-4 flex text-sm space-x-3">
-                      <div className="font-medium">Size:</div> {formatSize(product.exhibitionSize)}
-                      <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
-                  </div>
-                  <div className="mt-2">
-                    <span className="font-medium text-sm">Barcode:</span> {product.exhibitionBarcode}
                   </div>
                 </CardContent>
               </Card>

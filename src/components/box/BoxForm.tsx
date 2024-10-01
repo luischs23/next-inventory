@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams} from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { addDoc, collection, getDocs } from 'firebase/firestore'
@@ -35,10 +35,12 @@ interface Warehouse {
   name: string 
 }
 
-export default function FormBoxPage() {
+interface BoxFormProps {
+    warehouseId: string
+  }
+
+export default function BoxForm({ warehouseId }: BoxFormProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const warehouseId = searchParams.get('warehouseId')
   const [formData, setFormData] = useState<BoxFormData>({
     brand: 'Nike',
     reference: '',
@@ -126,15 +128,15 @@ export default function FormBoxPage() {
         title: "Success",
         description: "Box saved successfully",
         duration: 3000,
-          style: {
-            background: "#4CAF50",
-            color: "white",
-            fontWeight: "bold",
-          },
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
       })
 
       // Redirect back to the specific warehouse inventory page
-      router.push(`/warehouse-inventory/${warehouseId}`)
+      router.push(`/warehouses/${warehouseId}/inventory`)
     } catch (error) {
       console.error('Error saving the box:', error)
       toast({

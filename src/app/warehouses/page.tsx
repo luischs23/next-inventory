@@ -18,7 +18,7 @@ export default function WarehousesPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [newWarehouseName, setNewWarehouseName] = useState('')
   const router = useRouter()
-
+  
   useEffect(() => {
     const fetchWarehouses = async () => {
       const warehousesCollection = collection(db, 'warehouses')
@@ -44,11 +44,11 @@ export default function WarehousesPage() {
   }
 
   const handleBodegaInventoryClick = (warehouseId: string) => {
-    router.push(`/warehouse/${warehouseId}/warehouse-inventory`)
+    router.push(`/warehouses/${warehouseId}/inventory`)
   }
 
   const handleParesInventoryClick = (warehouseId: string) => {
-    router.push(`/warehouse/${warehouseId}/inventory`)
+    router.push(`/warehouses/${warehouseId}/pares-inventory`)
   }
 
   return (

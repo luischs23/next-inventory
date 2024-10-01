@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter} from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { doc, getDoc, updateDoc, collection, getDocs } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -36,6 +36,11 @@ interface Warehouse {
   id: string
   name: string
 }
+
+interface UpdateBoxFormProps {
+    boxId: string
+    warehouseId: string
+  }
  
 const formatNumber = (value: string): string => {
   const number = value.replace(/[^\d]/g, '')
@@ -46,9 +51,8 @@ const parseFormattedNumber = (value: string): number => {
   return parseInt(value.replace(/\./g, ''), 10)
 }
 
-export default function UpdateBoxPage({ params }: { params: { id: string } }) {
+export default function UpdateBoxForm({ boxId, warehouseId }: UpdateBoxFormProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [formData, setFormData] = useState<BoxFormData>({
     brand: 'Nike',
     reference: '',
@@ -60,7 +64,7 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
     imageUrl: '',
     baseprice: '',
     saleprice: '',
-    warehouseId: searchParams.get('warehouseId') || '',
+    warehouseId: warehouseId,
     barcode: ''
   })
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
@@ -80,12 +84,7 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
         setWarehouses(warehousesList)
 
         // Now fetch the box data
-        const warehouseId = searchParams.get('warehouseId')
-        if (!warehouseId) {
-          throw new Error('Warehouse ID is missing')
-        }
-
-        const boxDoc = await getDoc(doc(db, `warehouses/${warehouseId}/boxes`, params.id))
+        const boxDoc = await getDoc(doc(db, `warehouses/${warehouseId}/boxes`, boxId))
         if (boxDoc.exists()) {
           const boxData = boxDoc.data() as BoxFormData
           setFormData({ ...boxData, 
@@ -110,7 +109,7 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
       }
     }
     fetchBoxAndWarehouses()
-  }, [params.id, searchParams])
+  }, [boxId, warehouseId])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -152,7 +151,7 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
 
       }
 
-      await updateDoc(doc(db, `warehouses/${formData.warehouseId}/boxes`, params.id), boxData)
+      await updateDoc(doc(db, `warehouses/${formData.warehouseId}/boxes`, boxId), boxData)
 
       toast({
         title: "Success",
@@ -165,10 +164,10 @@ export default function UpdateBoxPage({ params }: { params: { id: string } }) {
           },
       })
 
-      router.push(`/warehouse-inventory/${formData.warehouseId}`)
+      router.push(`/warehouses/${formData.warehouseId}/inventory`)
     } catch (error) {
       console.error('Error updating the box:', error)
-      toast({
+      toast({   
         title: "Error",
         description: "Failed to update the box. Please try again.",
         variant: "destructive",

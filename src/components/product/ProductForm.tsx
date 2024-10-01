@@ -2,15 +2,15 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { db, storage } from '../services/firebase/firebase.config';
+import { db, storage } from '../../services/firebase/firebase.config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
-import { Button } from "../components/ui/button"
-import { Input } from "../components/ui/input"
-import { Label } from "../components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select"
-import { Switch } from "../components/ui/switch"
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
+import { Button } from "../ui/button"
+import { Input } from "../ui/input"
+import { Label } from "../ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
+import { Switch } from "../ui/switch"
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
 import { useToast } from "app/components/ui/use-toast"
 import { useProducts } from 'app/app/context/ProductContext'
 
@@ -41,11 +41,11 @@ interface ProductFormData {
   exhibition: { [store: string]: string }
 }
 
-interface ProductFormComponentProps {
+interface ProductFormProps {
   warehouseId: string
 }
 
-export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ warehouseId }) => {
+export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
   const router = useRouter()
   const { toast } = useToast()
   const { addNewProduct } = useProducts()

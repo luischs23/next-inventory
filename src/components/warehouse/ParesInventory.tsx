@@ -10,13 +10,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Switch } from "app/components/ui/switch"
 import { PlusIcon, Pencil, Trash2, MoreHorizontal, FileDown } from 'lucide-react'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, deleteDoc, doc, query, Timestamp, FieldValue } from 'firebase/firestore'
+import { collection, getDocs, deleteDoc, doc, getDoc, query, Timestamp, FieldValue } from 'firebase/firestore'
 import { ref, deleteObject } from 'firebase/storage'
 import Image from 'next/image'
-import { useProducts } from 'app/app/context/ProductContext'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import { useAuth } from 'app/app/context/AuthContext'
+import { toast } from 'app/components/ui/use-toast'
 
 interface SizeInput {
   quantity: number
@@ -40,17 +40,39 @@ interface Product {
   warehouseId: string
 }
 
-export default function InventoryDashboard({ params }: { params: { id: string } }) {
+interface ParesInventoryProps {
+  params: {
+    id: string
+  }
+}
+
+export default function ParesInventory({ params }: ParesInventoryProps) {
   const router = useRouter()
   const warehouseId = params.id
-  const { products, addNewProduct, removeProduct } = useProducts()
+  const [products, setProducts] = useState<Product[]>([])
   const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [showInactive, setShowInactive] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [warehouseName, setWarehouseName] = useState<string>('')
   const { user, userRole } = useAuth()
 
   useEffect(() => {
+    const fetchWarehouseDetails = async () => {
+      try {
+        const warehouseDoc = await getDoc(doc(db, 'warehouses', warehouseId))
+        if (warehouseDoc.exists()) {
+          setWarehouseName(warehouseDoc.data().name || 'Unnamed Warehouse')
+        } else {
+          console.error('Warehouse not found')
+          setWarehouseName('Unknown Warehouse')
+        }
+      } catch (error) {
+        console.error('Error fetching warehouse details:', error)
+        setWarehouseName('Error Loading Warehouse Name')
+      }
+    }
+    
     const fetchProducts = async () => {
       if (!user) {
         console.error('User not authenticated')
@@ -83,19 +105,21 @@ export default function InventoryDashboard({ params }: { params: { id: string } 
             warehouseId
           } as Product
         })
-        productsList.forEach(product => addNewProduct(product))
+        setProducts(productsList)
       } catch (error) {
         console.error('Error fetching products:', error)
       } finally {
         setLoading(false)
       }
     }
+
     if (user) {
+      fetchWarehouseDetails()
       fetchProducts()
     } else {
       setLoading(false)
     }
-  }, [addNewProduct, warehouseId, user])
+  }, [warehouseId, user])
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -119,14 +143,32 @@ export default function InventoryDashboard({ params }: { params: { id: string } 
       console.error('Only admins can delete products')
       return
     }
-    try {
-      await deleteDoc(doc(db, 'warehouses', product.warehouseId, 'products', product.id))
-      const imageRef = ref(storage, product.imageUrl)
-      await deleteObject(imageRef)
-      
-      removeProduct(product.id)
-    } catch (error) {
-      console.error('Error deleting product:', error)
+    
+    if (window.confirm(`Are you sure you want to delete ${product.brand} ${product.reference}?`)) {
+      try {
+        await deleteDoc(doc(db, 'warehouses', product.warehouseId, 'products', product.id))
+        const imageRef = ref(storage, product.imageUrl)
+        await deleteObject(imageRef)
+        
+        setProducts(prevProducts => prevProducts.filter(p => p.id !== product.id))
+        toast({
+          title: "Success",
+          description: "Product deleted successfully",
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
+        })
+      } catch (error) {
+        console.error('Error deleting product:', error)
+        toast({
+          title: "Error",
+          description: "Failed to delete the product. Please try again.",
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -135,7 +177,7 @@ export default function InventoryDashboard({ params }: { params: { id: string } 
       console.error('Only admins can update products')
       return
     }
-    router.push(`/update-product/${product.id}?warehouseId=${product.warehouseId}`)
+    router.push(`/warehouses/${warehouseId}/update-product/${product.id}`)
   }
 
   const sortSizes = (sizes: { [key: string]: SizeInput }) => {
@@ -211,7 +253,7 @@ export default function InventoryDashboard({ params }: { params: { id: string } 
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     
-    saveAs(data, showInactive ? 'inactive_inventory.xlsx' : 'active_inventory.xlsx')
+    saveAs(data, `${warehouseName.replace(/\s+/g, '_')}_${showInactive ? 'inactive' : 'active'}_inventory.xlsx`)
   }
 
   if (loading) {
@@ -285,7 +327,7 @@ export default function InventoryDashboard({ params }: { params: { id: string } 
       </Card>
       <div className="w-full md:w-3/4">
         <div className="flex justify-between items-center mb-4 space-x-4">
-          <h2 className="text-2xl font-bold">Inventory Dashboard</h2>
+          <h2 className="text-2xl font-bold">Pares Inventory Dashboard ({warehouseName})</h2>
           <div className="flex items-center space-x-4">
               <Switch
                 id="show-inactive"
@@ -302,7 +344,7 @@ export default function InventoryDashboard({ params }: { params: { id: string } 
           <FileDown className="mr-2 h-4 w-4" /> Export Excel
         </Button>
         {userRole === 'admin' && (
-              <Button onClick={() => router.push(`/form-product/${warehouseId}`)}>
+              <Button onClick={() => router.push(`/warehouses/${warehouseId}/form-product`)}>
                 <PlusIcon className="mr-2 h-4 w-4" /> Add
               </Button>
             )}

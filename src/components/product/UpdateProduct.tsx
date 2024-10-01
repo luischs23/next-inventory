@@ -41,7 +41,7 @@ interface Product {
   exhibition: { [storeId: string]: { size: string, barcode: string } }
 }
 
-interface UpdateProductComponentProps {
+interface UpdateProductProps {
     productId: string
     warehouseId: string
   }
@@ -49,7 +49,7 @@ interface UpdateProductComponentProps {
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
-export default function UpdateProductComponent({ productId, warehouseId }: UpdateProductComponentProps) {
+export default function UpdateProduct({ productId, warehouseId }: UpdateProductProps) {
   const [product,   setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [newImage, setNewImage] = useState<File | null>(null)
@@ -595,7 +595,7 @@ export default function UpdateProductComponent({ productId, warehouseId }: Updat
             </div>
           </div>
           <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={() => router.push(`/inventory/${warehouseId}`)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => router.push(`/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
           <Button type="submit">Update Product</Button>
           </div>
         </form>

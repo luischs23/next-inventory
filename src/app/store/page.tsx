@@ -15,7 +15,7 @@ interface Store {
   userId: string
 }
 
-export default function HomePage() {
+export default function StoreListPage() {
   const { user } = useAuth()
   const router = useRouter()
   const [stores, setStores] = useState<Store[]>([])
@@ -79,18 +79,18 @@ export default function HomePage() {
                 <Link href={`/store/${store.id}/invoices`}>
                   <Button className="w-full">View Invoices</Button>
                 </Link>
-                <Link href={`/inventory-exb/${store.id}`}>
+                <Link href={`/store/${store.id}/exhibition-inventory`}>
                   <Button className="w-full" variant="outline">Exb Inventory</Button>
                 </Link>
-                <Link href={`/unassigned-exb/${store.id}`}>
+                <Link href={`/store/${store.id}/unassigned-exhibition`}>
                   <Button className="w-full" variant="outline">Unassigned Exhibition</Button>
                 </Link>
               </CardContent>
-            </Card>
+            </Card> 
           ))}
         </div>
       )}
-      <Button className="mt-6" onClick={() => router.push('/create-store')}>Create New Store</Button>
+      <Button className="mt-6" onClick={() => router.push('/store/create')}>Create New Store</Button>
     </div>
   )
 }

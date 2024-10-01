@@ -1,20 +1,20 @@
 "use client"
 
 import { useParams } from 'next/navigation'
-import InventoryDashboard from "app/components/inventory-dashboard"
+import ParesInventory from "app/components/warehouse/ParesInventory"
 
 export default function InventoryPage() {
   const params = useParams()
-  const id = params?.id as string
+  const warehouseId = params?.warehouseId as string
 
-  if (!id) {
+  if (!warehouseId) {
     return <div>Loading...</div>
   }
 
   return (
     <div>
       <section>
-        <InventoryDashboard params={{ id }} />
+        <ParesInventory params={{ id: warehouseId }} />
       </section>
     </div>
   )

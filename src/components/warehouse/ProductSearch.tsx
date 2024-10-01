@@ -6,7 +6,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
-import ProductCard from 'app/components/product-card-store'
+import ProductCard from 'app/components/warehouse/product-card-store'
 
 interface Size {
   quantity: number

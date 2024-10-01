@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'
 import "./globals.css";
 import { AuthProvider } from './context/AuthContext'
 import Navbar from 'app/components/shared/navbar/Navbar'
-import { ThemeProvider } from 'app/components/ThemeProvider'
+import { ThemeProvider } from 'app/components/theme/ThemeProvider'
 import { Toaster } from "app/components/ui/toaster"
 import { ProductProvider } from 'app/app/context/ProductContext'
 import CreativeHeader from 'app/components/shared/header/CreativeHeader'

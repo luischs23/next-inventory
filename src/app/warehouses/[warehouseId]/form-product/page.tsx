@@ -1,7 +1,7 @@
 "use client"
 
 import { useParams } from 'next/navigation'
-import { ProductFormComponent } from "app/components/product-form"
+import { ProductForm } from "app/components/product/ProductForm"
 
 export default function FormProductPage() {
   const params = useParams()
@@ -13,7 +13,7 @@ export default function FormProductPage() {
 
   return (
     <div>
-      <ProductFormComponent warehouseId={warehouseId} />
+      <ProductForm warehouseId={warehouseId} />
     </div>
   )
 }
