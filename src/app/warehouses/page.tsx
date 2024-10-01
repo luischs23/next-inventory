@@ -43,6 +43,14 @@ export default function WarehousesPage() {
     }
   }
 
+  const handleBodegaInventoryClick = (warehouseId: string) => {
+    router.push(`/warehouse/${warehouseId}/warehouse-inventory`)
+  }
+
+  const handleParesInventoryClick = (warehouseId: string) => {
+    router.push(`/warehouse/${warehouseId}/inventory`)
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-4">Manage Warehouses</h1>
@@ -70,13 +78,13 @@ export default function WarehousesPage() {
             <CardContent className="p-4">
               <h3 className="text-lg font-semibold mb-2">{warehouse.name}</h3>
               <Button 
-                onClick={() => router.push(`/warehouse-inventory/${warehouse.id}`)}
+                onClick={() => handleBodegaInventoryClick(warehouse.id)}
                 className="w-full"
               >
                 Bodega Inventory 
               </Button>
               <Button 
-                onClick={() => router.push(`/inventory/${warehouse.id}`)}
+                onClick={() => handleParesInventoryClick(warehouse.id)}
                 className="w-full"
                 variant="outline"
               >

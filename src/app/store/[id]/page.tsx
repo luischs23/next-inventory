@@ -98,10 +98,17 @@
           addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date(),
         } as InvoiceItem | BoxItem
       })
+
+      // Sort the invoice items by addedAt in descending order
+      const sortedInvoiceItems = invoiceItems.sort((a, b) => {
+        const dateA = a.addedAt instanceof Date ? a.addedAt : a.addedAt.toDate()
+        const dateB = b.addedAt instanceof Date ? b.addedAt : b.addedAt.toDate()
+        return dateB.getTime() - dateA.getTime()
+      })
   
-      setInvoice(invoiceItems)
-      calculateTotals(invoiceItems)
-      initializeItemStates(invoiceItems)
+      setInvoice(sortedInvoiceItems)
+      calculateTotals(sortedInvoiceItems)
+      initializeItemStates(sortedInvoiceItems)
     }, [user, params.id])
   
     const calculateTotals = useCallback((items: (InvoiceItem | BoxItem)[]) => {
@@ -163,11 +170,11 @@
     }    
     
     const formatPrice = (price: number): string => {
-      return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+      return price === 0 ? '' : price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
     }
   
     const parsePrice = (price: string): number => {
-      return parseInt(price.replace(/\./g, ''), 10)
+      return price === '' ? 0 : parseInt(price.replace(/\./g, ''), 10)
     }
 
     const fetchStores = async () => {
@@ -186,49 +193,6 @@
         return acc
       }, {} as {[id: string]: string})
       setWarehouses(warehousesData)
-    }
-
-    const fetchStoreAndInvoiceItems = async () => {
-      if (!user) return
-
-      const storeRef = doc(db, 'stores', params.id)
-      const storeDoc = await getDoc(storeRef)
-      if (storeDoc.exists()) {
-        const storeData = storeDoc.data() as Store
-        setStoreName(storeData.name)
-      }
-
-      const invoiceRef = collection(db, 'stores', params.id, 'invoices', user.uid, 'items')
-      const invoiceSnapshot = await getDocs(invoiceRef)
-
-      const invoiceItems = invoiceSnapshot.docs.map(doc => {
-        const data = doc.data()
-        const item = {
-          ...data,
-          invoiceId: doc.id,
-          salePrice: Number(data.salePrice) || 0,
-          sold: data.sold || false,
-          addedAt: data.addedAt instanceof Timestamp ? data.addedAt.toDate() : data.addedAt || new Date(),
-        } as InvoiceItem | BoxItem
-  
-        // Initialize enabledItems and salePrices for each item
-        setEnabledItems(prev => ({ ...prev, [item.invoiceId]: true }))
-        setSalePrices(prev => ({ ...prev, [item.invoiceId]: formatPrice(item.salePrice) }))
-        setPreviousSalePrices(prev => ({ ...prev, [item.invoiceId]: item.salePrice }))
-  
-        return item
-      })
-  
-      setInvoice(invoiceItems)
-      calculateTotalSold(invoiceItems)
-    }
-
-    const calculateTotalSold = (items: (InvoiceItem | BoxItem)[]) => {
-      const total = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) : 0), 0)
-      setTotalSold(total)
-
-      const totalProfit = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) - Number(item.baseprice) : 0), 0)
-      setTotalEarn(totalProfit)
     }
 
     const handleSearch = async () => {
@@ -505,7 +469,7 @@
     const handleSalePriceChange = (invoiceId: string, value: string) => {
       if (enabledItems[invoiceId]) {
         const numericValue = value.replace(/\D/g, '')
-        const formattedValue = formatPrice(parseInt(numericValue, 10))
+        const formattedValue = numericValue === '' ? '' : formatPrice(parseInt(numericValue, 10))
         setSalePrices(prev => ({ ...prev, [invoiceId]: formattedValue }))
       }
     }
@@ -592,30 +556,37 @@
           customerName: customerName || "Unknown",
           customerPhone: customerPhone || "N/A",
           totalSold: totalSold || 0,
+          totalEarn: totalEarn || 0,
           createdAt: serverTimestamp(),
-          items: invoice.map(item => ({
+          items: invoice.map(item => {
+            const earn = Number(item.salePrice) - Number(item.baseprice)
+            return {
             brand: item.brand || "Unknown",
             reference: item.reference || "N/A",
             color: item.color || "N/A",
             size: item.size || "N/A",
             barcode: item.barcode || "N/A",
             salePrice: Number(item.salePrice) || 0,
+            baseprice: Number(item.baseprice) || 0,
+            earn: earn,
             sold: item.sold || false,
             addedAt: item.addedAt || serverTimestamp(),
             exhibitionStore: item.exhibitionStore || null,
             warehouseId: item.warehouseId || null,
-            imageUrl: item.imageUrl || "", // Add this line to include the image URL
-            isBox: item.isBox || false, // Change this line to correctly set isBox
+            imageUrl: item.imageUrl || "", 
+            isBox: item.isBox || false, 
             ...(item.isBox ? {
             comments: (item as BoxItem).comments || "",
             gender: (item as BoxItem).gender || "",
             baseprice: (item as BoxItem).baseprice || 0
           } : {})
-          }))
+          }
+        })
         })
         // Clear the current invoice
         setInvoice([])
         setTotalSold(0)
+        setTotalEarn(0)
         setCustomerName('')
         setCustomerPhone('')
 
@@ -635,9 +606,6 @@
             fontWeight: "bold",
           },
         })
-        // Reset form fields
-        setCustomerName('')
-        setCustomerPhone('')
       // Navigate to the new invoice page
       router.push(`/store/${params.id}/invoices/${newInvoiceDoc.id}`)
       } catch (error) {
@@ -729,7 +697,7 @@
               {invoice.map((item, index) => (
                 <div key={item.invoiceId} className="space-y-2">
                   <div className="flex">
-                    <span className="text-sm font-normal text-gray-600 pt-1 pr-1">{index + 1}</span>
+                  <span className="text-sm font-normal text-gray-600 pt-1 pr-1">{invoice.length - index}</span>
                     <ProductCard product={item} />
                   </div>
                   <div className='flex space-x-1 pl-3'>

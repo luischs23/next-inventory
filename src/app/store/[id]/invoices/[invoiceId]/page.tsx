@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, Timestamp } from 'firebase/firestore'
+import { doc, getDoc, getDocs, Timestamp, collection } from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { Button } from "app/components/ui/button"
 import Link from 'next/link'
@@ -19,6 +19,7 @@ interface InvoiceItem {
   size: string
   barcode: string
   salePrice: number
+  baseprice: number
   sold: boolean
   addedAt: Timestamp | Date
   exhibitionStore: string | null
@@ -34,6 +35,7 @@ interface Invoice {
   customerName: string
   customerPhone: string
   totalSold: number
+  totalEarn: number
   createdAt: Timestamp | Date
   items: InvoiceItem[]
 }
@@ -43,6 +45,8 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [storeName, setStoreName] = useState<string>('')
+  const [warehouses, setWarehouses] = useState<{[id: string]: string}>({})
+  const [stores, setStores] = useState<{[id: string]: string}>({})
 
   const formatPrice = (price: number): string => {
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -53,6 +57,8 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       router.push('/login')
     } else {
       fetchInvoice()
+      fetchWarehouses()
+      fetchStores()
     }
   }, [user, router])
 
@@ -68,12 +74,32 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       const invoiceDoc = await getDoc(invoiceRef)
       if (invoiceDoc.exists()) {
         const data = invoiceDoc.data() as Invoice
+        const totalEarn = data.items.reduce((sum, item) => sum + (item.salePrice - item.baseprice), 0)
         setInvoice({
           ...data,
           id: invoiceDoc.id,
+          totalEarn,
         })
       }
     }
+  }
+
+  const fetchWarehouses = async () => {
+    const warehousesSnapshot = await getDocs(collection(db, 'warehouses'))
+    const warehousesData = warehousesSnapshot.docs.reduce((acc, doc) => {
+      acc[doc.id] = doc.data().name
+      return acc
+    }, {} as {[id: string]: string})
+    setWarehouses(warehousesData)
+  }
+
+  const fetchStores = async () => {
+    const storesSnapshot = await getDocs(collection(db, 'stores'))
+    const storesData = storesSnapshot.docs.reduce((acc, doc) => {
+      acc[doc.id] = doc.data().name
+      return acc
+    }, {} as {[id: string]: string})
+    setStores(storesData)
   }
 
   const formatDate = (date: Timestamp | Date) => {
@@ -107,16 +133,20 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
     pdf.text(`Phone: ${invoice.customerPhone}`, 20, yOffset)
     yOffset += 10
     pdf.text(`Total: $${formatPrice(invoice.totalSold)}`, 20, yOffset)
+    yOffset += 10
+    pdf.text(`Total Earn: $${formatPrice(invoice.totalEarn)}`, 20, yOffset)
     yOffset += 20
 
     // Add item table
-    const columns = ['Brand', 'Reference', 'Color', 'Size', 'Price', 'Added At']
+    const columns = ['Brand', 'Reference', 'Color', 'Size', 'Price', 'Earn', 'Location', 'Added At']
     const data = invoice.items.map(item => [
       item.brand,
       item.reference,
       item.color,
       item.size,
       `$${formatPrice(item.salePrice)}`,
+      `$${formatPrice(item.salePrice - item.baseprice)}`,
+      item.exhibitionStore ? `Exhibition: ${stores[item.exhibitionStore]}` : `Warehouse: ${warehouses[item.warehouseId || '']}`,
       formatDate(item.addedAt)
     ])
 
@@ -137,7 +167,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
 
   return (
     <div className="container mx-auto p-4">
-      <Card className="mb-8">
+      <Card className="mb-2">
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Invoice for {invoice.customerName}</CardTitle>
           <div className="text-sm text-gray-500">
@@ -148,10 +178,11 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
           <p className="mb-2">Store: {storeName}</p>
           <p className="mb-2">Customer Phone: {invoice.customerPhone}</p>
           <p className="mb-2 text-lg font-semibold">Total Sold: ${formatPrice(invoice.totalSold)}</p>
+          <p className="mb-2 text-lg font-semibold">Total Earn: ${formatPrice(invoice.totalEarn)}</p>
           <div className="flex space-x-4 mt-4">
             <Button onClick={exportToPDF}>Export to PDF</Button>
             <Link href={`/store/${params.id}/invoices`}>
-              <Button variant="outline">Back to Invoice List</Button>
+              <Button variant="outline">Invoice List</Button>
             </Link>
           </div>
         </CardContent>
@@ -176,6 +207,14 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
                       <p>Barcode: {item.barcode}</p>
                       <p>Sale Price: ${formatPrice(item.salePrice)}</p>
                       <p className="text-sm text-gray-500">Added At: {formatDate(item.addedAt)}</p>
+                      <div className='flex space-x-4'>
+                        {item.exhibitionStore ? (
+                          <p className="text-sm text-gray-500">Exb: {stores[item.exhibitionStore]}</p>
+                        ) : (
+                          <p className="text-sm text-gray-500">WH: {warehouses[item.warehouseId || '']}</p>
+                        )}
+                        <p className="text-sm text-gray-500"> |Earn: ${formatPrice(item.salePrice - item.baseprice)}</p>
+                      </div>
                     </div>
                     <div className="w-24 h-24 relative">
                       <Image
