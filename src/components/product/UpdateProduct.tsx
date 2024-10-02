@@ -166,7 +166,6 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
         setProduct(updatedProduct)
         setNewSize('')
         setNewQuantity(0) 
-        console.log("hola")
 
         toast({
           title: "Size Added",
@@ -383,7 +382,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
         })
       }
       // Redirect to the inventory page for the specific warehouse
-      router.push(`/inventory/${warehouseId}`)
+      router.push(`/warehouses/${warehouseId}/pares-inventory`)
     } catch (error) {
       console.error('Error updating product:', error)
       toast({

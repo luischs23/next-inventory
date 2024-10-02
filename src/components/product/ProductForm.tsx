@@ -1,18 +1,17 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { db, storage } from '../../services/firebase/firebase.config';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
-import { Button } from "../ui/button"
-import { Input } from "../ui/input"
-import { Label } from "../ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select"
-import { Switch } from "../ui/switch"
-import { Card, CardContent, CardHeader, CardTitle } from "../ui/card"
+import { db, storage } from 'app/services/firebase/firebase.config'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { Button } from "app/components/ui/button"
+import { Input } from "app/components/ui/input"
+import { Label } from "app/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
+import { Switch } from "app/components/ui/switch"
+import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { useToast } from "app/components/ui/use-toast"
-import { useProducts } from 'app/app/context/ProductContext'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -41,14 +40,13 @@ interface ProductFormData {
   exhibition: { [store: string]: string }
 }
 
-interface ProductFormProps {
+interface ProductFormComponentProps {
   warehouseId: string
 }
 
-export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
+export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ warehouseId }) => {
   const router = useRouter()
   const { toast } = useToast()
-  const { addNewProduct } = useProducts()
   const [formData, setFormData] = useState<ProductFormData>({
     brand: 'Nike',
     reference: '',
@@ -65,16 +63,6 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
   })
 
   const [imageError, setImageError] = useState('')
-  const [stores, setStores] = useState<string[]>([])
-
-  useEffect(() => {
-    const fetchStores = async () => {
-      const storesSnapshot = await getDocs(collection(db, 'stores'))
-      const storesList = storesSnapshot.docs.map(doc => doc.id)
-      setStores(storesList)
-    }
-    fetchStores()
-  }, [])
 
   const total = useMemo(() => {
     return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
@@ -114,7 +102,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     setFormData((prev) => ({ ...prev, image: file }))
-    setImageError('')  // Clear any previous error when a new image is selected
+    setImageError('')
   }
 
   const generateBarcode = () => {
@@ -128,7 +116,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
       return
     }
     try {
-      const imageRef = ref(storage, `products/${formData.image.name}`)
+      const imageRef = ref(storage, `warehouses/${warehouseId}/products/${formData.image.name}`)
       await uploadBytes(imageRef, formData.image)
       const imageUrl = await getDownloadURL(imageRef)
 
@@ -138,7 +126,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
         color: formData.color,
         gender: formData.gender,
         sizes: Object.fromEntries(
-        Object.entries(formData.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
+          Object.entries(formData.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
         ),
         total,
         comments: formData.comments,
@@ -149,25 +137,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
         createdAt: serverTimestamp(),
       }
 
-      const docRef = await addDoc(collection(db, `warehouses/${warehouseId}/products`), productData)
-
-      // Add the new product to the local state
-      addNewProduct({ id: docRef.id, ...productData, warehouseId })
-
-      setFormData({
-        brand: 'Nike',
-        reference: '',
-        color: '',
-        gender: 'Dama',
-        sizes: {},
-        total: 0,
-        comments: '',
-        image: null,
-        imageUrl: '',
-        baseprice: '',
-        saleprice: '',
-        exhibition: {}
-      })
+      await addDoc(collection(db, `warehouses/${warehouseId}/products`), productData)
 
       toast({
         title: "Product Added",
@@ -180,7 +150,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
         },
       })
 
-      router.push(`/inventory/${warehouseId}`)
+      router.push(`/warehouses/${warehouseId}/pares-inventory`)
     } catch (error) {
       console.error('Error adding product:', error)
       toast({
@@ -269,8 +239,8 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
               accept="image/*" 
               onChange={handleImageChange} 
               required
-              />
-              {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
+            />
+            {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
           </div>
           <div className='flex items-center space-x-4'>
             <div>
@@ -294,7 +264,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({ warehouseId }) => {
               />
             </div>
           </div>
-          <Button type="submit">Save Product</Button>
+          <Button type="submit">Add Product</Button>
         </form>
       </CardContent>
     </Card>

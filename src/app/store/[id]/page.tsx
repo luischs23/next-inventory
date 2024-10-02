@@ -9,7 +9,7 @@
   import { Input } from "app/components/ui/input"
   import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
   import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-  import ProductCard from 'app/components/warehouse/product-card-store'
+  import ProductCard from 'app/components/product-card-store'
   import { MoreVertical, Save, Search, Lock, Unlock} from 'lucide-react'
   import { useToast } from "app/components/ui/use-toast"
   import { format } from 'date-fns'

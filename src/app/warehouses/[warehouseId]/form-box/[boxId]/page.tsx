@@ -12,7 +12,8 @@ export default function FormBoxPage() {
   }
 
   return (
-    <div>
+    <div className="container mx-auto px-4 py-2">
+      <h1 className="text-2xl font-bold mb-1">Add New Box</h1>
       <BoxForm warehouseId={warehouseId} />
     </div>
   )

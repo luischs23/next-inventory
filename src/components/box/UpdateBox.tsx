@@ -180,8 +180,8 @@ export default function UpdateBoxForm({ boxId, warehouseId }: UpdateBoxFormProps
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-4">Update Box</h1>
+    <div className="container mx-auto px-4 py-4">
+      <h1 className="text-2xl font-bold mb-2">Update Box</h1>
       <Card className="w-full max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle>Update Box Details</CardTitle>

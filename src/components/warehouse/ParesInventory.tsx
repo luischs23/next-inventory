@@ -344,7 +344,7 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
           <FileDown className="mr-2 h-4 w-4" /> Export Excel
         </Button>
         {userRole === 'admin' && (
-              <Button onClick={() => router.push(`/warehouses/${warehouseId}/form-product`)}>
+              <Button onClick={() => router.push(`/warehouses/${warehouseId}/form-product/${warehouseId}`)}>
                 <PlusIcon className="mr-2 h-4 w-4" /> Add
               </Button>
             )}

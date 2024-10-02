@@ -36,7 +36,7 @@ interface Box {
 
 interface WarehouseInventoryProps {
     warehouseId: string
-  }
+  } 
 
 export default function WarehouseInventoryPage({ warehouseId }: WarehouseInventoryProps) {
   const [boxes, setBoxes] = useState<Box[]>([])
@@ -169,7 +169,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
       console.error('Only admins can update boxes')
       return
     }
-    router.push(`/update-box/${box.id}?warehouseId=${warehouseId}`)
+    router.push(`/warehouses/${warehouseId}/update-box/${box.id}`)
   }
 
   const exportToExcel = () => {
@@ -338,7 +338,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
           </Button>
         </div>
         {userRole === 'admin' && (
-            <Button onClick={() => router.push(`/form-box/${warehouseId}`)}>
+            <Button onClick={() => router.push(`/warehouses/${warehouseId}/form-box/${warehouseId}`)}>
               <PlusIcon className="mr-2 h-4 w-4" /> Add Box
             </Button>
           )}
