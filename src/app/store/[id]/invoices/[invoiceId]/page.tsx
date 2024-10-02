@@ -4,15 +4,19 @@ import { useState, useEffect } from 'react'
 import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, getDocs, Timestamp, collection } from 'firebase/firestore'
+import { doc, getDoc, getDocs, updateDoc, collection, query, where, Timestamp} from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { Button } from "app/components/ui/button"
+import { Input } from "app/components/ui/input"
+import { Label } from "app/components/ui/label"
 import Link from 'next/link'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import Image from 'next/image'
 
 interface InvoiceItem {
+  id: string
+  productId: string
   brand: string
   reference: string
   color: string
@@ -26,6 +30,8 @@ interface InvoiceItem {
   warehouseId: string | null
   isBox: boolean
   imageUrl: string 
+  quantity: number
+  returned?: boolean
 }
 
 interface Invoice {
@@ -47,6 +53,10 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   const [storeName, setStoreName] = useState<string>('')
   const [warehouses, setWarehouses] = useState<{[id: string]: string}>({})
   const [stores, setStores] = useState<{[id: string]: string}>({})
+  const [returnBarcode, setReturnBarcode] = useState('')
+  const [addBarcode, setAddBarcode] = useState('')
+  const [newSalePrice, setNewSalePrice] = useState('')
+  const [searchResult, setSearchResult] = useState<InvoiceItem | null>(null)
 
   const formatPrice = (price: number): string => {
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -74,11 +84,10 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       const invoiceDoc = await getDoc(invoiceRef)
       if (invoiceDoc.exists()) {
         const data = invoiceDoc.data() as Invoice
-        const totalEarn = data.items.reduce((sum, item) => sum + (item.salePrice - item.baseprice), 0)
         setInvoice({
           ...data,
           id: invoiceDoc.id,
-          totalEarn,
+          totalEarn: data.totalEarn,
         })
       }
     }
@@ -100,6 +109,139 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       return acc
     }, {} as {[id: string]: string})
     setStores(storesData)
+  }
+
+  const handleReturn = async () => {
+    if (!invoice) return
+
+    const itemToReturn = invoice.items.find(item => item.barcode === returnBarcode)
+    if (!itemToReturn) {
+      alert('Item not found in the invoice')
+      return
+    }
+
+    if (!itemToReturn.productId) {
+      alert('Product ID not found for this item')
+      return
+    }
+
+    // Update the invoice
+    const updatedItems = invoice.items.map(item => 
+      item.barcode === returnBarcode ? {...item, returned: true} : item
+    )
+    const updatedTotalSold = invoice.totalSold - itemToReturn.salePrice
+    const updatedTotalEarn = invoice.totalEarn - (itemToReturn.salePrice - itemToReturn.baseprice)
+
+    // Update the invoice in Firestore
+    const invoiceRef = doc(db, 'stores', params.id, 'invoices', params.invoiceId)
+    await updateDoc(invoiceRef, {
+      items: updatedItems,
+      totalSold: updatedTotalSold,
+      totalEarn: updatedTotalEarn
+    })
+
+    // Return the item to the product inventory
+    const productRef = doc(db, 'products', itemToReturn.productId)
+    const productDoc = await getDoc(productRef)
+    if (productDoc.exists()) {
+      const productData = productDoc.data()
+      const updatedSizes = {...productData.sizes}
+      if (!updatedSizes[itemToReturn.size]) {
+        updatedSizes[itemToReturn.size] = { barcodes: [], quantity: 0 }
+      }
+      updatedSizes[itemToReturn.size].barcodes.push(itemToReturn.barcode)
+      updatedSizes[itemToReturn.size].quantity = (updatedSizes[itemToReturn.size].quantity || 0) + 1
+
+      await updateDoc(productRef, { sizes: updatedSizes })
+    }
+
+    // Refresh the invoice data
+    await fetchInvoice()
+    setReturnBarcode('')
+  }
+
+  const handleSearch = async () => {
+    const productsRef = collection(db, 'products')
+    const q = query(productsRef, where('barcodes', 'array-contains', addBarcode))
+    const querySnapshot = await getDocs(q)
+    
+    if (!querySnapshot.empty) {
+      const productDoc = querySnapshot.docs[0]
+      const productData = productDoc.data()
+      const size = Object.keys(productData.sizes).find(size => 
+        productData.sizes[size].barcodes.includes(addBarcode)
+      )
+      
+      if (size) {
+        setSearchResult({
+          id: productDoc.id,
+          productId: productDoc.id,
+          brand: productData.brand,
+          reference: productData.reference,
+          color: productData.color,
+          size: size,
+          barcode: addBarcode,
+          salePrice: productData.saleprice,
+          baseprice: productData.baseprice,
+          sold: false,
+          addedAt: new Date(),
+          exhibitionStore: null,
+          warehouseId: null,
+          isBox: false,
+          imageUrl: productData.imageUrl,
+          quantity: 1
+        })
+      } else {
+        setSearchResult(null)
+        alert('Barcode not found in product sizes')
+      }
+    } else {
+      setSearchResult(null)
+      alert('Product not found')
+    }
+  }
+
+  const handleAddToInvoice = async () => {
+    if (!invoice || !searchResult) return
+
+    const newItem: InvoiceItem = {
+      ...searchResult,
+      salePrice: Number(newSalePrice),
+      sold: true,
+      addedAt: new Date()
+    }
+
+    const updatedItems = [...invoice.items, newItem]
+    const updatedTotalSold = invoice.totalSold + Number(newSalePrice)
+    const updatedTotalEarn = invoice.totalEarn + (Number(newSalePrice) - searchResult.baseprice)
+
+    // Update the invoice in Firestore
+    const invoiceRef = doc(db, 'stores', params.id, 'invoices', params.invoiceId)
+    await updateDoc(invoiceRef, {
+      items: updatedItems,
+      totalSold: updatedTotalSold,
+      totalEarn: updatedTotalEarn
+    })
+
+    // Remove the barcode from the product's inventory
+    const productRef = doc(db, 'products', searchResult.productId)
+    const productDoc = await getDoc(productRef)
+    if (productDoc.exists()) {
+      const productData = productDoc.data()
+      const updatedSizes = {...productData.sizes}
+      const barcodeIndex = updatedSizes[searchResult.size].barcodes.indexOf(searchResult.barcode)
+      if (barcodeIndex > -1) {
+        updatedSizes[searchResult.size].barcodes.splice(barcodeIndex, 1)
+        updatedSizes[searchResult.size].quantity -= 1
+      }
+      await updateDoc(productRef, { sizes: updatedSizes })
+    }
+
+    // Refresh the invoice data
+    await fetchInvoice()
+    setAddBarcode('')
+    setNewSalePrice('')
+    setSearchResult(null)
   }
 
   const formatDate = (date: Timestamp | Date) => {
@@ -169,16 +311,16 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
     <div className="container mx-auto p-4">
       <Card className="mb-2">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold">Invoice for {invoice.customerName}</CardTitle>
+          <CardTitle className="text-2xl font-bold">Invoice for {invoice?.customerName}</CardTitle>
           <div className="text-sm text-gray-500">
-            Date: {formatDate(invoice.createdAt)}
+            Date: {invoice && formatDate(invoice.createdAt)}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent> 
           <p className="mb-2">Store: {storeName}</p>
           <p className="mb-2">Customer Phone: {invoice.customerPhone}</p>
-          <p className="mb-2 text-lg font-semibold">Total Sold: ${formatPrice(invoice.totalSold)}</p>
-          <p className="mb-2 text-lg font-semibold">Total Earn: ${formatPrice(invoice.totalEarn)}</p>
+          <p className="mb-2 text-lg font-semibold">Total Sold: ${invoice && formatPrice(invoice.totalSold)}</p>
+          <p className="mb-2 text-lg font-semibold">Total Earn: ${invoice &&formatPrice(invoice.totalEarn)}</p>
           <div className="flex space-x-4 mt-4">
             <Button onClick={exportToPDF}>Export to PDF</Button>
             <Link href={`/store/${params.id}/invoices`}>
@@ -187,7 +329,55 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
           </div>
         </CardContent>
       </Card>
-
+      <div className="grid gap-4 mb-4">
+            <div>
+              <Label htmlFor="returnBarcode">Return</Label>
+              <div className="flex">
+                <Input
+                  id="returnBarcode"
+                  value={returnBarcode}
+                  onChange={(e) => setReturnBarcode(e.target.value)}
+                  placeholder="Enter barcode to return"
+                  className="mr-2"
+                />
+                <Button onClick={handleReturn}>Return</Button>
+              </div>
+            </div>
+            
+            <div>
+              <Label htmlFor="addBarcode">Add to Invoice</Label>
+              <div className="flex">
+                <Input
+                  id="addBarcode"
+                  value={addBarcode}
+                  onChange={(e) => setAddBarcode(e.target.value)}
+                  placeholder="Enter barcode to add"
+                  className="mr-2"
+                />
+                <Button onClick={handleSearch}>Search</Button>
+              </div>
+            </div>
+          </div>
+          
+          {searchResult && (
+            <Card className="mb-4">
+              <CardContent className="p-4">
+                <h3 className="font-semibold">{searchResult.brand} - {searchResult.reference}</h3>
+                <p>Color: {searchResult.color}</p>
+                <p>Size: {searchResult.size}</p>
+                <p>Barcode: {searchResult.barcode}</p>
+                <div className="flex mt-2">
+                  <Input
+                    value={newSalePrice}
+                    onChange={(e) => setNewSalePrice(e.target.value)}
+                    placeholder="Enter sale price"
+                    className="mr-2"
+                  />
+                  <Button onClick={handleAddToInvoice}>Add to Invoice</Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
       <Card>
         <CardHeader className="flex flex-row justify-between items-center">
           <CardTitle>Invoice Items</CardTitle>
@@ -198,12 +388,16 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
             {invoice.items.map((item, index) => (
               <div key={index} className="flex items-start">
                 <span className="text-sm font-semibold text-gray-500 mr-2 mt-1">{index + 1}</span>
-                <Card className="w-full">
+                <Card className={`w-full ${item.returned ? 'opacity-50 bg-gray-100' : ''}`}>
                 <CardContent className="p-2 flex items-center justify-between">
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold">{item.brand} - {item.reference}</h3>
                       <p>Color: {item.color}</p>
-                      <p>Size: {item.size}</p>
+                      {item.isBox ? (
+                        <p>Box: {item.quantity}</p>
+                      ) : (
+                        <p>Size: {item.size}</p>
+                      )}
                       <p>Barcode: {item.barcode}</p>
                       <p>Sale Price: ${formatPrice(item.salePrice)}</p>
                       <p className="text-sm text-gray-500">Added At: {formatDate(item.addedAt)}</p>
@@ -213,7 +407,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
                         ) : (
                           <p className="text-sm text-gray-500">WH: {warehouses[item.warehouseId || '']}</p>
                         )}
-                        <p className="text-sm text-gray-500"> |Earn: ${formatPrice(item.salePrice - item.baseprice)}</p>
+                        <p className="text-sm text-gray-500"> |Earn: ${formatPrice((item.salePrice - item.baseprice) * item.quantity)}</p>
                       </div>
                     </div>
                     <div className="w-24 h-24 relative">

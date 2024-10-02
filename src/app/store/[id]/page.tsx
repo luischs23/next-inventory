@@ -112,12 +112,25 @@
     }, [user, params.id])
   
     const calculateTotals = useCallback((items: (InvoiceItem | BoxItem)[]) => {
-      const totalSold = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) : 0), 0)
-      const totalEarn = items.reduce((sum, item) => sum + (item.sold ? Number(item.salePrice) - Number(item.baseprice) : 0), 0)
+      const totalSold = items.reduce((sum, item) => {
+        if (item.sold) {
+          const quantity = item.isBox ? item.quantity : 1;
+          return sum + (Number(item.salePrice) * quantity);
+        }
+        return sum;
+      }, 0);
+    
+      const totalEarn = items.reduce((sum, item) => {
+        if (item.sold) {
+          const quantity = item.isBox ? item.quantity : 1;
+          return sum + ((Number(item.salePrice) - Number(item.baseprice)) * quantity);
+        }
+        return sum;
+      }, 0);
       
-      setTotalSold(totalSold)
-      setTotalEarn(totalEarn)
-    }, [])
+      setTotalSold(totalSold);
+      setTotalEarn(totalEarn);
+    }, []);
   
     const initializeItemStates = useCallback((items: (InvoiceItem | BoxItem)[]) => {
       const newSalePrices: { [key: string]: string } = {}
@@ -322,18 +335,19 @@
         ...product,
         invoiceId: invoiceRef.id,
         salePrice: Number(product.saleprice),
+        baseprice: Number(product.baseprice),
         sold: false,
         addedAt: serverTimestamp() as Timestamp,
         imageUrl: product.imageUrl, 
         isBox: product.isBox || false,
+        quantity: product.isBox ? product.quantity : 1,
         ...(product.exhibitionStore && { exhibitionStore: product.exhibitionStore }),
         ...(product.isBox && {
           comments: (product as BoxItem).comments || '',
           gender: (product as BoxItem).gender || '',
-          baseprice: (product as BoxItem).baseprice || 0,
           size: (product as BoxItem).size || ''
-      })
-    }
+      }) 
+    };
       
       await setDoc(invoiceRef, newInvoiceItem)
 
@@ -496,16 +510,29 @@
         return
       }
       try {
-        
         const itemRef = doc(db, 'stores', params.id, 'invoices', user.uid, 'items', item.invoiceId);
         await updateDoc(itemRef, { 
           sold: true,
           salePrice: newSalePrice,
           soldAt: serverTimestamp()
         })
-  
-        // Re-fetch invoice data to ensure all totals are up-to-date
-      await fetchInvoiceData()
+        
+      await fetchInvoiceData() 
+      // Update local state
+      setInvoice(prevInvoice => 
+        prevInvoice.map(i => 
+          i.invoiceId === item.invoiceId 
+            ? { ...i, sold: true, salePrice: newSalePrice } 
+            : i
+        )
+      );
+
+      // Recalculate totals
+      calculateTotals(invoice.map(i => 
+        i.invoiceId === item.invoiceId 
+          ? { ...i, sold: true, salePrice: newSalePrice } 
+          : i
+      ));
 
       toast({
         title: "Success",
@@ -559,26 +586,27 @@
           totalEarn: totalEarn || 0,
           createdAt: serverTimestamp(),
           items: invoice.map(item => {
-            const earn = Number(item.salePrice) - Number(item.baseprice)
+            const quantity = item.isBox ? item.quantity : 1;
+            const earn = (Number(item.salePrice) - Number(item.baseprice)) * quantity;
             return {
-            brand: item.brand || "Unknown",
-            reference: item.reference || "N/A",
-            color: item.color || "N/A",
-            size: item.size || "N/A",
-            barcode: item.barcode || "N/A",
-            salePrice: Number(item.salePrice) || 0,
-            baseprice: Number(item.baseprice) || 0,
-            earn: earn,
-            sold: item.sold || false,
-            addedAt: item.addedAt || serverTimestamp(),
-            exhibitionStore: item.exhibitionStore || null,
-            warehouseId: item.warehouseId || null,
-            imageUrl: item.imageUrl || "", 
-            isBox: item.isBox || false, 
-            ...(item.isBox ? {
-            comments: (item as BoxItem).comments || "",
-            gender: (item as BoxItem).gender || "",
-            baseprice: (item as BoxItem).baseprice || 0
+              brand: item.brand || "Unknown",
+              reference: item.reference || "N/A",
+              color: item.color || "N/A",
+              size: item.size || "N/A",
+              barcode: item.barcode || "N/A",
+              salePrice: Number(item.salePrice) || 0,
+              baseprice: Number(item.baseprice) || 0,
+              earn: earn,
+              sold: item.sold || false,
+              addedAt: item.addedAt || serverTimestamp(),
+              exhibitionStore: item.exhibitionStore || null,
+              warehouseId: item.warehouseId || null,
+              imageUrl: item.imageUrl || "", 
+              isBox: item.isBox || false, 
+              quantity: quantity,
+              ...(item.isBox ? {
+              comments: (item as BoxItem).comments || "",
+              gender: (item as BoxItem).gender || "",
           } : {})
           }
         })
@@ -587,7 +615,7 @@
         setInvoice([])
         setTotalSold(0)
         setTotalEarn(0)
-        setCustomerName('')
+        setCustomerName('') 
         setCustomerPhone('')
 
         // Delete the temporary invoice items
@@ -712,7 +740,7 @@
                     </div>
                   )}
                   <div className="text-sm text-gray-500">
-                  | Earn: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}
+                  | Earn unit: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}
                   </div>
                   </div>
                   <div className="flex items-center space-x-2">

@@ -246,7 +246,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
 
   const summaryInfo = useMemo(() => {
     const totalBoxes = filteredBoxes.length
-    const totalQuantity = filteredBoxes.reduce((sum, box) => sum + box.quantity, 0)
+    const totalQuantity = filteredBoxes.reduce((sum, box) => sum + (Number(box.quantity) || 0), 0)
     const totalBase = filteredBoxes.reduce((sum, box) => sum + box.baseprice * box.quantity, 0)
     const totalSale = filteredBoxes.reduce((sum, box) => sum + box.saleprice * box.quantity, 0)
     return { totalBoxes, totalQuantity, totalBase, totalSale }
