@@ -21,6 +21,7 @@
 
   interface Product {
     id: string
+    productId: string;
     brand: string
     reference: string
     color: string
@@ -285,100 +286,102 @@
 
     const handleAddToInvoice = async (product: ProductWithBarcode) => {
       if (!user) return
-
+    
       try {
-      if (product.exhibitionStore) {
-        // Handle exhibition item
-        const productRef = doc(db, 'warehouses', product.warehouseId, 'products', product.id)
-        const productDoc = await getDoc(productRef)
-        if (productDoc.exists()) {
-          const productData = productDoc.data() as Product
-          const updatedExhibition = { ...productData.exhibition }
-          delete updatedExhibition[product.exhibitionStore]
-          await updateDoc(productRef, { exhibition: updatedExhibition })
-        }
-      } else if (product.isBox) {
-        // Handle box item
-        const boxRef = doc(db, `warehouses/${product.warehouseId}/boxes`, product.id)
-        await deleteDoc(boxRef)
-      } else {
-        // Handle regular inventory item
-        const productRef = doc(db, 'warehouses', product.warehouseId, 'products', product.id)
-        const productDoc = await getDoc(productRef)
-        if (productDoc.exists()) {
-          const productData = productDoc.data() as Product
-          const updatedSizes = { ...productData.sizes }
-          
-          if (updatedSizes[product.size]) {
-            updatedSizes[product.size] = {
-              quantity: updatedSizes[product.size].quantity - 1,
-              barcodes: updatedSizes[product.size].barcodes.filter(b => b !== product.barcode)
-            }
-            
-            // Remove the size if quantity becomes 0
-            if (updatedSizes[product.size].quantity === 0) {
-              delete updatedSizes[product.size]
-            }
+        if (product.exhibitionStore) {
+          // Handle exhibition item
+          const productRef = doc(db, 'warehouses', product.warehouseId, 'products', product.id)
+          const productDoc = await getDoc(productRef)
+          if (productDoc.exists()) {
+            const productData = productDoc.data() as Product
+            const updatedExhibition = { ...productData.exhibition }
+            delete updatedExhibition[product.exhibitionStore]
+            await updateDoc(productRef, { exhibition: updatedExhibition })
           }
-      
-          const newTotal = (productData.total || 0) - 1
-
-          await updateDoc(productRef, {
-            sizes: updatedSizes,
-            total: newTotal
-          })
+        } else if (product.isBox) {
+          // Handle box item
+          const boxRef = doc(db, `warehouses/${product.warehouseId}/boxes`, product.id)
+          await deleteDoc(boxRef)
+        } else {
+          // Handle regular inventory item
+          const productRef = doc(db, 'warehouses', product.warehouseId, 'products', product.id)
+          const productDoc = await getDoc(productRef)
+          if (productDoc.exists()) {
+            const productData = productDoc.data() as Product
+            const updatedSizes = { ...productData.sizes }
+            
+            if (updatedSizes[product.size]) {
+              updatedSizes[product.size] = {
+                quantity: updatedSizes[product.size].quantity - 1,
+                barcodes: updatedSizes[product.size].barcodes.filter(b => b !== product.barcode)
+              }
+              
+              // Remove the size if quantity becomes 0
+              if (updatedSizes[product.size].quantity === 0) {
+                delete updatedSizes[product.size]
+              }
+            }
+        
+            const newTotal = (productData.total || 0) - 1
+    
+            await updateDoc(productRef, {
+              sizes: updatedSizes,
+              total: newTotal
+            })
+          }
         }
+        const invoiceRef = doc(collection(db, 'stores', params.id, 'invoices', user.uid, 'items'))
+    
+        const newInvoiceItem: InvoiceItem | BoxItem = {
+          ...product,
+          productId: product.id, // Changed from item.id to product.id
+          invoiceId: invoiceRef.id,
+          salePrice: Number(product.saleprice),
+          baseprice: Number(product.baseprice),
+          sold: false,
+          addedAt: serverTimestamp() as Timestamp,
+          imageUrl: product.imageUrl, 
+          isBox: product.isBox || false,
+          quantity: product.isBox ? product.quantity : 1,
+          ...(product.exhibitionStore && { exhibitionStore: product.exhibitionStore }),
+          ...(product.isBox && {
+            comments: (product as BoxItem).comments || '',
+            gender: (product as BoxItem).gender || '',
+            size: (product as BoxItem).size || ''
+          }) 
+        };
+        
+        await setDoc(invoiceRef, newInvoiceItem)
+    
+        // Re-fetch invoice data to ensure all totals and states are up-to-date
+        await fetchInvoiceData()
+    
+        setSearchedProduct(null)
+        setSearchBarcode('')
+    
+        toast({
+          title: "Product Added",
+          description: product.exhibitionStore 
+            ? "The exhibition product has been added to the invoice." 
+            : "The product has been added to the invoice.",
+          duration: 1500,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
+        })
+      } catch (error) {
+        console.error('Error adding product to invoice:', error)
+        toast({
+          title: "Error",
+          description: "Failed to add product to invoice. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
       }
-      const invoiceRef = doc(collection(db, 'stores', params.id, 'invoices', user.uid, 'items'))
-
-      const newInvoiceItem: InvoiceItem | BoxItem = {
-        ...product,
-        invoiceId: invoiceRef.id,
-        salePrice: Number(product.saleprice),
-        baseprice: Number(product.baseprice),
-        sold: false,
-        addedAt: serverTimestamp() as Timestamp,
-        imageUrl: product.imageUrl, 
-        isBox: product.isBox || false,
-        quantity: product.isBox ? product.quantity : 1,
-        ...(product.exhibitionStore && { exhibitionStore: product.exhibitionStore }),
-        ...(product.isBox && {
-          comments: (product as BoxItem).comments || '',
-          gender: (product as BoxItem).gender || '',
-          size: (product as BoxItem).size || ''
-      }) 
-    };
-      
-      await setDoc(invoiceRef, newInvoiceItem)
-
-      // Re-fetch invoice data to ensure all totals and states are up-to-date
-      await fetchInvoiceData()
-
-      setSearchedProduct(null)
-      setSearchBarcode('')
-
-      toast({
-        title: "Product Added",
-        description: product.exhibitionStore 
-          ? "The exhibition product has been added to the invoice." 
-          : "The product has been added to the invoice.",
-        duration: 1500,
-        style: {
-          background: "#4CAF50",
-          color: "white",
-          fontWeight: "bold",
-        },
-      })
-    } catch (error) {
-      console.error('Error adding product to invoice:', error)
-      toast({
-        title: "Error",
-        description: "Failed to add product to invoice. Please try again.",
-        duration: 3000,
-        variant: "destructive",
-      })
     }
-  }
+
     const handleReturn = async (item: InvoiceItem | BoxItem) => {
       if (!user) return
 
@@ -589,6 +592,7 @@
             const quantity = item.isBox ? item.quantity : 1;
             const earn = (Number(item.salePrice) - Number(item.baseprice)) * quantity;
             return {
+              productId: item.productId || item.id,
               brand: item.brand || "Unknown",
               reference: item.reference || "N/A",
               color: item.color || "N/A",
