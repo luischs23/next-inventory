@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, Package, User } from 'lucide-react'
+import { Home, FileText, Package, User, Store, Warehouse } from 'lucide-react'
 import { cn } from "app/lib/utils"
 import { ThemeToggle } from '../../ThemeToggle'
 
@@ -10,10 +10,10 @@ const Navbar = () => {
   const pathname = usePathname()
 
   const navItems = [
-    { icon: Home, href: '/', label: 'Home' },
-    { icon: FileText, href: '/form-product', label: 'Form' },
-    { icon: Package, href: '/inventory', label: 'Inventory' },
-    { icon: User, href: '/dashboarduser', label: 'User' },
+    { name: "Home", icon: Home, href: '/home', label: 'Home' },
+    { name: "Stores", icon: Store, href: '/store', label: 'Store' },
+    { name: "Bodegas", icon: Warehouse, href: '/warehouses', label: 'Warehouses' },
+    { name: "Invoices", icon: FileText, href: '/invoices', label: 'invoice' },
   ]
 
   return (
@@ -31,6 +31,7 @@ const Navbar = () => {
             )}
           >
             <item.icon className="h-6 w-6" />
+            <span className="text-sm">{item.name}</span>
             <span className="sr-only">{item.label}</span>
           </Link>
         ))}

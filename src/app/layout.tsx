@@ -32,10 +32,9 @@ export default function RootLayout({
           <AuthProvider>
             <ProductProvider>
               <div className="flex flex-col min-h-screen">
-                <CreativeHeader />
                 <div className="flex flex-1">
                   <Navbar />
-                  <main className="flex-1 p-1 pb-10 md:ml-16">{children}</main>
+                  <main className="flex-1 md:ml-16">{children}</main>
                 </div>
               </div>
               <Toaster />

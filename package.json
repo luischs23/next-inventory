@@ -35,6 +35,8 @@
     "react-barcode": "^1.5.3",
     "react-dom": "^18",
     "react-to-pdf": "^1.0.1",
+    "react-window": "^1.8.10",
+    "swr": "^2.2.5",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^10.0.0",
