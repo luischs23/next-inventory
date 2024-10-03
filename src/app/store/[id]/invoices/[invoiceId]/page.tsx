@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, getDocs, updateDoc, collection, query, where, Timestamp, arrayUnion, increment} from 'firebase/firestore'
+import { doc, getDoc, getDocs, updateDoc, collection, Timestamp, arrayUnion, increment} from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
@@ -14,6 +14,7 @@ import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import Image from 'next/image'
 import { toast } from 'app/components/ui/use-toast'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 interface InvoiceItem {
   id: string
@@ -47,6 +48,29 @@ interface Invoice {
   items: InvoiceItem[]
 }
 
+interface CollapsibleSectionProps {
+  title: string
+  children: React.ReactNode
+}
+
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children }) => {
+  const [isOpen, setIsOpen] = useState(false)
+
+  return (
+    <div className="mb-2">
+      <Button
+        variant="ghost"
+        className="w-full justify-between"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {title}
+        {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </Button>
+      {isOpen && <div className="mt-2">{children}</div>}
+    </div>
+  )
+}
+
 export default function InvoicePage({ params }: { params: { id: string, invoiceId: string } }) {
   const { user } = useAuth()
   const router = useRouter()
@@ -58,6 +82,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   const [addBarcode, setAddBarcode] = useState('')
   const [newSalePrice, setNewSalePrice] = useState('')
   const [searchResult, setSearchResult] = useState<InvoiceItem | null>(null)
+  const [imageError, setImageError] = useState('')
 
   const formatPrice = (price: number): string => {
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -287,7 +312,12 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       addedAt: new Date(),
       productId: searchResult.productId
     }
-    
+
+    if (!newItem.salePrice) {
+      setImageError('Please enter the price')
+      return
+    }
+
     const updatedItems = [...invoice.items, newItem]
     const updatedTotalSold = invoice.totalSold + Number(newSalePrice)
     const updatedTotalEarn = invoice.totalEarn + (Number(newSalePrice) - searchResult.baseprice)
@@ -428,7 +458,8 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
           </div>
         </CardContent>
       </Card>
-      <div className="grid gap-4 mb-4">
+      <div className="grid gap-4">
+       <CollapsibleSection title="Cambios"> 
             <div>
               <Label htmlFor="returnBarcode">Return</Label>
               <div className="flex">
@@ -456,15 +487,28 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
                 <Button onClick={handleSearch}>Search</Button>
               </div>
             </div>
+            </CollapsibleSection>
           </div>
           
           {searchResult && (
             <Card className="mb-4">
               <CardContent className="p-4">
-                <h3 className="font-semibold">{searchResult.brand} - {searchResult.reference}</h3>
-                <p>Color: {searchResult.color}</p>
-                <p>Size: {searchResult.size}</p>
-                <p>Barcode: {searchResult.barcode}</p>
+                <div className='flex space-x-6'>
+                  <div>
+                    <h3 className="font-semibold">{searchResult.brand} - {searchResult.reference}</h3>
+                    <p>Color: {searchResult.color}</p>
+                    <p>Size: {searchResult.size}</p>
+                    <p>Barcode: {searchResult.barcode}</p>
+                  </div>
+                  <div className="w-24 h-24 relative">
+                    <Image
+                      src={searchResult.imageUrl || '/placeholder.svg'}
+                      alt={`${searchResult.brand} - ${searchResult.reference}`}
+                      fill
+                      className="object-cover rounded-md"
+                    />
+                  </div>
+                 </div>
                 <div className="flex mt-2">
                   <Input
                     value={newSalePrice}
@@ -474,6 +518,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
                   />
                   <Button onClick={handleAddToInvoice}>Add to Invoice</Button>
                 </div>
+                {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
               </CardContent>
             </Card>
           )}
