@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
@@ -29,6 +30,7 @@ interface Warehouse {
 }
 
 export default function WarehousesPage() {
+  const { user, loading: authLoading } = useAuth()
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
@@ -39,30 +41,39 @@ export default function WarehousesPage() {
   const router = useRouter()
   
   useEffect(() => {
-    const fetchWarehouses = async () => {
-      setLoading(true)
-      try {
-        const warehousesCollection = collection(db, 'warehouses')
-        const warehousesSnapshot = await getDocs(warehousesCollection)
-        const warehousesList = warehousesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Warehouse[]
-        
-        // Simulate a delay to ensure the loading state is visible
-        await new Promise(resolve => setTimeout(resolve, 1000))
-        
-        setWarehouses(warehousesList)
-      } catch (err) {
-        console.error('Error fetching warehouses:', err)
-        setError('Failed to load warehouses. Please try again.')
-      } finally {
-        setLoading(false)
-      }
+    if (authLoading) return
+    if (!user) {
+      router.push('/login')
+    } else {
+      fetchWarehouses()
     }
+  }, [user, authLoading, router])
 
-    fetchWarehouses()
-  }, [])
+  const fetchWarehouses = async () => {
+    if (!user || !user.companyId) return
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const warehousesRef = collection(db, 'companies', user.companyId, 'warehouses')
+      const warehousesSnapshot = await getDocs(warehousesRef)
+      const warehousesList = warehousesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Warehouse[]
+      
+      // Simulate a delay to ensure the loading state is visible
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      setWarehouses(warehousesList)
+    } catch (err) {
+      console.error('Error fetching warehouses:', err)
+      setError('Failed to load warehouses. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const uploadImage = async (file: File) => {
     const storageRef = ref(storage, `warehouse-images/${file.name}`)
@@ -72,20 +83,20 @@ export default function WarehousesPage() {
 
   const handleCreateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!imageFile) return
+    if (!user || !user.companyId || !imageFile) return
 
     setLoading(true)
     setError(null)
 
     try {
       const imageUrl = await uploadImage(imageFile)
-      const warehousesCollection = collection(db, 'warehouses')
+      const warehousesRef = collection(db, 'companies', user.companyId, 'warehouses')
       const newWarehouseData = {
         ...newWarehouse,
         imageUrl,
         createdAt: new Date()
       }
-      const docRef = await addDoc(warehousesCollection, newWarehouseData)
+      const docRef = await addDoc(warehousesRef, newWarehouseData)
       setWarehouses(prevWarehouses => [...prevWarehouses, { id: docRef.id, ...newWarehouseData }])
       setIsPopupOpen(false)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
@@ -100,7 +111,7 @@ export default function WarehousesPage() {
 
   const handleUpdateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingWarehouse) return
+    if (!user || !user.companyId || !editingWarehouse) return
 
     setLoading(true)
     setError(null)
@@ -112,7 +123,7 @@ export default function WarehousesPage() {
         updatedData.imageUrl = imageUrl
       }
 
-      const warehouseRef = doc(db, 'warehouses', editingWarehouse.id)
+      const warehouseRef = doc(db, 'companies', user.companyId, 'warehouses', editingWarehouse.id)
       await updateDoc(warehouseRef, updatedData)
 
       setWarehouses(warehouses.map(warehouse => 
@@ -132,11 +143,13 @@ export default function WarehousesPage() {
   }
 
   const handleDeleteWarehouse = async (warehouse: Warehouse) => {
+    if (!user || !user.companyId) return
+
     setLoading(true)
     setError(null)
 
     try {
-      await deleteDoc(doc(db, 'warehouses', warehouse.id))
+      await deleteDoc(doc(db, 'companies', user.companyId, 'warehouses', warehouse.id))
 
       if (warehouse.imageUrl) {
         const imageRef = ref(storage, warehouse.imageUrl)
@@ -173,7 +186,7 @@ export default function WarehousesPage() {
   const handleParesInventoryClick = (warehouseId: string) => {
     router.push(`/warehouses/${warehouseId}/pares-inventory`)
   }
-
+  if (authLoading || loading) {
   return (
     <div className="min-h-screen bg-blue-100">
       <header className="bg-teal-600 text-white p-4 flex items-center">
@@ -330,4 +343,5 @@ export default function WarehousesPage() {
       )}
     </div>
   )
+}
 }

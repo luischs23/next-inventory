@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, FileText, Package, User, Store, Warehouse } from 'lucide-react'
 import { cn } from "app/lib/utils"
-import { ThemeToggle } from '../../ThemeToggle'
 
 const Navbar = () => {
   const pathname = usePathname()
@@ -14,6 +13,7 @@ const Navbar = () => {
     { name: "Stores", icon: Store, href: '/store', label: 'Store' },
     { name: "Bodegas", icon: Warehouse, href: '/warehouses', label: 'Warehouses' },
     { name: "Invoices", icon: FileText, href: '/invoices', label: 'invoice' },
+    { name: "Users", icon: User, href: '/users', label: 'users' },
   ]
 
   return (
@@ -36,7 +36,6 @@ const Navbar = () => {
           </Link>
         ))}
         <div className="pt-2">
-          <ThemeToggle />
         </div>
       </div>
     </nav>

@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from 'app/app/context/AuthContext'
+import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
@@ -27,11 +27,10 @@ interface Store {
   manager: string
   phone: string
   imageUrl: string
-  userId: string
 }
 
 export default function StoreListPage() {
-  const { user } = useAuth()
+  const { data: session, status } = useSession()
   const router = useRouter()
   const [stores, setStores] = useState<Store[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,23 +46,22 @@ export default function StoreListPage() {
   const [imageFile, setImageFile] = useState<File | null>(null)
 
   useEffect(() => {
-    if (!user) {
+    if (status === 'unauthenticated') {
       router.push('/login')
-    } else {
+    } else if (status === 'authenticated') {
       fetchStores()
     }
-  }, [user, router])
+  }, [status, router])
 
   const fetchStores = async () => {
-    if (!user) return
+    if (!session?.user?.companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
-      const storesRef = collection(db, 'stores')
-      const q = query(storesRef, where('userId', '==', user.uid))
-      const querySnapshot = await getDocs(q)
+      const storesRef = collection(db, 'companies', session.user.companyId, 'stores')
+      const querySnapshot = await getDocs(storesRef)
       const storeList = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -91,18 +89,17 @@ export default function StoreListPage() {
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !imageFile) return
+    if (!session?.user?.companyId || !imageFile) return
 
     setLoading(true)
     setError(null)
 
     try {
       const imageUrl = await uploadImage(imageFile)
-      const storesRef = collection(db, 'stores')
+      const storesRef = collection(db, 'companies', session.user.companyId, 'stores')
       const newStoreData = {
         ...newStore,
         imageUrl,
-        userId: user.uid,
         createdAt: new Date()
       }
       const docRef = await addDoc(storesRef, newStoreData)
@@ -120,7 +117,7 @@ export default function StoreListPage() {
 
   const handleUpdateStore = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !editingStore) return
+    if (!session?.user?.companyId || !editingStore) return
 
     setLoading(true)
     setError(null)
@@ -132,7 +129,7 @@ export default function StoreListPage() {
         updatedData.imageUrl = imageUrl
       }
 
-      const storeRef = doc(db, 'stores', editingStore.id)
+      const storeRef = doc(db, 'companies', session.user.companyId, 'stores', editingStore.id)
       await updateDoc(storeRef, updatedData)
 
       setStores(stores.map(store => 
@@ -152,22 +149,19 @@ export default function StoreListPage() {
   }
 
   const handleDeleteStore = async () => {
-    if (!user || !editingStore) return
+    if (!session?.user?.companyId || !editingStore) return
 
     setLoading(true)
     setError(null)
 
     try {
-      // Delete the store document from Firestore
-      await deleteDoc(doc(db, 'stores', editingStore.id))
+      await deleteDoc(doc(db, 'companies', session.user.companyId, 'stores', editingStore.id))
 
-      // Delete the store image from Storage
       if (editingStore.imageUrl) {
         const imageRef = ref(storage, editingStore.imageUrl)
         await deleteObject(imageRef)
       }
 
-      // Update local state
       setStores(stores.filter(store => store.id !== editingStore.id))
 
       setIsPopupOpen(false)
@@ -193,6 +187,18 @@ export default function StoreListPage() {
     setIsPopupOpen(true)
   }
 
+  if (status === 'loading' || loading) {
+    return (
+      <div className="min-h-screen bg-blue-100 flex justify-center items-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(2)].map((_, index) => (
+            <StoreCardSkeleton key={index} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-blue-100">
       <header className="bg-teal-600 text-white p-4 flex items-center">
@@ -210,13 +216,7 @@ export default function StoreListPage() {
       </header>
 
       <main className="container mx-auto p-4">
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(2)].map((_, index) => (
-              <StoreCardSkeleton key={index} />
-            ))}
-          </div>
-        ) : stores.length === 0 ? (
+        {stores.length === 0 ? (
           <p className="text-center mt-8">You dont have any stores yet. Create one to get started!</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -345,7 +345,7 @@ export default function StoreListPage() {
                   <Button 
                     variant="destructive" 
                     className="w-full"
-                    onClick={() => handleDeleteStore()}
+                    onClick={handleDeleteStore}
                   >
                     Delete Store
                   </Button>
