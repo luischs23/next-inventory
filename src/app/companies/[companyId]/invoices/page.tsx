@@ -50,7 +50,7 @@ interface Store {
   name: string
 }
 
-export default function InvoicesPage() {
+export default function InvoicesPage({ params }: { params: { companyId: string } }) {
   const { user } = useAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
@@ -68,7 +68,7 @@ export default function InvoicesPage() {
       setLoading(true)
       try {
         // Fetch stores
-        const storesRef = collection(db, 'stores')
+        const storesRef = collection(db, `companies/${params.companyId}/stores`)
         const storesSnapshot = await getDocs(storesRef)
         const storesData = storesSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }))
         setStores(storesData)
@@ -76,7 +76,7 @@ export default function InvoicesPage() {
         // Fetch invoices from all stores
         let allInvoices: Invoice[] = []
         for (const store of storesData) {
-          const invoicesRef = collection(db, 'stores', store.id, 'invoices')
+          const invoicesRef = collection(db, `companies/${params.companyId}/stores/${store.id}/invoices`)
           const invoicesSnapshot = await getDocs(invoicesRef)
           const storeInvoices = invoicesSnapshot.docs.map(doc => ({
             ...doc.data(),
@@ -101,7 +101,7 @@ export default function InvoicesPage() {
     }
 
     fetchStoresAndInvoices()
-  }, [user])
+  }, [user, params.companyId])
 
   useEffect(() => {
     filterAndSortInvoices()

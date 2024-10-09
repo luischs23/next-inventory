@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, getDocs, updateDoc, collection, Timestamp, arrayUnion, increment} from 'firebase/firestore'
+import { doc, getDoc, getDocs, updateDoc, collection, Timestamp, arrayUnion, increment, DocumentData} from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
@@ -53,6 +53,21 @@ interface CollapsibleSectionProps {
   children: React.ReactNode
 }
 
+interface SizeData {
+  barcodes: string[];
+  quantity: number;
+}
+
+interface ProductData extends DocumentData {
+  brand: string;
+  reference: string;
+  color: string;
+  sizes: { [size: string]: SizeData };
+  saleprice: number;
+  baseprice: number;
+  imageUrl: string;
+}
+
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children }) => {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -71,7 +86,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
   )
 }
 
-export default function InvoicePage({ params }: { params: { id: string, invoiceId: string } }) {
+export default function InvoicePage({ params }: { params: { companyId: string, storeId: string, invoiceId: string } }) {
   const { user } = useAuth()
   const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
@@ -101,7 +116,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   const fetchInvoice = async () => {
     if (!user) return
 
-    const storeRef = doc(db, 'stores', params.id)
+    const storeRef = doc(db, `companies/${params.companyId}/stores`, params.storeId)
     const storeDoc = await getDoc(storeRef)
     if (storeDoc.exists()) {
       setStoreName(storeDoc.data().name)
@@ -120,7 +135,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   }
 
   const fetchWarehouses = async () => {
-    const warehousesSnapshot = await getDocs(collection(db, 'warehouses'))
+    const warehousesSnapshot = await getDocs(collection(db, `companies/${params.companyId}/warehouses`))
     const warehousesData = warehousesSnapshot.docs.reduce((acc, doc) => {
       acc[doc.id] = doc.data().name
       return acc
@@ -129,7 +144,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   }
 
   const fetchStores = async () => {
-    const storesSnapshot = await getDocs(collection(db, 'stores'))
+    const storesSnapshot = await getDocs(collection(db, `companies/${params.companyId}/stores`))
     const storesData = storesSnapshot.docs.reduce((acc, doc) => {
       acc[doc.id] = doc.data().name
       return acc
@@ -168,7 +183,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       const updatedTotalEarn = invoice.totalEarn - (itemToReturn.salePrice - itemToReturn.baseprice)
   
       // Update the invoice in Firestore
-      const invoiceRef = doc(db, 'stores', params.id, 'invoices', params.invoiceId)
+      const invoiceRef = doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, params.invoiceId)
       await updateDoc(invoiceRef, {
         items: updatedItems,
         totalSold: updatedTotalSold,
@@ -176,7 +191,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
       })
   
       // Return the item to the product inventory
-      const productRef = doc(db, 'warehouses', itemToReturn.warehouseId, 'products', itemToReturn.productId)
+      const productRef = doc(db, `companies/${params.companyId}/warehouses/${itemToReturn.warehouseId}/products`, itemToReturn.productId)
       const productDoc = await getDoc(productRef)
       if (productDoc.exists()) {
         const productData = productDoc.data()
@@ -248,14 +263,14 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
   
       // Search in all warehouses
       for (const warehouseId of Object.keys(warehouses)) {
-        const productsRef = collection(db, 'warehouses', warehouseId, 'products')
+        const productsRef = collection(db, `companies/${params.companyId}/warehouses/${warehouseId}/products`)
         const querySnapshot = await getDocs(productsRef)
 
         // Search in sizes
         for (const doc of querySnapshot.docs) {
-          const productData = doc.data()
+          const productData = doc.data() as ProductData
           for (const [size, sizeData] of Object.entries(productData.sizes)) {
-            if (sizeData.barcodes.includes(addBarcode)) {
+            if (Array.isArray(sizeData.barcodes) && sizeData.barcodes.includes(addBarcode)) {
               foundProduct = {
                 id: doc.id,
                 productId: doc.id,
@@ -323,7 +338,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
     const updatedTotalEarn = invoice.totalEarn + (Number(newSalePrice) - searchResult.baseprice)
 
     // Update the invoice in Firestore
-    const invoiceRef = doc(db, 'stores', params.id, 'invoices', params.invoiceId)
+    const invoiceRef = doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, params.invoiceId)
     await updateDoc(invoiceRef, {
       items: updatedItems,
       totalSold: updatedTotalSold,
@@ -332,7 +347,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
 
     // Remove the barcode from the product's inventory
     if (searchResult.warehouseId) {
-      const productRef = doc(db, 'warehouses', searchResult.warehouseId, 'products', searchResult.productId)
+      const productRef = doc(db, `companies/${params.companyId}/warehouses/${searchResult.warehouseId}/products`, searchResult.productId)
       const productDoc = await getDoc(productRef)
       if (productDoc.exists()) {
         const productData = productDoc.data()
@@ -452,7 +467,7 @@ export default function InvoicePage({ params }: { params: { id: string, invoiceI
           <p className="mb-2 text-lg font-semibold">Total Earn: ${invoice &&formatPrice(invoice.totalEarn)}</p>
           <div className="flex space-x-4 mt-4">
             <Button onClick={exportToPDF}>Export to PDF</Button>
-            <Link href={`/store/${params.id}/invoices`}>
+            <Link href={`/companies/${params.companyId}/stores/${params.storeId}/invoices`}>
               <Button variant="outline">Invoice List</Button>
             </Link>
           </div>

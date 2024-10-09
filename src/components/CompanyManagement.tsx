@@ -12,7 +12,6 @@ import { Card, CardContent } from 'app/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +49,10 @@ export default function CompanyManagement() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null)
 
+  const handleCardClick = (companyId: string) => {
+    router.push(`/companies/${companyId}/home`)
+  }
+    
   useEffect(() => {
     fetchCompanies()
   }, [])
@@ -154,63 +157,77 @@ export default function CompanyManagement() {
           + Add Company
         </Button>
       </header>
-
-      <main className="container mx-auto p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {companies.map((company) => (
-            <Card key={company.id} className="overflow-hidden">
-              <div className="flex">
-                <div className="w-1/3">
-                  <Image 
-                    src={company.imageUrl || '/placeholder.svg'} 
-                    alt={company.name} 
-                    width={100} 
-                    height={100} 
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <CardContent className="w-2/3 p-4 relative">
-                  <div className="absolute top-2 right-2 flex">
-                    <Button variant="ghost" className="h-8 w-8 p-0 mr-1" onClick={() => handleEdit(company)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      className="h-8 w-8 p-0 mr-1" 
-                      onClick={() => {
-                        setCompanyToDelete(company.id)
-                        setDeleteConfirmOpen(true)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem>
-                          <Link href={`/companies/${company.id}/store`}>Stores</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Link href={`/companies/${company.id}/warehouses`}>Warehouses</Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <h2 className="font-bold mb-2">{company.name}</h2>
-                  <p className="text-sm text-gray-600">{company.email}</p>
-                  <p className="text-sm text-gray-600">Phone: {company.phone}</p>
-                  <p className="text-sm text-gray-600">{company.address}</p>
-                </CardContent>
+      
+    <main className="container mx-auto p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {companies.map((company) => (
+          <Card 
+            key={company.id} 
+            className="overflow-hidden cursor-pointer transition-shadow hover:shadow-lg"
+            onClick={() => handleCardClick(company.id)}
+          >
+            <div className="flex">
+              <div className="w-1/3">
+                <Image 
+                  src={company.imageUrl || '/placeholder.svg'} 
+                  alt={company.name} 
+                  width={100} 
+                  height={100} 
+                  className="w-full h-full object-cover"
+                />
               </div>
-            </Card> 
-          ))}
-        </div>
-        {error && <p className="text-red-500 mt-4">{error}</p>}
-      </main>
+              <CardContent className="w-2/3 p-4 relative">
+                <div className="absolute top-2 right-2 flex" onClick={(e) => e.stopPropagation()}>
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 w-8 p-0 mr-1" 
+                    onClick={() => handleEdit(company)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="h-8 w-8 p-0 mr-1" 
+                    onClick={() => {
+                      setCompanyToDelete(company.id)
+                      setDeleteConfirmOpen(true)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className="h-8 w-8 p-0"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/home`)}>
+                        Home
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/stores`)}>
+                        Stores
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/warehouses`)}>
+                        Warehouses
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <h2 className="font-bold mb-2">{company.name}</h2>
+                <p className="text-sm text-gray-600">{company.email}</p>
+                <p className="text-sm text-gray-600">Phone: {company.phone}</p>
+                <p className="text-sm text-gray-600">{company.address}</p>
+              </CardContent>
+            </div>
+          </Card> 
+        ))}
+      </div>
+      {error && <p className="text-red-500 mt-4">{error}</p>}
+    </main>
 
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end items-start p-4">

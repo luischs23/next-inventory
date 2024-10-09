@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import { Inter } from 'next/font/google'
 import "./globals.css";
 import { AuthProvider } from './context/AuthContext'
-import Navbar from 'app/components/shared/navbar/Navbar'
 import { ThemeProvider } from 'app/components/ThemeProvider'
 import { Toaster } from "app/components/ui/toaster"
-import { ProductProvider } from 'app/app/context/ProductContext'
+import { ProductProvider } from './context/ProductContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -30,12 +29,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <ProductProvider>
-              <div className="flex flex-col min-h-screen">
-                <div className="flex flex-1">
-                  <Navbar />
-                  <main className="flex-1 md:ml-16">{children}</main>
-                </div>
-              </div>
+              {children}
               <Toaster />
             </ProductProvider>
           </AuthProvider>

@@ -8,6 +8,7 @@ import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'fireb
 import { Button } from "app/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 
 interface Invoice {
   id: string
@@ -21,7 +22,7 @@ interface Store {
   name: string
 }
 
-export default function InvoiceListPage({ params }: { params: { id: string } }) {
+export default function InvoiceListPage({ params }: { params: { companyId: string, storeId: string } }) {
   const { user } = useAuth()
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -31,11 +32,11 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     if (!user) {
-      router.push('/login')
+
     } else {
       fetchStoreAndInvoices()
     }
-  }, [user, router])
+  }, [user, router, params.companyId, params.storeId])
 
   const fetchStoreAndInvoices = async () => {
     if (!user) return
@@ -45,7 +46,7 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
 
     try {
       // Fetch store name
-      const storeRef = doc(db, 'stores', params.id)
+      const storeRef = doc(db, `companies/${params.companyId}/stores`, params.storeId)
       const storeDoc = await getDoc(storeRef)
       if (storeDoc.exists()) {
         const storeData = storeDoc.data() as Store
@@ -53,7 +54,7 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
       }
 
       // Fetch invoices
-      const invoicesRef = collection(db, 'stores', params.id, 'invoices')
+      const invoicesRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`)
       const q = query(invoicesRef, where('userId', '==', user.uid))
       const querySnapshot = await getDocs(q)
       const invoiceList = querySnapshot.docs.map(doc => ({
@@ -74,39 +75,53 @@ export default function InvoiceListPage({ params }: { params: { id: string } }) 
     return date.toLocaleDateString()
   }
 
+  const formatPrice = (price: number): string => {
+    return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  }
+
   if (loading) {
-    return <div className="container mx-auto p-4">Loading...</div>
+    return <div className="min-h-screen bg-blue-100 flex items-center justify-center">Loading...</div>
   }
 
   if (error) {
-    return <div className="container mx-auto p-4 text-red-500">{error}</div>
+    return <div className="min-h-screen bg-blue-100 flex items-center justify-center text-red-500">{error}</div>
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Invoices for {storeName}</h1>
-        <Link href={`/store/${params.id}`}>
-          <Button>New Invoice</Button>
+    <div className="min-h-screen bg-blue-100">
+      <header className="bg-teal-600 text-white p-4 flex items-center">
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+          <ArrowLeft className="h-6 w-6" />
+        </Button>
+        <h1 className="text-xl font-bold flex-grow">Invoices for {storeName}</h1>
+        <Link href={`/companies/${params.companyId}/store/${params.storeId}/new-invoice`}>
+          <Button variant="secondary">+ New Invoice</Button>
         </Link>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {invoices.map((invoice) => (
-          <Card key={invoice.id}>
-            <CardHeader>
-              <CardTitle>{invoice.customerName}</CardTitle>
-              <p className="text-sm text-gray-700">{invoice.customerPhone}</p>
-              <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
-            </CardHeader>
-            <CardContent>
-              <p>Total: ${invoice.totalSold}</p>
-              <Link href={`/store/${params.id}/invoices/${invoice.id}`}>
-                <Button className="mt-2">View Details</Button>
-              </Link>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      </header>
+      <main className="container mx-auto p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {invoices.map((invoice, index) => (
+            <div key={invoice.id} className="relative">
+              <span className="absolute top-0 left-0 -mt-2 -ml-2 bg-teal-600 text-white rounded-full w-8 h-8 flex items-center justify-center z-10">
+                {index + 1}
+              </span>
+              <Card className="border-2 border-teal-600">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
+                  <p className="text-sm text-gray-600">{invoice.customerPhone}</p>
+                  <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-lg font-bold text-teal-800">Total: ${formatPrice(invoice.totalSold)}</p>
+                  <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
+                    <Button className="mt-2 w-full bg-teal-600 hover:bg-teal-700">View Details</Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
+      </main>
     </div>
   )
 }

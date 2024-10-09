@@ -27,7 +27,7 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      router.push('/')
+      router.push('/companies')
     } catch (error) {
       setError('Failed to log in. Please check your credentials.')
       console.error(error)
