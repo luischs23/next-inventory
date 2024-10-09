@@ -30,9 +30,10 @@ interface BoxFormData {
 
 interface BoxFormProps {
   warehouseId: string
+  companyId: string
 }
 
-export default function BoxForm({ warehouseId }: BoxFormProps) {
+export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const [formData, setFormData] = useState<BoxFormData>({
@@ -80,7 +81,7 @@ export default function BoxForm({ warehouseId }: BoxFormProps) {
     }
 
     try {
-      const imageRef = ref(storage, `boxes/${formData.image.name}`)
+      const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/boxes/${formData.image.name}`)
       await uploadBytes(imageRef, formData.image)
       const imageUrl = await getDownloadURL(imageRef)
 
@@ -98,7 +99,7 @@ export default function BoxForm({ warehouseId }: BoxFormProps) {
         barcode: generateBarcode(),
       }
 
-      await addDoc(collection(db, `warehouses/${warehouseId}/boxes`), boxData)
+      await addDoc(collection(db, `companies/${companyId}/warehouses/${warehouseId}/boxes`), boxData)
 
       toast({
         title: "Success",
@@ -111,7 +112,7 @@ export default function BoxForm({ warehouseId }: BoxFormProps) {
         },
       })
 
-      router.push(`/warehouses/${warehouseId}/inventory`)
+      router.push(`/companies/${companyId}/warehouses/${warehouseId}/inventory`)
     } catch (error) {
       console.error('Error adding the box:', error)
       toast({

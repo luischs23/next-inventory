@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
@@ -37,12 +37,14 @@ export default function WarehousesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const params = useParams()
+  const companyId = params.companyId as string
   
   useEffect(() => {
     const fetchWarehouses = async () => {
       setLoading(true)
       try {
-        const warehousesCollection = collection(db, 'warehouses')
+        const warehousesCollection = collection(db, `companies/${companyId}/warehouses`)
         const warehousesSnapshot = await getDocs(warehousesCollection)
         const warehousesList = warehousesSnapshot.docs.map(doc => ({
           id: doc.id,
@@ -62,10 +64,10 @@ export default function WarehousesPage() {
     }
 
     fetchWarehouses()
-  }, [])
+  }, [companyId])
 
   const uploadImage = async (file: File) => {
-    const storageRef = ref(storage, `warehouse-images/${file.name}`)
+    const storageRef = ref(storage, `companies/${companyId}/warehouse-images/${file.name}`)
     await uploadBytes(storageRef, file)
     return getDownloadURL(storageRef)
   }
@@ -79,7 +81,7 @@ export default function WarehousesPage() {
 
     try {
       const imageUrl = await uploadImage(imageFile)
-      const warehousesCollection = collection(db, 'warehouses')
+      const warehousesCollection = collection(db, `companies/${companyId}/warehouses`)
       const newWarehouseData = {
         ...newWarehouse,
         imageUrl,
@@ -112,7 +114,7 @@ export default function WarehousesPage() {
         updatedData.imageUrl = imageUrl
       }
 
-      const warehouseRef = doc(db, 'warehouses', editingWarehouse.id)
+      const warehouseRef = doc(db, `companies/${companyId}/warehouses`, editingWarehouse.id)
       await updateDoc(warehouseRef, updatedData)
 
       setWarehouses(warehouses.map(warehouse => 
@@ -136,7 +138,7 @@ export default function WarehousesPage() {
     setError(null)
 
     try {
-      await deleteDoc(doc(db, 'warehouses', warehouse.id))
+      await deleteDoc(doc(db, `companies/${companyId}/warehouses`, warehouse.id))
 
       if (warehouse.imageUrl) {
         const imageRef = ref(storage, warehouse.imageUrl)
@@ -167,11 +169,11 @@ export default function WarehousesPage() {
   }
 
   const handleBodegaInventoryClick = (warehouseId: string) => {
-    router.push(`/warehouses/${warehouseId}/inventory`)
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/inventory`)
   }
 
   const handleParesInventoryClick = (warehouseId: string) => {
-    router.push(`/warehouses/${warehouseId}/pares-inventory`)
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
   }
 
   return (

@@ -5,15 +5,16 @@ import WarehouseInventoryComponent from 'app/components/warehouse/WarehouseInven
 
 export default function WarehouseInventoryPage() {
   const params = useParams()
+  const companyId = params?.companyId as string
   const warehouseId = params?.warehouseId as string
 
-  if (!warehouseId) {
+  if (!companyId || !warehouseId) {
     return <div>Loading...</div>
   }
 
   return (
     <div>
-      <WarehouseInventoryComponent warehouseId={warehouseId} />
+      <WarehouseInventoryComponent companyId={companyId} warehouseId={warehouseId} />
     </div>
   )
 }

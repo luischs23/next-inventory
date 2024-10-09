@@ -1,9 +1,9 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { collection, getDocs, query} from 'firebase/firestore'
+import { collection, getDocs, query, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore'
 import { db } from 'app/services/firebase/firebase.config'
-import { FieldValue } from 'firebase/firestore'
+import { FieldValue, serverTimestamp } from 'firebase/firestore'
 import { useAuth } from './AuthContext'
 
 interface Product {
@@ -25,8 +25,9 @@ interface Product {
 
 interface ProductContextType {
   products: Product[]
-  addNewProduct: (product: Product) => void
-  removeProduct: (id: string) => void
+  addNewProduct: (product: Omit<Product, 'id' | 'createdAt'>) => Promise<void>
+  updateProduct: (product: Product) => Promise<void>
+  removeProduct: (id: string) => Promise<void>
   loading: boolean
 }
 
@@ -43,18 +44,18 @@ export const useProducts = () => {
 export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const { user, userRole } = useAuth()
+  const { user, userRole, companyId } = useAuth()
 
   useEffect(() => {
     const fetchProducts = async () => {
-      if (!user) {
+      if (!user || !companyId) {
         setLoading(false)
         return
       }
 
       try {
         setLoading(true)
-        const productsCollection = collection(db, 'products')
+        const productsCollection = collection(db, `companies/${companyId}/products`)
         const productsQuery = query(productsCollection)
         const productsSnapshot = await getDocs(productsQuery)
         const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))
@@ -67,44 +68,72 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     fetchProducts()
-  }, [user])
+  }, [user, companyId])
 
-  const addNewProduct = (product: Product) => {
-    if (userRole !== 'admin') {
+  const addNewProduct = async (product: Omit<Product, 'id' | 'createdAt'>) => {
+    if (userRole !== 'admin' || !companyId) {
       console.error('Only admins can add products')
       return
     }
 
-    setProducts(prevProducts => {
-      const newProduct = {
+    try {
+      const productsCollection = collection(db, `companies/${companyId}/products`)
+      const newProductRef = await addDoc(productsCollection, {
         ...product,
-        createdAt: product.createdAt instanceof FieldValue ? Date.now() : product.createdAt,
+        createdAt: serverTimestamp(),
         comments: product.comments || '',
         exhibition: product.exhibition || {}
-      }
-  
-      const index = prevProducts.findIndex(p => p.id === product.id)
-      if (index !== -1) {
-        // If the product already exists, update it
-        return prevProducts.map(p => p.id === product.id ? newProduct : p)
-      } else {
-        // If it's a new product, add it to the beginning of the array
-        return [newProduct, ...prevProducts]
-      }
-    })
-  } 
+      })
 
-  const removeProduct = (id: string) => {
-    if (userRole !== 'admin') {
+      const newProduct = {
+        ...product,
+        id: newProductRef.id,
+        createdAt: Date.now()
+      } as Product
+
+      setProducts(prevProducts => [newProduct, ...prevProducts])
+    } catch (error) {
+      console.error('Error adding new product:', error)
+    }
+  }
+
+  const updateProduct = async (product: Product) => {
+    if (userRole !== 'admin' || !companyId) {
+      console.error('Only admins can update products')
+      return
+    }
+
+    try {
+      const productRef = doc(db, `companies/${companyId}/products`, product.id)
+      const { id, createdAt, ...updateData } = product
+      await updateDoc(productRef, updateData)
+
+      setProducts(prevProducts =>
+        prevProducts.map(p => p.id === product.id ? product : p)
+      )
+    } catch (error) {
+      console.error('Error updating product:', error)
+    }
+  }
+
+  const removeProduct = async (id: string) => {
+    if (userRole !== 'admin' || !companyId) {
       console.error('Only admins can remove products')
       return
     }
 
-    setProducts(prevProducts => prevProducts.filter(product => product.id !== id))
+    try {
+      const productRef = doc(db, `companies/${companyId}/products`, id)
+      await deleteDoc(productRef)
+
+      setProducts(prevProducts => prevProducts.filter(product => product.id !== id))
+    } catch (error) {
+      console.error('Error removing product:', error)
+    }
   }
 
   return (
-    <ProductContext.Provider value={{ products, addNewProduct, removeProduct, loading }}>
+    <ProductContext.Provider value={{ products, addNewProduct, updateProduct, removeProduct, loading }}>
       {children}
     </ProductContext.Provider>
   )

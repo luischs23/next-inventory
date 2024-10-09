@@ -7,14 +7,15 @@ export default function UpdateBoxPage() {
   const params = useParams()
   const warehouseId = params.warehouseId as string
   const boxId = params.boxId as string
+  const companyId = params.companyId as string
 
   if (!warehouseId || !boxId) {
     return <div>Error: Warehouse ID or Box ID not found</div>
   }
 
   return (
-    <div className="container mx-auto px-4 py-2">
-      <UpdateBoxForm boxId={boxId} warehouseId={warehouseId} />
+    <div className='mb-12'>
+      <UpdateBoxForm companyId={companyId} boxId={boxId} warehouseId={warehouseId} />
     </div>
   )
 }

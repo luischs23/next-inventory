@@ -1,22 +1,25 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useAuth } from 'app/app/context/AuthContext'
+import { db, storage } from 'app/services/firebase/firebase.config'
+import { collection, getDocs, doc, deleteDoc, Timestamp, FieldValue, getDoc, query } from 'firebase/firestore'
+import { ref, deleteObject } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { Switch } from "app/components/ui/switch"
-import { PlusIcon, Pencil, Trash2, MoreHorizontal, FileDown } from 'lucide-react'
-import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, deleteDoc, doc, getDoc, query, Timestamp, FieldValue } from 'firebase/firestore'
-import { ref, deleteObject } from 'firebase/storage'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
+import { Pencil, MoreHorizontal, ImageIcon, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc } from 'lucide-react'
 import Image from 'next/image'
+import { toast } from "app/components/ui/use-toast"
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
-import { useAuth } from 'app/app/context/AuthContext'
-import { toast } from 'app/components/ui/use-toast'
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+import { Switch } from "app/components/ui/switch"
 
 interface SizeInput {
   quantity: number
@@ -41,146 +44,23 @@ interface Product {
 }
 
 interface ParesInventoryProps {
-  params: {
-    id: string
-  }
+  companyId: string
+  warehouseId: string
 }
 
-export default function ParesInventory({ params }: ParesInventoryProps) {
-  const router = useRouter()
-  const warehouseId = params.id
+export default function ParesInventoryComponent({ companyId, warehouseId }: ParesInventoryProps) {
   const [products, setProducts] = useState<Product[]>([])
-  const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
-  const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
-  const [showInactive, setShowInactive] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [genderFilter, setGenderFilter] = useState<'all' | 'Dama' | 'Hombre'>('all')
+  const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [warehouseName, setWarehouseName] = useState<string>('')
+  const [showInactive, setShowInactive] = useState(false)
+  const router = useRouter()
   const { user, userRole } = useAuth()
 
-  useEffect(() => {
-    const fetchWarehouseDetails = async () => {
-      try {
-        const warehouseDoc = await getDoc(doc(db, 'warehouses', warehouseId))
-        if (warehouseDoc.exists()) {
-          setWarehouseName(warehouseDoc.data().name || 'Unnamed Warehouse')
-        } else {
-          console.error('Warehouse not found')
-          setWarehouseName('Unknown Warehouse')
-        }
-      } catch (error) {
-        console.error('Error fetching warehouse details:', error)
-        setWarehouseName('Error Loading Warehouse Name')
-      }
-    }
-    
-    const fetchProducts = async () => {
-      if (!user) {
-        console.error('User not authenticated')
-        setLoading(false)
-        return
-      }
-      try {
-        const productsQuery = query(
-          collection(db, 'warehouses', warehouseId, 'products')
-        )
-        const productsSnapshot = await getDocs(productsQuery)
-        const productsList = productsSnapshot.docs.map(doc => {
-          const data = doc.data()
-          let createdAtValue: number | Timestamp | FieldValue = data.createdAt
-
-          if (createdAtValue instanceof Timestamp) {
-            createdAtValue = createdAtValue.toMillis()
-          } else if (typeof createdAtValue === 'number') {
-            createdAtValue = createdAtValue
-          } else {
-            createdAtValue = Timestamp.now().toMillis()
-          }
-
-          return { 
-            id: doc.id, 
-            ...data,
-            createdAt: createdAtValue,
-            comments: data.comments || '',
-            exhibition: data.exhibition || {},
-            warehouseId
-          } as Product
-        })
-        setProducts(productsList)
-      } catch (error) {
-        console.error('Error fetching products:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (user) {
-      fetchWarehouseDetails()
-      fetchProducts()
-    } else {
-      setLoading(false)
-    }
-  }, [warehouseId, user])
-
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      const isInactive = product.total === 0 || Object.keys(product.sizes).length === 0
-      const matchesFilters = (
-        (filters.brand === '' || product.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
-        (filters.reference === '' || product.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
-        (filters.color === '' || product.color.toLowerCase().includes(filters.color.toLowerCase())) &&
-        (filters.gender === '' || filters.gender === 'all' || product.gender === filters.gender)
-      )
-      return matchesFilters && (showInactive ? isInactive : !isInactive)
-    })
-  }, [products, filters, showInactive])
-
-  const handleDelete = async (product: Product) => {
-    if (userRole !== 'admin') {
-      console.error('Only admins can delete products')
-      return
-    }
-    
-    if (window.confirm(`Are you sure you want to delete ${product.brand} ${product.reference}?`)) {
-      try {
-        await deleteDoc(doc(db, 'warehouses', product.warehouseId, 'products', product.id))
-        const imageRef = ref(storage, product.imageUrl)
-        await deleteObject(imageRef)
-        
-        setProducts(prevProducts => prevProducts.filter(p => p.id !== product.id))
-        toast({
-          title: "Success",
-          description: "Product deleted successfully",
-          duration: 3000,
-          style: {
-            background: "#4CAF50",
-            color: "white",
-            fontWeight: "bold",
-          },
-        })
-      } catch (error) {
-        console.error('Error deleting product:', error)
-        toast({
-          title: "Error",
-          description: "Failed to delete the product. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }
-  }
-
-  const handleUpdate = (product: Product) => {
-    if (userRole !== 'admin') {
-      console.error('Only admins can update products')
-      return
-    }
-    router.push(`/warehouses/${warehouseId}/update-product/${product.id}`)
-  }
-
-  const sortSizes = (sizes: { [key: string]: SizeInput }) => {
+  const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
     return Object.entries(sizes).sort((a, b) => {
       const sizeA = a[0].toLowerCase().replace('t-', '')
       const sizeB = b[0].toLowerCase().replace('t-', '')
@@ -191,11 +71,82 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
       
       return sizeA.localeCompare(sizeB)
     })
-  }
+  }  
+  
+  const fetchWarehouseDetails = useCallback(async () => {
+    try {
+      const warehouseDocRef = doc(db, `companies/${companyId}/warehouses`, warehouseId)
+      const warehouseDocSnap = await getDoc(warehouseDocRef)
+      if (warehouseDocSnap.exists()) {
+        const warehouseData = warehouseDocSnap.data()
+        setWarehouseName(warehouseData?.name || 'Unnamed Warehouse')
+      } else {
+        console.error('Warehouse document does not exist')
+        setWarehouseName('Unknown Warehouse')
+      }
+    } catch (error) {
+      console.error('Error fetching warehouse details:', error)
+      setWarehouseName('Error Loading Warehouse Name')
+    }
+  }, [companyId, warehouseId])
 
-  const formatNumber = (value: number) => {
-    return value.toLocaleString('es-ES')
-  }
+  const fetchProducts = useCallback(async () => {
+    setLoading(true)
+    try {
+      const productsQuery = query(
+        collection(db, `companies/${companyId}/warehouses/${warehouseId}/products`)
+      )
+      const productsSnapshot = await getDocs(productsQuery)
+      const productsList = productsSnapshot.docs.map(doc => {
+        const data = doc.data()
+        let createdAtValue: number | Timestamp | FieldValue = data.createdAt
+
+        if (createdAtValue instanceof Timestamp) {
+          createdAtValue = createdAtValue.toMillis()
+        } else if (typeof createdAtValue === 'number') {
+          createdAtValue = createdAtValue
+        } else {
+          createdAtValue = Timestamp.now().toMillis()
+        }
+
+        return { 
+          id: doc.id, 
+          ...data,
+          createdAt: createdAtValue,
+          comments: data.comments || '',
+          exhibition: data.exhibition || {},
+          warehouseId
+        } as Product
+      })
+      setProducts(productsList)
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch products. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }, [companyId, warehouseId])
+
+  useEffect(() => {
+    fetchWarehouseDetails()
+    fetchProducts()
+  }, [fetchWarehouseDetails, fetchProducts])
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const isInactive = product.total === 0 || Object.keys(product.sizes).length === 0
+      const matchesSearch = 
+        product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.color.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesGender = genderFilter === 'all' || product.gender === genderFilter
+      return matchesSearch && matchesGender && (showInactive ? isInactive : !isInactive)
+    })
+  }, [products, searchTerm, genderFilter, showInactive])
 
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
@@ -210,6 +161,110 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
     })
   }, [filteredProducts, sortOrder])
 
+  const handleDelete = async () => {
+    if (productToDelete) {
+      try {
+        await deleteDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, productToDelete.id))
+        if (productToDelete.imageUrl) {
+          const imageRef = ref(storage, productToDelete.imageUrl)
+          await deleteObject(imageRef)
+        }
+        setProducts(products.filter(p => p.id !== productToDelete.id))
+        toast({
+          title: "Success",
+          description: `Product ${productToDelete.brand} ${productToDelete.reference} has been deleted successfully.`,
+          style: { background: "#4CAF50", color: "white", fontWeight: "bold" },
+        })
+      } catch (error) {
+        console.error('Error deleting product:', error)
+        toast({
+          title: "Error",
+          description: `Failed to delete the product ${productToDelete.brand} ${productToDelete.reference}.`,
+          variant: "destructive",
+        })
+      } finally {
+        setProductToDelete(null)
+      }
+    }
+  }
+
+  const handleUpdate = (product: Product) => {
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${product.id}`)
+  }
+
+  const exportToExcel = () => {
+    const workbook = XLSX.utils.book_new()
+    
+    const worksheetData = filteredProducts.map((product, index) => ({
+      'No.': index + 1,
+      'Brand': product.brand,
+      'Reference': product.reference,
+      'Color': product.color,
+      'Gender': product.gender,
+      'Sizes': JSON.stringify(product.sizes),
+      'Total Quantity': product.total,
+      'Base Price': product.baseprice,
+      'Sale Price': product.saleprice,
+      'Barcode': Object.values(product.sizes).flatMap(size => size.barcodes).join(', '),
+      'Created At': product.createdAt instanceof Timestamp 
+        ? product.createdAt.toDate().toISOString()
+        : typeof product.createdAt === 'number'
+          ? new Date(product.createdAt).toISOString()
+          : new Date().toISOString(),
+    }))
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData)
+
+    worksheet['!cols'] = [
+      { width: 5 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 },
+      { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 30 }, { width: 20 }
+    ]
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Pares Inventory')
+
+    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    
+    saveAs(data, `${warehouseName.replace(/\s+/g, '_')}_pares_inventory.xlsx`)
+  }
+
+  const exportToPDF = () => {
+    const doc = new jsPDF()
+
+    doc.setFontSize(18)
+    doc.text(`Pares Inventory (${warehouseName})`, 14, 22)
+
+    doc.setFontSize(12)
+    doc.text(`Total Products: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
+    doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
+    doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
+    doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Total", "Base Price", "Sale Price"]
+    const tableRows = sortedProducts.map((product, index) => [
+      index + 1,
+      product.brand,
+      product.reference,
+      product.color,
+      product.gender,
+      product.total,
+      formatNumber(product.baseprice),
+      formatNumber(product.saleprice)
+    ])
+
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 65,
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      alternateRowStyles: { fillColor: [224, 224, 224] }
+    })
+
+    doc.save(`${warehouseName.replace(/\s+/g, '_')}_pares_inventory.pdf`)
+  }
+
   const summaryInfo = useMemo(() => {
     const totalItems = filteredProducts.length
     const totalPares = filteredProducts.reduce((sum, product) => sum + product.total, 0)
@@ -218,42 +273,8 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
     return { totalItems, totalPares, totalBase, totalSale }
   }, [filteredProducts])
 
-  const exportToExcel = () => {
-    const workbook = XLSX.utils.book_new()
-    
-    const worksheetData = filteredProducts.map(product => ({
-      'Brand': product.brand,
-      'Reference': product.reference,
-      'Color': product.color,
-      'Gender': product.gender,
-      'Sizes': JSON.stringify(product.sizes),
-      'Total Quantity': product.total,
-      'Comments': product.comments,
-      'Base Price': product.baseprice,
-      'Sale Price': product.saleprice,
-      'Exhibition': JSON.stringify(product.exhibition),
-      'Created At': product.createdAt instanceof Timestamp 
-        ? product.createdAt.toDate().toISOString()
-        : typeof product.createdAt === 'number'
-          ? new Date(product.createdAt).toISOString()
-          : new Date().toISOString(),
-      'Image URL': product.imageUrl
-    }))
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData)
-
-    worksheet['!cols'] = [
-      { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 },
-      { width: 30 }, { width: 15 }, { width: 20 }, { width: 15 },
-      { width: 15 }, { width: 30 }, { width: 20 }, { width: 30 }
-    ]
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, showInactive ? 'Inactive Inventory' : 'Active Inventory')
-
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    
-    saveAs(data, `${warehouseName.replace(/\s+/g, '_')}_${showInactive ? 'inactive' : 'active'}_inventory.xlsx`)
+  const formatNumber = (num: number) => {
+    return num.toLocaleString('es-ES')
   }
 
   if (loading) {
@@ -265,97 +286,78 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 p-6">
-      <Card className="w-full md:w-1/4">
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label htmlFor="brand" className="text-sm font-medium">Brand</label>
-            <Input
-              id="brand"
-              placeholder="Filter by brand"
-              value={filters.brand}
-              onChange={(e) => handleFilterChange('brand', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="reference" className="text-sm font-medium">Reference</label>
-            <Input
-              id="reference"
-              placeholder="Filter by reference"
-              value={filters.reference}
-              onChange={(e) => handleFilterChange('reference', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="color" className="text-sm font-medium">Color</label>
-            <Input
-              id="color"
-              placeholder="Filter by color"
-              value={filters.color}
-              onChange={(e) => handleFilterChange('color', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="gender" className="text-sm font-medium">Gender</label>
-            <Select onValueChange={(value) => handleFilterChange('gender', value)}>
-              <SelectTrigger id="gender">
-                <SelectValue placeholder="Filter by gender" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="Dama">Dama</SelectItem>
-                <SelectItem value="Hombre">Hombre</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label htmlFor="sortOrder" className="text-sm font-medium">Sort Order</label>
-            <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
-              <SelectTrigger id="sortOrder">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="entry">Entry Order</SelectItem>
-                <SelectItem value="alphabetical">Alphabetical</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-      <div className="w-full md:w-3/4">
-        <div className="flex justify-between items-center mb-4 space-x-4">
-          <h2 className="text-2xl font-bold">Pares Inventory Dashboard ({warehouseName})</h2>
-          <div className="flex items-center space-x-4">
-              <Switch
-                id="show-inactive"
-                checked={showInactive}
-                onCheckedChange={setShowInactive}
-              />
-              <label htmlFor="show-inactive" className="text-sm font-medium">
-                {showInactive ? 'Showing Inactive' : 'Showing Active'}
-              </label>
-          </div>
-        </div>
-        <div className="flex items-center space-x-2">
-        <Button onClick={exportToExcel} className="mb-4">
-          <FileDown className="mr-2 h-4 w-4" /> Export Excel
+    <div className="min-h-screen bg-blue-100">
+      <header className="bg-teal-600 text-white p-4 flex items-center">
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+          <ArrowLeft className="h-6 w-6" />
         </Button>
-        {userRole === 'admin' && (
-              <Button onClick={() => router.push(`/warehouses/${warehouseId}/form-product/${warehouseId}`)}>
-                <PlusIcon className="mr-2 h-4 w-4" /> Add
-              </Button>
-            )}
+        <h1 className="text-xl font-bold flex-grow">Pares Inventory</h1>
+        <div className="flex space-x-2">
+          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
+            <PlusIcon className="h-4 w-4" />
+          </Button>
+          <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">
+            <FileDown className="h-4 w-4" />
+          </Button>
+          <Button onClick={exportToExcel} className="bg-green-500 hover:bg-green-600">
+            <FileDown className="h-4 w-4" />
+          </Button>
         </div>
+      </header>
+
+      <main className="container mx-auto p-4">
+        <div className="flex items-center space-x-2 mb-6">
+          <Input
+            placeholder="Search by brand, reference, or color"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-grow"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setGenderFilter('all')}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGenderFilter('Dama')}>Dama</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGenderFilter('Hombre')}>Hombre</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+            <SelectTrigger className="w-[100px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entry">
+                <span className="flex items-center">
+                  <SortDesc className="mr-2 h-4 w-4" />
+                </span>
+              </SelectItem>
+              <SelectItem value="alphabetical">A-Z</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="show-inactive"
+              checked={showInactive}
+              
+              onCheckedChange={setShowInactive}
+            />
+            <label htmlFor="show-inactive" className="text-sm font-medium">
+              {showInactive ? 'Inactive' : 'Active'}
+            </label>
+          </div>
+        </div>
+
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
-              <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
-              <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
-              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>Total Products: {formatNumber(summaryInfo.totalItems)}</div>
+              <div>Total Pares: {formatNumber(summaryInfo.totalPares)}</div>
+              <div>Total Base: ${formatNumber(summaryInfo.totalBase)}</div>
+              <div>Total Sale: ${formatNumber(summaryInfo.totalSale)}</div>
             </div>
           </CardContent>
         </Card>
@@ -381,7 +383,7 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
                               <Pencil className="mr-2 h-4 w-4" />
                               <span>Update</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleDelete(product)}>
+                            <DropdownMenuItem onClick={() => setProductToDelete(product)}>
                               <Trash2 className="mr-2 h-4 w-4" />
                               <span>Delete</span>
                             </DropdownMenuItem>
@@ -396,7 +398,7 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
                         src={product.imageUrl}
                         alt={product.reference}
                         fill
-                        sizes="(max-width: 64px) 100vw, 64px"
+                        sizes="(max-width: 64px) 150vw, 64px"
                         className="object-cover rounded-md"
                       />
                     </div>
@@ -404,16 +406,11 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
                       <h3 className="font-semibold">{product.brand}</h3>
                       <p className="text-sm text-gray-500">{product.reference}</p>
                       <p className="text-sm">{product.color} - {product.gender}</p>
-                    </div>
-                  </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                    <div className='flex space-x-9'>
-                      <span className="font-medium">Total:</span> {product.total}
-                      <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
+                      <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p> 
                     </div>
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-sm">Sizes:</span>
+                    <span className="font-medium text-sm">Sizes Total: {product.total}</span>
                     <div className="grid grid-cols-3 gap-1 mt-1">
                       {Object.keys(product.sizes).length > 0 ? (
                         sortSizes(product.sizes).map(([size, { quantity }]) => (
@@ -436,7 +433,26 @@ export default function ParesInventory({ params }: ParesInventoryProps) {
             </div>
           ))}
         </div>
-      </div>
+      </main>
+
+      <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the product
+              <span className="font-semibold"> {productToDelete?.brand} {productToDelete?.reference} </span>
+              and remove the associated image from storage.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

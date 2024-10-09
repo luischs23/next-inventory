@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from 'app/app/context/AuthContext'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams} from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
@@ -11,12 +11,7 @@ import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import Link from 'next/link'
 import { ArrowLeft, MoreVertical, X, Pencil } from 'lucide-react'
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "app/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import Image from 'next/image'
 import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
 
@@ -33,6 +28,8 @@ interface Store {
 export default function StoreListPage() {
   const { user } = useAuth()
   const router = useRouter()
+  const params = useParams()
+  const companyId = params.companyId as string
   const [stores, setStores] = useState<Store[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,20 +45,19 @@ export default function StoreListPage() {
 
   useEffect(() => {
     if (!user) {
-      router.push('/login')
     } else {
       fetchStores()
     }
-  }, [user, router])
+  }, [user, router, companyId])
 
   const fetchStores = async () => {
-    if (!user) return
+    if (!user || !companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
-      const storesRef = collection(db, 'stores')
+      const storesRef = collection(db, `companies/${companyId}/stores`)
       const q = query(storesRef, where('userId', '==', user.uid))
       const querySnapshot = await getDocs(q)
       const storeList = querySnapshot.docs.map(doc => ({
@@ -84,21 +80,21 @@ export default function StoreListPage() {
   }
 
   const uploadImage = async (file: File) => {
-    const storageRef = ref(storage, `store-images/${file.name}`)
+    const storageRef = ref(storage, `companies/${companyId}/store-images/${file.name}`)
     await uploadBytes(storageRef, file)
     return getDownloadURL(storageRef)
   }
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !imageFile) return
+    if (!user || !imageFile || !companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
       const imageUrl = await uploadImage(imageFile)
-      const storesRef = collection(db, 'stores')
+      const storesRef = collection(db, `companies/${companyId}/stores`)
       const newStoreData = {
         ...newStore,
         imageUrl,
@@ -120,7 +116,7 @@ export default function StoreListPage() {
 
   const handleUpdateStore = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !editingStore) return
+    if (!user || !editingStore || !companyId) return
 
     setLoading(true)
     setError(null)
@@ -132,7 +128,7 @@ export default function StoreListPage() {
         updatedData.imageUrl = imageUrl
       }
 
-      const storeRef = doc(db, 'stores', editingStore.id)
+      const storeRef = doc(db, `companies/${companyId}/stores`, editingStore.id)
       await updateDoc(storeRef, updatedData)
 
       setStores(stores.map(store => 
@@ -152,14 +148,14 @@ export default function StoreListPage() {
   }
 
   const handleDeleteStore = async () => {
-    if (!user || !editingStore) return
+    if (!user || !editingStore || !companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
       // Delete the store document from Firestore
-      await deleteDoc(doc(db, 'stores', editingStore.id))
+      await deleteDoc(doc(db, `companies/${companyId}/stores`, editingStore.id))
 
       // Delete the store image from Storage
       if (editingStore.imageUrl) {
@@ -245,13 +241,10 @@ export default function StoreListPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           <DropdownMenuItem>
-                            <Link href={`/store/${store.id}/invoices`}>Invoices</Link>
+                            <Link href={`/companies/${companyId}/store/${store.id}/invoices`}>Invoices</Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem>
-                            <Link href={`/store/${store.id}/exhibition-inventory`}>Exb Inventory</Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Link href={`/store/${store.id}/unassigned-exhibition`}>Exb Unassign</Link>
+                            <Link href={`/companies/${companyId}/store/${store.id}/exhibition-inventory`}>Exb Inventory</Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

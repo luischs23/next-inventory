@@ -9,9 +9,9 @@ import { ref, deleteObject } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { Card, CardContent} from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { Pencil, MoreHorizontal, ImageIcon, FileDown, Trash2, PlusIcon } from 'lucide-react'
+import { Pencil, MoreHorizontal, ImageIcon, FileDown, Trash2, PlusIcon, Filter, ArrowLeft, SortDesc  } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
@@ -35,13 +35,15 @@ interface Box {
 }
 
 interface WarehouseInventoryProps {
+    companyId: string
     warehouseId: string
   } 
 
-export default function WarehouseInventoryPage({ warehouseId }: WarehouseInventoryProps) {
+  export default function WarehouseInventoryComponent({ companyId, warehouseId }: WarehouseInventoryProps) {
   const [boxes, setBoxes] = useState<Box[]>([])
   const [loading, setLoading] = useState(true)
-  const [filters, setFilters] = useState({ brand: '', reference: '', color: '', gender: '' })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [genderFilter, setGenderFilter] = useState<'all' | 'Dama' | 'Hombre'>('all')
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [boxToDelete, setBoxToDelete] = useState<Box | null>(null)
   const [warehouseName, setWarehouseName] = useState<string>('')
@@ -50,7 +52,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
 
   const fetchWarehouseDetails = useCallback(async () => {
     try {
-      const warehouseDoc = await getDoc(doc(db, 'warehouses', warehouseId))
+      const warehouseDoc = await getDoc(doc(db, `companies/${companyId}/warehouses`, warehouseId))
       if (warehouseDoc.exists()) {
         setWarehouseName(warehouseDoc.data().name || 'Unnamed Warehouse')
       } else {
@@ -61,17 +63,12 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
       console.error('Error fetching warehouse details:', error)
       setWarehouseName('Error Loading Warehouse Name')
     }
-  }, [warehouseId])
+  }, [companyId, warehouseId])
 
   const fetchBoxes = useCallback(async () => {
-    if (!user) {
-      console.error('User not authenticated')
-      setLoading(false)
-      return
-    }
     setLoading(true)
     try {
-      const boxesQuery = collection(db, 'warehouses', warehouseId, 'boxes')
+      const boxesQuery = collection(db, `companies/${companyId}/warehouses/${warehouseId}/boxes`)
       const boxesSnapshot = await getDocs(boxesQuery)
       const boxesList = boxesSnapshot.docs.map(doc => {
         const data = doc.data()
@@ -102,27 +99,23 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
     } finally {
       setLoading(false)
     }
-  }, [warehouseId, user])
+  }, [companyId, warehouseId])
 
   useEffect(() => {
     fetchWarehouseDetails()
     fetchBoxes()
   }, [fetchWarehouseDetails, fetchBoxes])
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
-
   const filteredBoxes = useMemo(() => {
     return boxes.filter((box) => {
-      return (
-        (filters.brand === '' || box.brand.toLowerCase().includes(filters.brand.toLowerCase())) &&
-        (filters.reference === '' || box.reference.toLowerCase().includes(filters.reference.toLowerCase())) &&
-        (filters.color === '' || box.color.toLowerCase().includes(filters.color.toLowerCase())) &&
-        (filters.gender === '' || filters.gender === 'all' || box.gender === filters.gender)
-      )
+      const matchesSearch = 
+        box.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        box.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        box.color.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesGender = genderFilter === 'all' || box.gender === genderFilter
+      return matchesSearch && matchesGender
     })
-  }, [boxes, filters])
+  }, [boxes, searchTerm, genderFilter])
 
   const sortedBoxes = useMemo(() => {
     return [...filteredBoxes].sort((a, b) => {
@@ -140,7 +133,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
   const handleDelete = async () => {
     if (boxToDelete) {
       try {
-        await deleteDoc(doc(db, 'warehouses', warehouseId, 'boxes', boxToDelete.id))
+        await deleteDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/boxes`, boxToDelete.id))
         if (boxToDelete.imageUrl) {
           const imageRef = ref(storage, boxToDelete.imageUrl)
           await deleteObject(imageRef)
@@ -169,7 +162,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
       console.error('Only admins can update boxes')
       return
     }
-    router.push(`/warehouses/${warehouseId}/update-box/${box.id}`)
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-box/${box.id}`)
   }
 
   const exportToExcel = () => {
@@ -265,86 +258,63 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
   }
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 p-6">
-      <Card className="w-full md:w-1/4">
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label htmlFor="brand" className="text-sm font-medium">Brand</label>
-            <Input
-              id="brand"
-              placeholder="Filter by brand"
-              value={filters.brand}
-              onChange={(e) => handleFilterChange('brand', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="reference" className="text-sm font-medium">Reference</label>
-            <Input
-              id="reference"
-              placeholder="Filter by reference"
-              value={filters.reference}
-              onChange={(e) => handleFilterChange('reference', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="color" className="text-sm font-medium">Color</label>
-            <Input
-              id="color"
-              placeholder="Filter by color"
-              value={filters.color}
-              onChange={(e) => handleFilterChange('color', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="gender" className="text-sm font-medium">Gender</label>
-            <Select onValueChange={(value) => handleFilterChange('gender', value)}>
-              <SelectTrigger id="gender">
-                <SelectValue placeholder="Filter by gender" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="Dama">Dama</SelectItem>
-                <SelectItem value="Hombre">Hombre</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label htmlFor="sortOrder" className="text-sm font-medium">Sort Order</label>
-            <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
-              <SelectTrigger id="sortOrder">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="entry">Entry Order</SelectItem>
-                <SelectItem value="alphabetical">Alphabetical</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-      <div className="w-full md:w-3/4">
-        <div className="flex justify-between items-center mb-4 space-x-4">
-          <h2 className="text-2xl font-bold">Warehouse Inventory ({warehouseName})</h2>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button onClick={exportToExcel} className="mb-4">
-            <FileDown className="mr-2 h-4 w-4" /> Export Excel
+    <div className="min-h-screen bg-blue-100">
+      <header className="bg-teal-600 text-white p-4 flex items-center">
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+          <ArrowLeft className="h-6 w-6" />
+        </Button>
+        <h1 className="text-xl font-bold flex-grow">Inventory WH</h1>
+        <div className="flex space-x-2">
+          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-box`)}>
+            <PlusIcon className="h-4 w-4" />
           </Button>
-          <Button onClick={exportToPDF} className="mb-4">
-            Export PDF
+          <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">
+            <FileDown className="h-4 w-4" />
+          </Button>
+          <Button onClick={exportToExcel} className="bg-green-500 hover:bg-green-600">
+            <FileDown className="h-4 w-4" />
           </Button>
         </div>
-        {userRole === 'admin' && (
-            <Button onClick={() => router.push(`/warehouses/${warehouseId}/form-box/${warehouseId}`)}>
-              <PlusIcon className="mr-2 h-4 w-4" /> Add Box
-            </Button>
-          )}
+      </header>
+
+      <main className="container mx-auto p-4">
+      <div className="flex items-center space-x-2 mb-6">
+          <Input
+            placeholder="Search by brand, reference, or color"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-grow"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <Filter className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setGenderFilter('all')}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGenderFilter('Dama')}>Dama</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGenderFilter('Hombre')}>Hombre</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+            <SelectTrigger className="w-[100px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entry">
+                <span className="flex items-center">
+                  <SortDesc className="mr-2 h-4 w-4" />
+                </span>
+              </SelectItem>
+              <SelectItem value="alphabetical">A-Z</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <Card className="mb-6">
           <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>Total Boxes: {formatNumber(summaryInfo.totalBoxes)}</div>
               <div>Total Quantity: {formatNumber(summaryInfo.totalQuantity)}</div>
               <div>Total Base: ${formatNumber(summaryInfo.totalBase)}</div>
@@ -353,71 +323,56 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          {sortedBoxes.map((box, index) => (
-            <div key={box.id} className="flex items-start">
-              <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
-              <Card className="flex-grow relative">
-                <CardContent className="p-4">
-                  <div className="absolute top-2 right-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {sortedBoxes.map((box) => (
+            <Card key={box.id} className="overflow-hidden">
+              <div className="flex">
+                <div className="w-2/5 h-44">
+                  {box.imageUrl ? (
+                    <Image
+                      src={box.imageUrl}
+                      alt={`${box.brand} ${box.reference}`}
+                      width={100}
+                      height={100}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                      <ImageIcon className="h-12 w-12 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <CardContent className="w-2/3 p-4 relative">
+                  <div className="absolute top-2 right-2 flex">
+                    <Button variant="ghost" className="h-8 w-8 p-0 mr-1" onClick={() => handleUpdate(box)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {userRole === 'admin' && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleUpdate(box)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              <span>Update</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setBoxToDelete(box)}>
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </>
-                        )}
+                      <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => setBoxToDelete(box)}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="relative w-16 h-16 flex-shrink-0">
-                      {box.imageUrl ? (
-                        <Image
-                          src={box.imageUrl}
-                          alt={`${box.brand} ${box.reference}`}
-                          fill
-                          sizes="(max-width: 64px) 100vw, 64px"
-                          className="object-cover rounded-md"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 bg-gray-200 flex items-center justify-center rounded-md">
-                          <ImageIcon className="h-8 w-8 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-grow">
-                      <h3 className="font-semibold">{box.brand}</h3>
-                      <p className="text-sm text-gray-500">{box.reference}</p>
-                      <p className="text-sm">{box.color} - {box.gender}</p>
-                    </div>
-                    <div className="text-right mt-5">
-                      <p className="font-semibold">total: {box.quantity}</p>
-                      <p className="text-sm">Sale: ${formatNumber(box.saleprice)}</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-sm">
-                    <p>Barcode: {box.barcode}</p>
-                  </div>
+                  <h2 className="font-bold mb-2">{box.brand}</h2>
+                  <p className="text-sm text-gray-600">{box.reference}</p>
+                  <p className="text-sm">{box.color} - {box.gender}</p>
+                  <p className="text-sm mt-2">Quantity: {box.quantity}</p>
+                  <p className="text-sm">Sale Price: ${formatNumber(box.saleprice)}</p>
+                  <p className="text-sm mt-2 text-gray-500">Barcode: {box.barcode}</p>
                 </CardContent>
-              </Card>
-            </div>
+              </div>
+            </Card>
           ))}
         </div>
-      </div>
+      </main>
 
       <AlertDialog open={!!boxToDelete} onOpenChange={() => setBoxToDelete(null)}>
         <AlertDialogContent>
@@ -436,6 +391,7 @@ export default function WarehouseInventoryPage({ warehouseId }: WarehouseInvento
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
+      
       </AlertDialog>
     </div>
   )

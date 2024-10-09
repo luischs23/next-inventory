@@ -8,13 +8,13 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
-import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { Card, CardContent} from "app/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "app/components/ui/dialog"
 import { Label } from "app/components/ui/label"
 import Barcode from 'react-barcode'
-import { PlusIcon, Trash2Icon, RotateCcwIcon } from 'lucide-react'
-import Image from 'next/image'
+import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft} from 'lucide-react'
 import { useToast } from "app/components/ui/use-toast"
+import ProductImageUpload from '../ui/ProductImageUpload'
 
 interface SizeInput {
   quantity: number
@@ -42,6 +42,7 @@ interface Product {
 }
 
 interface UpdateProductProps {
+    companyId: string
     productId: string
     warehouseId: string
   }
@@ -49,10 +50,10 @@ interface UpdateProductProps {
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
-export default function UpdateProduct({ productId, warehouseId }: UpdateProductProps) {
+export default function UpdateProduct({ companyId, warehouseId, productId }: UpdateProductProps) {
   const [product,   setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
-  const [newImage, setNewImage] = useState<File | null>(null)
+  const [imageLoading, setImageLoading] = useState(false)
   const [newSize, setNewSize] = useState('')
   const [newQuantity, setNewQuantity] = useState(0)
   const [stores, setStores] = useState<Store[]>([])
@@ -73,7 +74,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const productDoc = await getDoc(doc(db, 'warehouses', warehouseId, 'products', productId))
+        const productDoc = await getDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, productId))
         if (productDoc.exists()) {
           const productData = productDoc.data() as Omit<Product, 'id'>
           setProduct({ 
@@ -95,14 +96,14 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
     }
 
     const fetchStores = async () => {
-      const storesSnapshot = await getDocs(collection(db, 'stores'))
+      const storesSnapshot = await getDocs(collection(db, `companies/${companyId}/stores`))
       const storesList = storesSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }))
       setStores(storesList)
     }
 
     fetchProduct()
     fetchStores()
-  }, [productId, warehouseId])
+  }, [companyId, warehouseId, productId])
 
   const availableSizes = useMemo(() => {
     if (!product) return []
@@ -137,9 +138,45 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
     }
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null
-    setNewImage(file)
+  const handleImageChange = async (file: File | null) => {
+    if (file && product) {
+      setImageLoading(true)
+      try {
+        const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${file.name}`)
+        await uploadBytes(imageRef, file)
+        const imageUrl = await getDownloadURL(imageRef)
+        
+        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), {
+          imageUrl: imageUrl
+        })
+
+        setProduct({
+          ...product,
+          imageUrl: imageUrl
+        })
+
+        toast({
+          title: "Image Updated",
+          description: "The product image has been successfully updated.",
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold", 
+          },    
+        })
+      } catch (error) {
+        console.error('Error updating image:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update image. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      } finally {
+        setImageLoading(false)
+      }
+    }
   }
 
   const generateBarcode = () => {
@@ -160,7 +197,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
 
       try {
         // Update Firestore
-        await updateDoc(doc(db, 'warehouses', warehouseId, 'products', product.id), updatedProduct)
+        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct)
 
         // Update local state
         setProduct(updatedProduct)
@@ -260,7 +297,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
   
         try {
           // Update the product in the warehouses/products subcollection
-          await updateDoc(doc(db, 'warehouses', warehouseId, 'products', product.id), updatedProduct)
+          await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct)
   
           setProduct(updatedProduct)
           setSelectedStore('')
@@ -334,42 +371,31 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
       }
     }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!product) return
-
-    try {
-      let imageUrl = product.imageUrl
-
-      if (newImage) {
-        const imageRef = ref(storage, `products/${newImage.name}`)
-        await uploadBytes(imageRef, newImage)
-        imageUrl = await getDownloadURL(imageRef)
-      }
-
-      // Filter out sizes with 0 quantity
-      const updatedSizes = Object.fromEntries(
-        Object.entries(product.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
-      )
-
-      const updatedProduct = {
-        ...product,
-        sizes: updatedSizes,
-        total: Object.values(updatedSizes).reduce((sum, size) => sum + size.quantity, 0),
-        imageUrl,
-        baseprice: parseFormattedNumber(product.baseprice),
-        saleprice: parseFormattedNumber(product.saleprice)
-      }
-
-      await updateDoc(doc(db, 'warehouses', warehouseId, 'products', product.id), updatedProduct)
-
-      setProduct({
-        ...updatedProduct,
-        baseprice: formatNumber(updatedProduct.baseprice.toString()),
-        saleprice: formatNumber(updatedProduct.saleprice.toString())
-      })
-
-      if (e.type === 'submit') {
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!product) return
+  
+      try {
+        const updatedSizes = Object.fromEntries(
+          Object.entries(product.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
+        )
+  
+        const updatedProduct = {
+          ...product,
+          sizes: updatedSizes,
+          total: Object.values(updatedSizes).reduce((sum, size) => sum + size.quantity, 0),
+          baseprice: parseFormattedNumber(product.baseprice),
+          saleprice: parseFormattedNumber(product.saleprice)
+        }
+  
+        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct)
+  
+        setProduct({
+          ...updatedProduct,
+          baseprice: formatNumber(updatedProduct.baseprice.toString()),
+          saleprice: formatNumber(updatedProduct.saleprice.toString())
+        })
+  
         toast({
           title: "Product Updated",
           description: "The product has been successfully updated.",
@@ -380,19 +406,18 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
             fontWeight: "bold", 
           },    
         })
+  
+        router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
+      } catch (error) {
+        console.error('Error updating product:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update product. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
       }
-      // Redirect to the inventory page for the specific warehouse
-      router.push(`/warehouses/${warehouseId}/pares-inventory`)
-    } catch (error) {
-      console.error('Error updating product:', error)
-      toast({
-        title: "Error",
-        description: "Failed to update product. Please try again.",
-        duration: 3000,
-        variant: "destructive",
-      })
     }
-  }
 
   if (loading) {
     return <div>Loading...</div>
@@ -403,11 +428,16 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto mt-8">
-      <CardHeader>
-        <CardTitle>Update Product</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="min-h-screen bg-blue-100">
+      <header className="bg-teal-600 text-white p-4 flex items-center">
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+          <ArrowLeft className="h-6 w-6" />
+        </Button>
+        <h1 className="text-xl font-bold flex-grow">Update Product</h1>
+      </header>
+      <main className="container mx-auto p-4">
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardContent className='m-2'>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -425,10 +455,6 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
             <div>
               <Label htmlFor="comments">Comments</Label>
               <Input id="comments" name="comments" value={product.comments} onChange={handleInputChange} />
-            </div>
-            <div>
-              <Label htmlFor="gender">Gender</Label>
-              <Input id="gender" name="gender" value={product.gender} readOnly />
             </div>
           </div>
           
@@ -489,7 +515,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
           {/* Add new size */}
           <div className="flex flex-wrap gap-2">
             <Select value={newSize} onValueChange={setNewSize}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[150px]">
                 <SelectValue placeholder="Select new size" />
               </SelectTrigger>
               <SelectContent>
@@ -503,7 +529,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
               placeholder="Quantity"
               value={newQuantity}
               onChange={(e) => setNewQuantity(parseInt(e.target.value))}
-              className="w-24"
+              className="w-10"
             />
             <Button type="button" onClick={handleAddSize}>Add Size</Button>
           </div>
@@ -517,7 +543,7 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
             <Label>Exhibition</Label>
             <div className="flex flex-wrap gap-2 mt-2">
               <Select value={selectedStore} onValueChange={setSelectedStore}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[120px]">
                   <SelectValue placeholder="Store" />
                 </SelectTrigger>
                 <SelectContent>
@@ -556,21 +582,13 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
           
           {/* Image and Pricing */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="image">Current Image</Label>
-              <div className="relative w-32 h-32 overflow-hidden rounded-md">
-                <Image
-                  src={product.imageUrl}
-                  alt={`${product.brand} ${product.reference}`}
-                  fill
-                  sizes="(max-width: 128px) 100vw, 128px"
-                  className="object-cover"
+            <ProductImageUpload 
+                  imageUrl={product?.imageUrl || '/placeholder.svg'}
+                  altText={`${product?.brand} ${product?.reference}`}
+                  onImageChange={handleImageChange}
+                  isLoading={imageLoading}
                 />
-              </div>
-              <Label htmlFor="newImage" className="mt-2">Upload New Image</Label>
-              <Input id="newImage" name="newImage" type="file" onChange={handleImageChange} />
-            </div>
-            <div className='space-y-4'>
+            <div className='flex space-x-4'>
               <div>
                 <Label htmlFor="baseprice">Base Price</Label>
                 <Input
@@ -594,11 +612,13 @@ export default function UpdateProduct({ productId, warehouseId }: UpdateProductP
             </div>
           </div>
           <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={() => router.push(`/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
+          <Button type="button" variant="outline" onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
           <Button type="submit">Update Product</Button>
           </div>
         </form>
       </CardContent>
     </Card>
+    </main>
+    </div>
   )
 }
