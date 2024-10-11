@@ -22,6 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "app/components/ui/alert-dialog"
+import Link from 'next/link'
+import { useAuth } from 'app/app/context/AuthContext'
 
 interface Company {
   id: string
@@ -48,6 +50,7 @@ export default function CompanyManagement() {
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null)
+  const { userRole } = useAuth()
 
   const handleCardClick = (companyId: string) => {
     router.push(`/companies/${companyId}/home`)
@@ -149,15 +152,24 @@ export default function CompanyManagement() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Companies</h1>
+        <div className='space-x-2'>
         <Button variant="secondary" onClick={() => {
           setEditingCompany(null)
           setNewCompany({ name: '', email: '', phone: '', address: '' })
           setIsPopupOpen(true)
         }}>
-          + Add Company
+          + Add 
         </Button>
+        {userRole === 'developer' && (
+        <Link href="/companies/create-general-manager" className="btn btn-primary">
+          <Button>
+          Create GM
+          </Button>
+        </Link>
+         )}
+         </div>
       </header>
-      
+
     <main className="container mx-auto p-4">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {companies.map((company) => (
@@ -208,7 +220,7 @@ export default function CompanyManagement() {
                       <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/home`)}>
                         Home
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/stores`)}>
+                      <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/store`)}>
                         Stores
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/warehouses`)}>

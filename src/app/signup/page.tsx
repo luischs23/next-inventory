@@ -9,7 +9,6 @@ import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import Link from 'next/link'
 
 export default function SignUpPage() {
@@ -17,7 +16,6 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [role, setRole] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
 
@@ -25,7 +23,7 @@ export default function SignUpPage() {
     e.preventDefault()
     setError('')
 
-    if (!email || !password || !role || !firstName || !lastName) {
+    if (!email || !password || !firstName || !lastName) {
       setError('Please fill in all fields')
       return
     }
@@ -34,11 +32,13 @@ export default function SignUpPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
+      // Create a user document for the developer
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
         firstName,
         lastName,
-        role: role
+        role: 'developer',
+        createdAt: new Date()
       })
 
       router.push('/login')
@@ -52,7 +52,7 @@ export default function SignUpPage() {
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">Sign Up</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">Create Developer Account</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSignUp} className="space-y-4">
@@ -100,21 +100,8 @@ export default function SignUpPage() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select onValueChange={setRole} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="seller">Seller</SelectItem>
-                  <SelectItem value="storehouse">Storehouse</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button type="submit" className="w-full">Sign Up</Button>
+            <Button type="submit" className="w-full">Create Developer Account</Button>
           </form>
           <p className="mt-4 text-center text-sm">
             Already have an account?{' '}
