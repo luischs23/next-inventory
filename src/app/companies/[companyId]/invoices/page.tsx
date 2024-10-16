@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, Timestamp} from 'firebase/firestore'
+import { collection, getDocs, Timestamp, doc, getDoc} from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
@@ -43,6 +42,7 @@ interface Invoice {
   totalSold: number
   totalEarn: number
   items: InvoiceItem[]
+  companyId: string
 }
 
 interface Store {
@@ -50,8 +50,7 @@ interface Store {
   name: string
 }
 
-export default function InvoicesPage({ params }: { params: { companyId: string } }) {
-  const { user } = useAuth()
+export default function InvoicesPage({ params }: { params: { companyId: string, storeId: string } }) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -60,13 +59,25 @@ export default function InvoicesPage({ params }: { params: { companyId: string }
   const [stores, setStores] = useState<Store[]>([])
   const [selectedStore, setSelectedStore] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<'date' | 'name'>('date')
+  const [companyName, setCompanyName] = useState<string>('')
 
   useEffect(() => {
-    const fetchStoresAndInvoices = async () => {
-      if (!user) return
-
+    const fetchCompanyAndStoresAndInvoices = async () => {
       setLoading(true)
       try {
+        if (!params.companyId) {
+          throw new Error('Company ID is undefined')
+        }
+
+        // Fetch company name
+        const companyRef = doc(db, 'companies', params.companyId)
+        const companyDoc = await getDoc(companyRef)
+        if (companyDoc.exists()) {
+          setCompanyName(companyDoc.data().name)
+        } else {
+          throw new Error('Company not found')
+        }
+
         // Fetch stores
         const storesRef = collection(db, `companies/${params.companyId}/stores`)
         const storesSnapshot = await getDocs(storesRef)
@@ -82,26 +93,28 @@ export default function InvoicesPage({ params }: { params: { companyId: string }
             ...doc.data(),
             id: doc.id,
             storeId: store.id,
-            storeName: store.name
+            storeName: store.name,
+            companyId: params.companyId
           } as Invoice))
           allInvoices = [...allInvoices, ...storeInvoices]
         }
         setInvoices(allInvoices)
         setFilteredInvoices(allInvoices)
       } catch (err) {
-        console.error('Error fetching stores and invoices:', err)
+        console.error('Error fetching company, stores and invoices:', err)
         toast({
           title: "Error",
           description: "Failed to fetch invoices. Please try again later.",
           variant: "destructive",
         })
+        router.push('/companies') // Redirect to companies page on error
       } finally {
         setLoading(false)
       }
     }
+    fetchCompanyAndStoresAndInvoices()
+  }, [params.companyId, router])
 
-    fetchStoresAndInvoices()
-  }, [user, params.companyId])
 
   useEffect(() => {
     filterAndSortInvoices()
@@ -269,7 +282,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string }
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           <DropdownMenuItem>
-                            <Link href={`/store/${invoice.storeId}/invoices/${invoice.id}`} className="flex items-center">
+                            <Link href={`/companies/${invoice.companyId}/store/${invoice.storeId}/invoices/${invoice.id}`} className="flex items-center">
                               <Pencil className="mr-2 h-4 w-4" />
                               Update
                             </Link>

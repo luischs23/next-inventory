@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, query, where, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import Link from 'next/link'
@@ -18,12 +17,11 @@ interface Invoice {
   customerPhone: string
 }
 
-interface Store {
+interface Store { 
   name: string
 }
 
 export default function InvoiceListPage({ params }: { params: { companyId: string, storeId: string } }) {
-  const { user } = useAuth()
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [storeName, setStoreName] = useState<string>('')
@@ -31,16 +29,10 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!user) {
-
-    } else {
-      fetchStoreAndInvoices()
-    }
-  }, [user, router, params.companyId, params.storeId])
+    fetchStoreAndInvoices()
+  }, [params.companyId, params.storeId])
 
   const fetchStoreAndInvoices = async () => {
-    if (!user) return
-
     setLoading(true)
     setError(null)
 
@@ -55,8 +47,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
 
       // Fetch invoices
       const invoicesRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`)
-      const q = query(invoicesRef, where('userId', '==', user.uid))
-      const querySnapshot = await getDocs(q)
+      const querySnapshot = await getDocs(invoicesRef)
       const invoiceList = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()

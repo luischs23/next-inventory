@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Rate limiting for store pages
-  if (request.nextUrl.pathname.startsWith('/store/')) {
+  if (request.nextUrl.pathname.startsWith('/companies/')) {
     const ip = request.ip ?? '127.0.0.1'
     const rateLimit = await getRateLimit(ip)
     if (!rateLimit.success) {

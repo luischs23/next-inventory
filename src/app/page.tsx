@@ -1,11 +1,22 @@
-import HomePage from "./companies/[companyId]/store/page";
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from 'app/app/context/AuthContext'
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[12px_1fr_12px] items-center justify-items-center min-h-screen p-2 pb-6 sm:p-4 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <HomePage/>
-      </main>
-    </div>
-  )
+  const router = useRouter()
+  const { user, loading } = useAuth()
+
+  useEffect(() => {
+    if (!loading) {
+      if (user) {
+        router.push('/login')
+      } else {
+        router.push('/login')
+      }
+    }
+  }, [user, loading, router])
+
+  return <div>Loading...</div>
 }

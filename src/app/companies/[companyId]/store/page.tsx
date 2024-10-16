@@ -51,15 +51,14 @@ export default function StoreListPage() {
   }, [user, router, companyId])
 
   const fetchStores = async () => {
-    if (!user || !companyId) return
+    if (!companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
       const storesRef = collection(db, `companies/${companyId}/stores`)
-      const q = query(storesRef, where('userId', '==', user.uid))
-      const querySnapshot = await getDocs(q)
+      const querySnapshot = await getDocs(storesRef)
       const storeList = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -67,11 +66,16 @@ export default function StoreListPage() {
       setStores(storeList)
     } catch (err) {
       console.error('Error fetching stores:', err)
-      setError('Failed to fetch stores. Please try again later.')
+      if (err instanceof Error) {
+        setError(`Failed to fetch stores: ${err.message}`)
+      } else {
+        setError('Failed to fetch stores. Please try again later.')
+      }
     } finally {
       setLoading(false)
     }
   }
+
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

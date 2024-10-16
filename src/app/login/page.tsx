@@ -8,6 +8,7 @@ import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import Link from 'next/link'
 import { useAuth } from 'app/app/context/AuthContext'
 
 export default function LoginPage() {
@@ -15,7 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
-  const { isSuperUser } = useAuth()
+  const { setUser } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -27,12 +28,14 @@ export default function LoginPage() {
     }
 
     try {
-      await signInWithEmailAndPassword(auth, email, password)
-      if (isSuperUser) {
-        router.push('/admin')
-      } else {
-        router.push('/companies')
-      }
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const user = userCredential.user
+      setUser(user)
+      
+      // Redirect based on user role
+      // You might want to fetch the user's role from Firestore here
+      // For now, we'll just redirect to the companies page
+      router.push('/companies')
     } catch (error) {
       setError('Failed to log in. Please check your credentials.')
       console.error(error)
@@ -72,6 +75,19 @@ export default function LoginPage() {
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <Button type="submit" className="w-full">Log In</Button>
           </form>
+          <div className="mt-4 text-center space-y-2">
+            <p className="text-sm">
+              Dont have an account?{' '}
+              <Link href="/signup" className="text-blue-500 hover:underline">
+                Sign up
+              </Link>
+            </p>
+            <p className="text-sm">
+              <Link href="/forgot-password" className="text-blue-500 hover:underline">
+                Forgot password?
+              </Link>
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>

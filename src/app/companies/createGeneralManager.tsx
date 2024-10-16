@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { doc, setDoc, collection, getDocs, writeBatch } from 'firebase/firestore'
+import { doc, collection, getDocs, writeBatch } from 'firebase/firestore'
 import { auth, db } from 'app/services/firebase/firebase.config'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
@@ -11,11 +11,13 @@ import { Label } from "app/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { useAuth } from 'app/app/context/AuthContext'
+import Link from 'next/link'
+import { FirebaseError } from 'firebase/app'
 
 interface Company {
-    id: string;
-    name: string;
-  }
+  id: string;
+  name: string;
+}
 
 export default function CreateGeneralManagerPage() {
   const [email, setEmail] = useState('')
@@ -44,26 +46,26 @@ export default function CreateGeneralManagerPage() {
       }
     }
 
-    fetchCompanies()
-  }, [])
-  
+    if (userRole === 'developer') {
+      fetchCompanies()
+    }
+  }, [userRole])
   
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-
+  
     if (!email || !password || !firstName || !lastName || !selectedCompanyId) {
       setError('Please fill in all fields')
       return
     }
-
+  
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const newUser = userCredential.user
-
+  
       const batch = writeBatch(db)
-
-      // Create user document in the company's users subcollection
+  
       const companyUserRef = doc(db, `companies/${selectedCompanyId}/users`, newUser.uid)
       batch.set(companyUserRef, {
         email: newUser.email,
@@ -73,30 +75,66 @@ export default function CreateGeneralManagerPage() {
         createdAt: new Date(),
         createdBy: user?.uid
       })
-
-      // Create a reference in the main users collection
+  
       const mainUserRef = doc(db, 'users', newUser.uid)
       batch.set(mainUserRef, {
         email: newUser.email,
         companyId: selectedCompanyId,
         role: 'generalManager'
       })
-
+  
       await batch.commit()
-
+  
+      // Sign out the newly created user and sign back in as the developer
+      await auth.signOut()
+      // You might need to implement a function to sign in the developer again here
+      // For example: await signInDeveloper(developerEmail, developerPassword)
+  
       router.push('/companies')
-    } catch (error: any) {
-      if (error.code === 'auth/email-already-in-use') {
-        setError('This email is already in use. Please use a different email address.')
+    } catch (error) {
+      if (error instanceof FirebaseError) {
+        switch (error.code) {
+          case 'auth/email-already-in-use':
+            setError('This email is already in use. Please use a different email address.')
+            break
+          case 'auth/invalid-email':
+            setError('Invalid email address. Please check and try again.')
+            break
+          case 'auth/weak-password':
+            setError('Password is too weak. Please use a stronger password.')
+            break
+          default:
+            setError('Failed to create an account. Please try again.')
+        }
       } else {
-        setError('Failed to create an account. Please try again.')
-        console.error(error)
+        setError('An unexpected error occurred. Please try again.')
       }
+      console.error('Error creating account:', error)
     }
   }
 
   if (loading) {
     return <div>Loading...</div>
+  }
+
+  if (userRole !== 'developer') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Access Denied</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-center mb-4">Only developers can create general manager accounts.</p>
+            <div className="flex justify-center">
+              <Link href="/companies" passHref>
+                <Button>Back to Companies</Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
