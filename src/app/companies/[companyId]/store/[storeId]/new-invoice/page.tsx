@@ -735,12 +735,14 @@ if (loading) {
             <CardTitle>Search Product</CardTitle>
           </CardHeader>
           <CardContent>
-          <div className="flex space-x-2">
+          <div className='mb-4'>
             <Input
-              placeholder="Enter barcode"
-              value={searchBarcode}
-              onChange={(e) => setSearchBarcode(e.target.value)}
-            />
+                placeholder="Enter barcode"
+                value={searchBarcode}
+                onChange={(e) => setSearchBarcode(e.target.value)}
+              />
+          </div>
+          <div className="flex space-x-2">
             <Button onClick={handleSearch}>
               <Search className="h-4 w-4 mr-2" />
               Search

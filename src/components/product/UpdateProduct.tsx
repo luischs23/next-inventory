@@ -12,7 +12,7 @@ import { Card, CardContent} from "app/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "app/components/ui/dialog"
 import { Label } from "app/components/ui/label"
 import Barcode from 'react-barcode'
-import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft} from 'lucide-react'
+import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft, PrinterIcon} from 'lucide-react'
 import { useToast } from "app/components/ui/use-toast"
 import ProductImageUpload from '../ui/ProductImageUpload'
 
@@ -50,6 +50,16 @@ interface UpdateProductProps {
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
+declare global {
+  interface Window {
+    electron: {
+      ipcRenderer: {
+        invoke(channel: string, args: any): Promise<any>;
+      };
+    };
+  }
+}
+
 export default function UpdateProduct({ companyId, warehouseId, productId }: UpdateProductProps) {
   const [product,   setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
@@ -62,6 +72,35 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const { toast } = useToast()
   const router = useRouter()
 
+  const printBarcode = async (barcode: string, productInfo: string) => {
+    try {
+      const result = await window.electron.ipcRenderer.invoke('print-barcode', { barcode, productInfo });
+      
+      if (result.success) {
+        toast({
+          title: "Barcode Printed",
+          description: result.message,
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
+        });
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      console.error("Printing failed", error);
+      toast({
+        title: "Print Error",
+        description: "Failed to print barcode. Please check printer connection.",
+        duration: 3000,
+        variant: "destructive",
+      });
+    }
+  };  
+  
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')
     return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
@@ -489,14 +528,22 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
                             <div className="flex flex-col items-center justify-center">
                               <Barcode value={barcode} width={1} height={50} fontSize={12} />
                             </div>
-                            <Button 
-                              variant="destructive" 
-                              size="sm" 
-                              className="mt-2"
-                              onClick={() => handleDeleteBarcode(size, barcode)}
-                            >
-                              <Trash2Icon className="w-4 h-4 mr-2" /> Delete
-                            </Button>
+                            <div className="flex justify-between mt-2">
+                                  <Button 
+                                    variant="destructive" 
+                                    size="sm" 
+                                    onClick={() => handleDeleteBarcode(size, barcode)}
+                                  >
+                                    <Trash2Icon className="w-4 h-4 mr-2" /> Delete
+                                  </Button>
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => printBarcode(barcode, `${product.brand} ${product.reference} ${product.color} Size ${size}`)}
+                                  >
+                                    <PrinterIcon className="w-4 h-4 mr-2" /> Print
+                                  </Button>
+                                </div>
                           </div>
                         ))}
                       </div>

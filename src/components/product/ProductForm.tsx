@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, doc, getDoc } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -41,10 +41,11 @@ interface ProductFormData {
 }
 
 interface ProductFormComponentProps {
+  companyId: string
   warehouseId: string
 }
 
-export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ warehouseId }) => {
+export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ companyId, warehouseId }) => {
   const router = useRouter()
   const { toast } = useToast()
   const [formData, setFormData] = useState<ProductFormData>({
@@ -61,8 +62,21 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
     saleprice: '',
     exhibition: {}
   })
-
   const [imageError, setImageError] = useState('')
+  const [sequence, setSequence] = useState(1)
+  const [warehouseNumber, setWarehouseNumber] = useState('')
+
+  useEffect(() => {
+    const fetchWarehouseNumber = async () => {
+      const warehouseRef = doc(db, `companies/${companyId}/warehouses`, warehouseId)
+      const warehouseDoc = await getDoc(warehouseRef)
+      if (warehouseDoc.exists()) {
+        const warehouseData = warehouseDoc.data()
+        setWarehouseNumber(warehouseData.warehouseNumber || '000')
+      }
+    }
+    fetchWarehouseNumber()
+  }, [companyId, warehouseId])
 
   const total = useMemo(() => {
     return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
@@ -72,6 +86,21 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
     const number = value.replace(/[^\d]/g, '')
     return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   }
+
+  const generateProductCode = useCallback(() => {
+    const date = new Date()
+    const year = date.getFullYear().toString().slice(-2)
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const day = date.getDate().toString().padStart(2, '0')
+    const warehouseCode = warehouseNumber.padStart(3, '0')
+    const sequenceNumber = sequence.toString().padStart(9, '0')
+    
+    const code = `${year}${month}${day}${warehouseCode}${sequenceNumber}`
+    
+    setSequence(prevSequence => prevSequence + 1)
+    
+    return code
+  }, [warehouseNumber, sequence])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -90,7 +119,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
       if (quantity > 0) {
         newSizes[size] = { 
           quantity, 
-          barcodes: Array(quantity).fill('').map(() => generateBarcode())
+          barcodes: Array(quantity).fill('').map(() => generateProductCode())
         }
       } else {
         delete newSizes[size]
@@ -105,10 +134,6 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
     setImageError('')
   }
 
-  const generateBarcode = () => {
-    return Math.random().toString(36).substr(2, 9).toUpperCase()
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.image) {
@@ -116,7 +141,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
       return
     }
     try {
-      const imageRef = ref(storage, `warehouses/${warehouseId}/products/${formData.image.name}`)
+      const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${formData.image.name}`)
       await uploadBytes(imageRef, formData.image)
       const imageUrl = await getDownloadURL(imageRef)
 
@@ -135,9 +160,10 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
         saleprice: parseInt(formData.saleprice.replace(/\./g, '')),
         exhibition: formData.exhibition,
         createdAt: serverTimestamp(),
+        warehouseId: warehouseId,
       }
 
-      await addDoc(collection(db, `warehouses/${warehouseId}/products`), productData)
+      await addDoc(collection(db, `companies/${companyId}/warehouses/${warehouseId}/products`), productData)
 
       toast({
         title: "Product Added",
@@ -150,7 +176,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ ware
         },
       })
 
-      router.push(`/warehouses/${warehouseId}/pares-inventory`)
+      router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
     } catch (error) {
       console.error('Error adding product:', error)
       toast({

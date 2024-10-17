@@ -1,15 +1,19 @@
 {
   "name": "next-inventory",
   "version": "0.1.0",
+  "types": "./src/types/quagga.d.ts",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "concurrently \"next dev\" \"npm run serve --prefix functions\"",
+    "dev": "concurrently \"next dev\" ",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "ts-node": "ts-node",
-    "serve": "npm run build && firebase emulators:start --only functions"
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "electron-dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:3000 && electron electron/dist/main.js\"",
+    "electron-build": "npm run build && cd electron && npm run build",
+    "electron-start": "npm run build && electron electron/dist/main.js",
+    "build-electron": "cd electron && npm run build-electron"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -23,9 +27,7 @@
     "@radix-ui/react-switch": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.1",
     "@react-pdf/renderer": "^3.4.5",
-    "app": "^0.1.0",
     "class-variance-authority": "^0.7.0",
-    "cloudflared": "^0.5.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "file-saver": "^2.0.5",
@@ -58,13 +60,15 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
-    "concurrently": "^9.0.1",
+    "cross-env": "^7.0.3",
     "eslint": "^8",
     "eslint-config-next": "14.2.11",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "concurrently": "^8.0.1",
+    "wait-on": "^7.0.1"
   }
 }
