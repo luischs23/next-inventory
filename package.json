@@ -1,19 +1,16 @@
 {
   "name": "next-inventory",
   "version": "0.1.0",
-  "types": "./src/types/quagga.d.ts",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "concurrently \"next dev\" ",
+    "dev": "concurrently \"next dev\" \"npm run serve --prefix functions\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "ts-node": "ts-node",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "electron-dev": "concurrently \"cross-env BROWSER=none npm run dev\" \"wait-on http://localhost:3000 && electron electron/dist/main.js\"",
-    "electron-build": "npm run build && cd electron && npm run build",
-    "electron-start": "npm run build && electron electron/dist/main.js",
-    "build-electron": "cd electron && npm run build-electron"
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -60,15 +57,16 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
-    "cross-env": "^7.0.3",
+    "concurrently": "^9.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.11",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.6.3",
-    "concurrently": "^8.0.1",
-    "wait-on": "^7.0.1"
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
