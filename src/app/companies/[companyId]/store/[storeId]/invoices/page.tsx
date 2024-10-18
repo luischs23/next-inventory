@@ -3,11 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, doc, getDoc, Timestamp } from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, Timestamp, deleteDoc } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, MoreVertical } from 'lucide-react'
+import { toast } from "app/components/ui/use-toast"
 
 interface Invoice {
   id: string
@@ -27,6 +30,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [storeName, setStoreName] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
 
   useEffect(() => {
     fetchStoreAndInvoices()
@@ -70,6 +74,29 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
+  const handleDelete = async () => {
+    if (invoiceToDelete) {
+      try {
+        await deleteDoc(doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, invoiceToDelete.id))
+        setInvoices(invoices.filter(invoice => invoice.id !== invoiceToDelete.id))
+        toast({
+          title: "Success",
+          description: `Invoice for ${invoiceToDelete.customerName} has been deleted successfully.`,
+          variant: "default",
+        })
+      } catch (error) {
+        console.error('Error deleting invoice:', error)
+        toast({
+          title: "Error",
+          description: `Failed to delete the invoice for ${invoiceToDelete.customerName}.`,
+          variant: "destructive",
+        })
+      } finally {
+        setInvoiceToDelete(null)
+      }
+    }
+  }
+
   if (loading) {
     return <div className="min-h-screen bg-blue-100 flex items-center justify-center">Loading...</div>
   }
@@ -97,22 +124,55 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                 {index + 1}
               </span>
               <Card className="border-2 border-teal-600">
-                <CardHeader>
+                <CardHeader className="relative">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0 absolute top-2 right-2">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
+                          View Details
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
                   <p className="text-sm text-gray-600">{invoice.customerPhone}</p>
                   <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
                 </CardHeader>
                 <CardContent>
                   <p className="text-lg font-bold text-teal-800">Total: ${formatPrice(invoice.totalSold)}</p>
-                  <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
-                    <Button className="mt-2 w-full bg-teal-600 hover:bg-teal-700">View Details</Button>
-                  </Link>
                 </CardContent>
               </Card>
             </div>
           ))}
         </div>
       </main>
+
+      <AlertDialog open={!!invoiceToDelete} onOpenChange={() => setInvoiceToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the invoice for
+              <span className="font-semibold"> {invoiceToDelete?.customerName} </span>
+              with a total of ${invoiceToDelete?.totalSold}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

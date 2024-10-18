@@ -158,10 +158,6 @@ interface WarehouseInventoryProps {
   }
 
   const handleUpdate = (box: Box) => {
-    if (userRole !== 'admin') {
-      console.error('Only admins can update boxes')
-      return
-    }
     router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-box/${box.id}`)
   }
 

@@ -9,11 +9,10 @@ import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import ProductCard from 'app/components/product-card-store'
-import { Save, Search, Lock, Unlock , ArrowLeft, Camera} from 'lucide-react'
+import { Save, Search, Lock, Unlock , ArrowLeft, X} from 'lucide-react'
 import { useToast } from "app/components/ui/use-toast"
 import { format } from 'date-fns'
 import NewInvoiceSkeleton from 'app/components/skeletons/NewInvoiceSkeleton'
-import { ScannerModal } from 'app/components/scanner-modal'
 
 interface Size {
   quantity: number
@@ -84,13 +83,6 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   const [previousSalePrices, setPreviousSalePrices] = useState<{ [key: string]: number }>({})
   const [totalEarn, setTotalEarn] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [isScannerOpen, setIsScannerOpen] = useState(false)
-  const [barcodeValue, setBarcodeValue] = useState('')
-
-  const handleScan = (result: string) => {
-    setBarcodeValue(result)
-    setIsScannerOpen(false)
-  }
 
   const fetchInvoiceData = useCallback(async () => {
     if (!user) return
@@ -344,6 +336,11 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
     }
 
     setSearchedProduct(foundProduct)
+  }
+
+  const handleClean = () => {
+    setSearchBarcode('')
+    setSearchedProduct(null)
   }
 
   const handleAddToInvoice = async (product: ProductWithBarcode) => {
@@ -735,22 +732,20 @@ if (loading) {
             <CardTitle>Search Product</CardTitle>
           </CardHeader>
           <CardContent>
-          <div className='mb-4'>
+          <div className='flex space-x-2 mb-2'>
             <Input
                 placeholder="Enter barcode"
                 value={searchBarcode}
                 onChange={(e) => setSearchBarcode(e.target.value)}
               />
-          </div>
-          <div className="flex space-x-2">
             <Button onClick={handleSearch}>
               <Search className="h-4 w-4 mr-2" />
               Search
             </Button>
-            <Button onClick={() => setIsScannerOpen(true)}>
-              <Camera className="h-4 w-4 mr-2" />
-                Scan Barcode
-              </Button>
+            <Button onClick={handleClean} variant="outline">
+              <X className="h-4 w-4 mr-2" />
+              Clean
+            </Button>
           </div>
           {searchedProduct && (
             <div className="mt-4">
@@ -845,12 +840,7 @@ if (loading) {
           </div>
         </CardContent>
       </Card>
-    </main>
-    <ScannerModal
-        isOpen={isScannerOpen}
-        onClose={() => setIsScannerOpen(false)}
-        onScan={handleScan}
-      />      
+    </main>   
     </div>
   )
 }

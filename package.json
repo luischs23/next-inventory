@@ -2,14 +2,13 @@
   "name": "next-inventory",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "scripts": {
-    "dev": "concurrently \"next dev\" \"npm run serve --prefix functions\"",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "ts-node": "ts-node",
-    "serve": "npm run build && firebase emulators:start --only functions",
+    "serve": "npm run build",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
@@ -49,6 +48,7 @@
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^10.0.0",
+    "winax": "^3.4.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -57,6 +57,8 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
+    "@types/winax": "^3.4.1",
+    "autoprefixer": "^10.0.1",
     "concurrently": "^9.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.11",

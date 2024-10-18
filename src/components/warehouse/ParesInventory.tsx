@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
-import { Pencil, MoreHorizontal, ImageIcon, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc } from 'lucide-react'
+import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
 import * as XLSX from 'xlsx'
@@ -363,12 +363,19 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         </Card>
 
         <div className="space-y-4">
-          {sortedProducts.map((product, index) => (
+        {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
               <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
               <Card className="flex-grow relative">
                 <CardContent className="p-4">
-                  <div className="absolute top-2 right-2">
+                  <div className="absolute top-2 right-2 flex items-center">
+                      <Button
+                        variant="ghost"
+                        className="h-8 w-8 p-0 mr-1"
+                        onClick={() => handleUpdate(product)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -377,18 +384,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {userRole === 'admin' && (
-                          <>
-                            <DropdownMenuItem onClick={() => handleUpdate(product)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              <span>Update</span>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setProductToDelete(product)}>
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              <span>Delete</span>
-                            </DropdownMenuItem>
-                          </>
-                        )}
+                          <DropdownMenuItem onClick={() => setProductToDelete(product)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
