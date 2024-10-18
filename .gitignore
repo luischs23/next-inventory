@@ -37,3 +37,5 @@ next-env.d.ts
 
 # Firebase configuration
 src/services/firebase/firebase.config.ts
+
+electron/node_modules/electron/dist/*
