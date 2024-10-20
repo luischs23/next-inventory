@@ -1,10 +1,10 @@
 'use client'
 
-import { useState} from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection} from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -15,7 +15,7 @@ import { useToast } from "app/components/ui/use-toast"
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
-
+ 
 interface BoxFormData {
   brand: Brand
   reference: string
@@ -26,6 +26,7 @@ interface BoxFormData {
   image: File | null
   baseprice: string
   saleprice: string
+  barcode?: string
 }
 
 interface BoxFormProps {
@@ -48,6 +49,72 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
     saleprice: '',
   })
 
+  const [nextBoxNumber, setNextBoxNumber] = useState(1)
+
+  useEffect(() => {
+    const fetchLastBarcode = async () => {
+      const companiesRef = collection(db, 'companies')
+      const companyQuery = query(companiesRef, limit(1))
+      const companySnapshot = await getDocs(companyQuery)
+      
+      if (!companySnapshot.empty) {
+        const companyDoc = companySnapshot.docs[0]
+        const warehousesRef = collection(companyDoc.ref, 'warehouses')
+        const warehousesQuery = query(warehousesRef)
+        const warehousesSnapshot = await getDocs(warehousesQuery)
+
+        let lastBoxNumber = 0
+
+        for (const warehouseDoc of warehousesSnapshot.docs) {
+          // Check products
+          const productsRef = collection(warehouseDoc.ref, 'products')
+          const productQuery = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
+          const productSnapshot = await getDocs(productQuery)
+
+          if (!productSnapshot.empty) {
+            const lastProduct = productSnapshot.docs[0].data()
+            if (lastProduct.barcode) {
+              const productBoxNumber = parseInt(lastProduct.barcode.slice(-12, -6))
+              if (productBoxNumber > lastBoxNumber) {
+                lastBoxNumber = productBoxNumber
+              }
+            }
+          }
+
+          // Check boxes
+          const boxesRef = collection(warehouseDoc.ref, 'boxes')
+          const boxQuery = query(boxesRef, orderBy('createdAt', 'desc'), limit(1))
+          const boxSnapshot = await getDocs(boxQuery)
+
+          if (!boxSnapshot.empty) {
+            const lastBox = boxSnapshot.docs[0].data() as BoxFormData
+            if (lastBox.barcode) {
+              const boxLastNumber = parseInt(lastBox.barcode.slice(-12, -6))
+              if (boxLastNumber > lastBoxNumber) {
+                lastBoxNumber = boxLastNumber
+              }
+            }
+          }
+        }
+
+        setNextBoxNumber(lastBoxNumber + 1)
+      }
+    }
+
+    fetchLastBarcode()
+  }, [companyId])
+
+  const generateBoxBarcode = useCallback(() => {
+    const date = new Date()
+    const dateString = date.toISOString().slice(2, 10).replace(/-/g, '')
+    const boxString = nextBoxNumber.toString().padStart(6, '0')
+    const productString = '000000' // For boxes, always use 000000
+
+    setNextBoxNumber(prevNumber => prevNumber + 1)
+
+    return `${dateString}${boxString}${productString}`
+  }, [nextBoxNumber])
+  
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     const numericValue = parseInt(value.replace(/\D/g, ''), 10)
@@ -63,10 +130,6 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     setFormData((prev) => ({ ...prev, image: file }))
-  }
-
-  const generateBarcode = () => {
-    return Math.random().toString(36).substr(2, 9).toUpperCase()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +159,8 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
         baseprice: parseInt(formData.baseprice.replace(/\D/g, ''), 10),
         saleprice: parseInt(formData.saleprice.replace(/\D/g, ''), 10),
         warehouseId,
-        barcode: generateBarcode(),
+        barcode: generateBoxBarcode(),
+        createdAt: serverTimestamp(),
       }
 
       await addDoc(collection(db, `companies/${companyId}/warehouses/${warehouseId}/boxes`), boxData)

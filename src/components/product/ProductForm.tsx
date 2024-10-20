@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp, doc, getDoc } from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -63,20 +63,54 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     exhibition: {}
   })
   const [imageError, setImageError] = useState('')
-  const [sequence, setSequence] = useState(1)
-  const [warehouseNumber, setWarehouseNumber] = useState('')
+  const [boxNumber, setBoxNumber] = useState(1)
+  const [globalProductNumber, setGlobalProductNumber] = useState(1)
 
   useEffect(() => {
-    const fetchWarehouseNumber = async () => {
-      const warehouseRef = doc(db, `companies/${companyId}/warehouses`, warehouseId)
-      const warehouseDoc = await getDoc(warehouseRef)
-      if (warehouseDoc.exists()) {
-        const warehouseData = warehouseDoc.data()
-        setWarehouseNumber(warehouseData.warehouseNumber || '000')
+    const fetchLastBarcode = async () => {
+      const companiesRef = collection(db, 'companies')
+      const companyQuery = query(companiesRef, limit(1))
+      const companySnapshot = await getDocs(companyQuery)
+      
+      if (!companySnapshot.empty) {
+        const companyDoc = companySnapshot.docs[0]
+        const warehousesRef = collection(companyDoc.ref, 'warehouses')
+        const warehousesQuery = query(warehousesRef)
+        const warehousesSnapshot = await getDocs(warehousesQuery)
+
+        let lastBarcode = ''
+        let lastBoxNumber = 0
+        let lastProductNumber = 0
+
+        for (const warehouseDoc of warehousesSnapshot.docs) {
+          const productsRef = collection(warehouseDoc.ref, 'products')
+          const q = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
+          const querySnapshot = await getDocs(q)
+
+          if (!querySnapshot.empty) {
+            const lastProduct = querySnapshot.docs[0].data() as ProductFormData
+            const warehouseLastBarcode = Object.values(lastProduct.sizes)
+              .flatMap((size: SizeInput) => size.barcodes)
+              .sort()
+              .pop()
+
+            if (warehouseLastBarcode && warehouseLastBarcode > lastBarcode) {
+              lastBarcode = warehouseLastBarcode
+              lastBoxNumber = parseInt(lastBarcode.slice(-12, -6))
+              lastProductNumber = parseInt(lastBarcode.slice(-6))
+            }
+          }
+        }
+
+        if (lastBarcode) {
+          setBoxNumber(lastBoxNumber + 1)
+          setGlobalProductNumber(lastProductNumber + 1)
+        }
       }
     }
-    fetchWarehouseNumber()
-  }, [companyId, warehouseId])
+
+    fetchLastBarcode()
+  }, [companyId])
 
   const total = useMemo(() => {
     return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
@@ -87,20 +121,14 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   }
 
-  const generateProductCode = useCallback(() => {
+  const generateBarcode = useCallback((currentProductNumber: number) => {
     const date = new Date()
-    const year = date.getFullYear().toString().slice(-2)
-    const month = (date.getMonth() + 1).toString().padStart(2, '0')
-    const day = date.getDate().toString().padStart(2, '0')
-    const warehouseCode = warehouseNumber.padStart(3, '0')
-    const sequenceNumber = sequence.toString().padStart(9, '0')
+    const dateString = date.toISOString().slice(2, 10).replace(/-/g, '')
+    const boxString = boxNumber.toString().padStart(6, '0')
+    const productString = currentProductNumber.toString().padStart(6, '0')
     
-    const code = `${year}${month}${day}${warehouseCode}${sequenceNumber}`
-    
-    setSequence(prevSequence => prevSequence + 1)
-    
-    return code
-  }, [warehouseNumber, sequence])
+    return `${dateString}${boxString}${productString}`
+  }, [boxNumber])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -114,16 +142,35 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
   const handleSizeChange = (size: string, value: string) => {
     const quantity = parseInt(value) || 0
+
     setFormData((prev) => {
       const newSizes = { ...prev.sizes }
-      if (quantity > 0) {
-        newSizes[size] = { 
-          quantity, 
-          barcodes: Array(quantity).fill('').map(() => generateProductCode())
+      let localProductNumber = globalProductNumber
+
+      // First, remove barcodes for sizes that have been reduced or set to 0
+      Object.keys(newSizes).forEach((sizeKey) => {
+        if (sizeKey === size) {
+          if (quantity < (newSizes[sizeKey]?.quantity || 0)) {
+            newSizes[sizeKey].barcodes = newSizes[sizeKey].barcodes.slice(0, quantity)
+          }
         }
+      })
+
+      // Then, generate new barcodes for the current size
+      if (quantity > 0) {
+        if (!newSizes[size]) {
+          newSizes[size] = { quantity: 0, barcodes: [] }
+        }
+        while (newSizes[size].barcodes.length < quantity) {
+          newSizes[size].barcodes.push(generateBarcode(localProductNumber))
+          localProductNumber++
+        }
+        newSizes[size].quantity = quantity
       } else {
         delete newSizes[size]
       }
+
+      setGlobalProductNumber(localProductNumber)
       return { ...prev, sizes: newSizes }
     })
   }
@@ -175,6 +222,10 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
           fontWeight: "bold",
         },
       })
+
+      // Increment box number for the next product
+      setBoxNumber(prevNumber => prevNumber + 1)
+      // Note: We're not resetting globalProductNumber here, as it should continue incrementing
 
       router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
     } catch (error) {
