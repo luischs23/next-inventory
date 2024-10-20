@@ -13,8 +13,7 @@ export default function FormProductPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-4">Add New Product</h1>
+    <div className="container mx-auto px-4 mt-4 mb-20">
       <ProductFormComponent warehouseId={warehouseId} companyId={companyId} />
     </div>
   )

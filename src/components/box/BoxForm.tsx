@@ -63,7 +63,7 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
         const warehousesQuery = query(warehousesRef)
         const warehousesSnapshot = await getDocs(warehousesQuery)
 
-        let lastBoxNumber = 0
+        let highestBoxNumber = 0
 
         for (const warehouseDoc of warehousesSnapshot.docs) {
           // Check products
@@ -73,10 +73,15 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
 
           if (!productSnapshot.empty) {
             const lastProduct = productSnapshot.docs[0].data()
-            if (lastProduct.barcode) {
-              const productBoxNumber = parseInt(lastProduct.barcode.slice(-12, -6))
-              if (productBoxNumber > lastBoxNumber) {
-                lastBoxNumber = productBoxNumber
+            const sizes = lastProduct.sizes as Record<string, { barcodes: string[] }>
+            const lastProductBarcode = Object.values(sizes)
+              .flatMap(size => size.barcodes)
+              .sort((a, b) => b.localeCompare(a))[0]
+
+            if (lastProductBarcode) {
+              const productBoxNumber = parseInt(lastProductBarcode.slice(6, 12))
+              if (productBoxNumber > highestBoxNumber) {
+                highestBoxNumber = productBoxNumber
               }
             }
           }
@@ -89,15 +94,16 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
           if (!boxSnapshot.empty) {
             const lastBox = boxSnapshot.docs[0].data() as BoxFormData
             if (lastBox.barcode) {
-              const boxLastNumber = parseInt(lastBox.barcode.slice(-12, -6))
-              if (boxLastNumber > lastBoxNumber) {
-                lastBoxNumber = boxLastNumber
+              const boxNumber = parseInt(lastBox.barcode.slice(6, 12))
+              if (boxNumber > highestBoxNumber) {
+                highestBoxNumber = boxNumber
               }
             }
           }
         }
 
-        setNextBoxNumber(lastBoxNumber + 1)
+        // Increment the highest box number to get the next box number
+        setNextBoxNumber(highestBoxNumber + 1)
       }
     }
 

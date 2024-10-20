@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
 import { printLabel } from 'app/lib/brotherPrinter'
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     console.log('Received print test request');
-    // Data to be printed on the label
-    const labelData = {
-      text1: "Nike Af1 Underground - Blanco/Negro",
-      text2: "44",
-      barcode: "231004001201100202"
-    };
+    
+    // Parse the incoming request body
+    const labelData = await request.json();
 
     console.log('Calling printLabel function with data:', labelData);
     const result = await printLabel(labelData);

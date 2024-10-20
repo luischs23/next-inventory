@@ -1,20 +1,20 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, updateDoc, collection, getDocs} from 'firebase/firestore'
+import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { Card, CardContent} from "app/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "app/components/ui/dialog"
 import { Label } from "app/components/ui/label"
 import Barcode from 'react-barcode'
 import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft, PrinterIcon} from 'lucide-react'
 import { useToast } from "app/components/ui/use-toast"
 import ProductImageUpload from '../ui/ProductImageUpload'
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog'
 
 interface SizeInput {
   quantity: number
@@ -50,18 +50,9 @@ interface UpdateProductProps {
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
-declare global {
-  interface Window {
-    electron: {
-      ipcRenderer: {
-        invoke(channel: string, args: any): Promise<any>;
-      };
-    };
-  }
-}
 
 export default function UpdateProduct({ companyId, warehouseId, productId }: UpdateProductProps) {
-  const [product,   setProduct] = useState<Product | null>(null)
+  const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [imageLoading, setImageLoading] = useState(false)
   const [newSize, setNewSize] = useState('')
@@ -71,35 +62,10 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const [exhibitionBarcode, setExhibitionBarcode] = useState('')
   const { toast } = useToast()
   const router = useRouter()
+  const [lastBarcode, setLastBarcode] = useState('')
+  const [boxNumber, setBoxNumber] = useState(0)
+  const [productNumber, setProductNumber] = useState(0)
 
-  const printBarcode = async (barcode: string, productInfo: string) => {
-    try {
-      const result = await window.electron.ipcRenderer.invoke('print-barcode', { barcode, productInfo });
-      
-      if (result.success) {
-        toast({
-          title: "Barcode Printed",
-          description: result.message,
-          duration: 3000,
-          style: {
-            background: "#4CAF50",
-            color: "white",
-            fontWeight: "bold",
-          },
-        });
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error) {
-      console.error("Printing failed", error);
-      toast({
-        title: "Print Error",
-        description: "Failed to print barcode. Please check printer connection.",
-        duration: 3000,
-        variant: "destructive",
-      });
-    }
-  };  
   
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')
@@ -140,9 +106,125 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
       setStores(storesList)
     }
 
+    const fetchLastBarcode = async () => {
+      try {
+        const productsRef = collection(db, `companies/${companyId}/warehouses/${warehouseId}/products`)
+        const q = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
+        const querySnapshot = await getDocs(q)
+        
+        if (!querySnapshot.empty) {
+          const lastProduct = querySnapshot.docs[0].data()
+          const sizes = lastProduct.sizes as Record<string, { barcodes: string[] }>
+          const lastBarcode = Object.values(sizes)
+            .flatMap(size => size.barcodes)
+            .sort()
+            .pop()
+          
+          if (lastBarcode) {
+            setLastBarcode(lastBarcode)
+            const boxNum = parseInt(lastBarcode.slice(6, 12))
+            const prodNum = parseInt(lastBarcode.slice(12))
+            setBoxNumber(boxNum)
+            setProductNumber(prodNum)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching last barcode:', error)
+      }
+    }
+
     fetchProduct()
     fetchStores()
+    fetchLastBarcode()
   }, [companyId, warehouseId, productId])
+
+  const handlePrintBarcode = useCallback(async (barcode: string, productInfo: string, size: string) => {
+    try {
+      const labelData = {
+        text1: productInfo,
+        text2: size,
+        barcode: barcode
+      };
+
+      const response = await fetch('/api/printer-test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(labelData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to print barcode');
+      }
+
+      const result = await response.json();
+      toast({
+        title: "Barcode Printed",
+        description: result.message,
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      });
+    } catch (error) {
+      console.error('Error printing barcode:', error);
+      toast({
+        title: "Error",
+        description: "Failed to print barcode. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const handlePrintAllBarcodes = useCallback(async (size: string) => {
+    if (product) {
+      const barcodes = product.sizes[size].barcodes;
+      const productInfo = `${product.brand} ${product.reference} ${product.color}`;
+      const sizeWithoutPrefix = size.replace('T-', '');
+
+      for (const barcode of barcodes) {
+        await handlePrintBarcode(barcode, productInfo, sizeWithoutPrefix);
+      }
+
+      toast({
+        title: "All Barcodes Printed",
+        description: `All barcodes for size ${size} have been sent to the printer.`,
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      });
+    }
+  }, [product, handlePrintBarcode, toast]);
+
+  const handlePrintAllSizes = useCallback(async () => {
+    if (product) {
+      const productInfo = `${product.brand} ${product.reference} ${product.color}`;
+      for (const [size, sizeData] of Object.entries(product.sizes)) {
+        const sizeWithoutPrefix = size.replace('T-', '');
+        for (const barcode of sizeData.barcodes) {
+          await handlePrintBarcode(barcode, productInfo, sizeWithoutPrefix);
+        }
+      }
+
+      toast({
+        title: "All Sizes Printed",
+        description: "All barcodes for all sizes have been sent to the printer.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      });
+    }
+  }, [product, handlePrintBarcode, toast]);
 
   const availableSizes = useMemo(() => {
     if (!product) return []
@@ -218,13 +300,26 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     }
   }
 
-  const generateBarcode = () => {
-    return Math.random().toString(36).substr(2, 9).toUpperCase()
-  }
+  const generateBarcode = useCallback((currentProductNumber: number) => {
+    const date = new Date();
+    const dateString = date.toISOString().slice(2, 10).replace(/-/g, '');
+    const boxString = boxNumber.toString().padStart(6, '0'); // Mantenemos el boxNumber actual
+    const productString = currentProductNumber.toString().padStart(6, '0');
+    
+    return `${dateString}${boxString}${productString}`;
+  }, [boxNumber]); // Asegurarnos de que el boxNumber no cambie
 
   const handleAddSize = async () => {
     if (newSize && newQuantity > 0 && product) {
-      const newBarcodes = Array(newQuantity).fill('').map(() => generateBarcode())
+      let localProductNumber = productNumber; // Usamos el número de producto actual
+      const newBarcodes: string[] = [];
+  
+      // Generar códigos de barras sin cambiar el `boxNumber`
+      while (newBarcodes.length < newQuantity) {
+        localProductNumber++;
+        newBarcodes.push(generateBarcode(localProductNumber)); // Generar códigos con el boxNumber actual
+      }
+  
       const updatedProduct = {
         ...product,
         sizes: {
@@ -232,17 +327,18 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           [newSize]: { quantity: newQuantity, barcodes: newBarcodes }
         },
         total: product.total + newQuantity
-      }
-
+      };
+  
       try {
-        // Update Firestore
-        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct)
-
-        // Update local state
-        setProduct(updatedProduct)
-        setNewSize('')
-        setNewQuantity(0) 
-
+        // Actualizar Firestore
+        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct);
+  
+        // Actualizar el estado local
+        setProduct(updatedProduct);
+        setProductNumber(localProductNumber); // Actualizar el número de producto
+        setNewSize('');
+        setNewQuantity(0);
+  
         toast({
           title: "Size Added",
           description: `Size ${newSize} has been added to the inventory.`,
@@ -252,18 +348,19 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             color: "white",
             fontWeight: "bold",
           },
-        })
+        });
       } catch (error) {
-        console.error('Error adding size:', error)
+        console.error('Error adding size:', error);
         toast({
           title: "Error",
           description: "Failed to add size. Please try again.",
           duration: 3000,
           variant: "destructive",
-        })
+        });
       }
     }
-  }
+  };
+  
 
   const handleDeleteBarcode = (size: string, barcodeToDelete: string) => {
     if (product) {
@@ -292,8 +389,10 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const handleAddBarcode = (size: string) => {
     if (product) {
       setProduct(prev => {
-        if (!prev) return null
-        const newBarcode = generateBarcode()
+        if (!prev) return null;
+        const newProductNumber = productNumber + 1;
+        const newBarcode = generateBarcode(newProductNumber);
+        setProductNumber(newProductNumber);
         return {
           ...prev,
           sizes: {
@@ -305,10 +404,10 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             }
           },
           total: prev.total + 1
-        }
-      })
+        };
+      });
     }
-  }
+  };
 
   const handleAddExhibition = async () => {
     if (product && selectedStore && exhibitionBarcode) {
@@ -510,50 +609,53 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
                     value={product.sizes[size].quantity}
                     readOnly
                   />
-                  <Dialog>
-                    <DialogTrigger asChild>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
                       <Button variant="outline" className="mt-2 w-full">Barcodes</Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-3xl text-gray-300">
-                      <DialogHeader>
-                        <DialogTitle>Barcodes - {product.brand} {product.reference} Size {size}</DialogTitle>
-                        <DialogDescription className='text-slate-200'>Add, remove, or view barcodes for this product size.</DialogDescription>
-                      </DialogHeader>
-                      <div className="grid grid-cols-2 gap-4">
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="max-w-3xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{product.brand} {product.reference} Size {size}</AlertDialogTitle>
+                        <AlertDialogDescription ></AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="grid grid-cols-1">
                         {product.sizes[size].barcodes.map((barcode, index) => (
-                          <div key={index} className="text-center border p-4 rounded">
+                          <div key={index} className="flex border rounded items-center justify-center space-x-2">
                             <p className="mb-2">
-                              {product.brand} {product.reference} {product.color} Size {size}
+                              {size}
                             </p>
                             <div className="flex flex-col items-center justify-center">
-                              <Barcode value={barcode} width={1} height={50} fontSize={12} />
+                              <Barcode value={barcode} width={1} height={30} fontSize={12} />
                             </div>
-                            <div className="flex justify-between mt-2">
+                            <div className="space-x-2">
+                                  <Button 
+                                    variant="outline" 
+                                    size="sm" 
+                                    onClick={() => handlePrintBarcode(barcode, `${product.brand} ${product.reference} ${product.color}`, size.replace('T-', ''))}
+                                  >
+                                    <PrinterIcon className="w-4 h-4" />
+                                  </Button>
                                   <Button 
                                     variant="destructive" 
                                     size="sm" 
                                     onClick={() => handleDeleteBarcode(size, barcode)}
                                   >
-                                    <Trash2Icon className="w-4 h-4 mr-2" /> Delete
-                                  </Button>
-                                  <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => printBarcode(barcode, `${product.brand} ${product.reference} ${product.color} Size ${size}`)}
-                                  >
-                                    <PrinterIcon className="w-4 h-4 mr-2" /> Print
+                                    <Trash2Icon className="w-4 h-4" />
                                   </Button>
                                 </div>
                           </div>
                         ))}
                       </div>
-                      <div className="flex justify-center mt-4">
+                      <div className="flex justify-center space-x-2">
                         <Button onClick={() => handleAddBarcode(size)}>
                           <PlusIcon className="w-4 h-4 mr-2" /> Add Barcode
                         </Button>
+                        <Button onClick={() => handlePrintAllBarcodes(size)}>
+                              <PrinterIcon className="w-4 h-4 mr-2" /> Print All
+                        </Button>
                       </div>
-                    </DialogContent>
-                  </Dialog>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               ))}
             </div>
@@ -573,17 +675,22 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             </Select>
             <Input
               type="number"
-              placeholder="Quantity"
+              placeholder=""
               value={newQuantity}
               onChange={(e) => setNewQuantity(parseInt(e.target.value))}
               className="w-10"
             />
             <Button type="button" onClick={handleAddSize}>Add Size</Button>
           </div>
-          <div>
-            <Label htmlFor="total">Total</Label>
-            <Input id="total" name="total" value={product.total} readOnly />
-          </div>
+          <div className="flex items-center space-x-4">
+                <div className="flex-grow">
+                  <Label htmlFor="total">Total</Label>
+                  <Input id="total" name="total" value={product.total} readOnly />
+                </div>
+                <Button type="button" onClick={handlePrintAllSizes} className="mt-6">
+                  <PrinterIcon className="w-4 h-4 mr-2" /> Print All Sizes
+                </Button>
+            </div>
           
           {/* Exhibition */}
           <div>

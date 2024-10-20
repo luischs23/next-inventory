@@ -83,21 +83,35 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
         let lastProductNumber = 0
 
         for (const warehouseDoc of warehousesSnapshot.docs) {
+          // Check products
           const productsRef = collection(warehouseDoc.ref, 'products')
-          const q = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
-          const querySnapshot = await getDocs(q)
+          const productQuery = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
+          const productSnapshot = await getDocs(productQuery)
 
-          if (!querySnapshot.empty) {
-            const lastProduct = querySnapshot.docs[0].data() as ProductFormData
-            const warehouseLastBarcode = Object.values(lastProduct.sizes)
+          if (!productSnapshot.empty) {
+            const lastProduct = productSnapshot.docs[0].data() as ProductFormData
+            const productLastBarcode = Object.values(lastProduct.sizes)
               .flatMap((size: SizeInput) => size.barcodes)
               .sort()
               .pop()
 
-            if (warehouseLastBarcode && warehouseLastBarcode > lastBarcode) {
-              lastBarcode = warehouseLastBarcode
-              lastBoxNumber = parseInt(lastBarcode.slice(-12, -6))
-              lastProductNumber = parseInt(lastBarcode.slice(-6))
+            if (productLastBarcode && productLastBarcode > lastBarcode) {
+              lastBarcode = productLastBarcode
+              lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
+              lastProductNumber = parseInt(lastBarcode.slice(12))
+            }
+          }
+
+          // Check boxes
+          const boxesRef = collection(warehouseDoc.ref, 'boxes')
+          const boxQuery = query(boxesRef, orderBy('createdAt', 'desc'), limit(1))
+          const boxSnapshot = await getDocs(boxQuery)
+
+          if (!boxSnapshot.empty) {
+            const lastBox = boxSnapshot.docs[0].data()
+            if (lastBox.barcode && lastBox.barcode > lastBarcode) {
+              lastBarcode = lastBox.barcode
+              lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
             }
           }
         }
@@ -164,7 +178,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
         while (newSizes[size].barcodes.length < quantity) {
           newSizes[size].barcodes.push(generateBarcode(localProductNumber))
           localProductNumber++
-        }
+        } 
         newSizes[size].quantity = quantity
       } else {
         delete newSizes[size]

@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
-import LabelPreview from './LabelPreview';
 
 export default function PrinterTest() {
   const [labelData, setLabelData] = useState({
@@ -55,9 +54,6 @@ export default function PrinterTest() {
             placeholder="Barcode"
           />
           <Button onClick={handleTestPrint}>Test Print</Button>
-        </div>
-        <div>
-          <LabelPreview {...labelData} />
         </div>
       </div>
     </div>
