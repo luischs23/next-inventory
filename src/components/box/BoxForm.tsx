@@ -114,7 +114,7 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
     const date = new Date()
     const dateString = date.toISOString().slice(2, 10).replace(/-/g, '')
     const boxString = nextBoxNumber.toString().padStart(6, '0')
-    const productString = '000000' // For boxes, always use 000000
+    const productString = '00' // For boxes, always use 000000
 
     setNextBoxNumber(prevNumber => prevNumber + 1)
 
@@ -174,7 +174,7 @@ export default function BoxForm({ companyId, warehouseId }: BoxFormProps) {
       toast({
         title: "Success",
         description: "Box added successfully",
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",

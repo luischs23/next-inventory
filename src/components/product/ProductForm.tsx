@@ -99,6 +99,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
               lastBarcode = productLastBarcode
               lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
               lastProductNumber = parseInt(lastBarcode.slice(12))
+              lastProductNumber = 0
             }
           }
 
@@ -112,6 +113,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
             if (lastBox.barcode && lastBox.barcode > lastBarcode) {
               lastBarcode = lastBox.barcode
               lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
+              lastProductNumber = 0
             }
           }
         }
@@ -139,7 +141,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     const date = new Date()
     const dateString = date.toISOString().slice(2, 10).replace(/-/g, '')
     const boxString = boxNumber.toString().padStart(6, '0')
-    const productString = currentProductNumber.toString().padStart(6, '0')
+    const productString = currentProductNumber.toString().padStart(2, '0')
     
     return `${dateString}${boxString}${productString}`
   }, [boxNumber])
@@ -229,7 +231,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
       toast({
         title: "Product Added",
         description: "The product has been successfully added to the inventory.",
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",
@@ -247,7 +249,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
       toast({
         title: "Error",
         description: "Failed to add product. Please try again.",
-        duration: 3000,
+        duration: 1000,
         variant: "destructive",
       })
     }

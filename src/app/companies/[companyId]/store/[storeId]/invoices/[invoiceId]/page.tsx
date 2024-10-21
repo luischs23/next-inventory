@@ -218,7 +218,7 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
         toast({
           title: "Success",
           description: "Item returned successfully",
-          duration: 3000,
+          duration: 1000,
           style: {
             background: "#4CAF50",
             color: "white",
@@ -379,7 +379,7 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
     toast({
       title: "Success",
       description: "Item added to invoice successfully",
-      duration: 3000,
+      duration: 1000,
       style: {
         background: "#4CAF50",
         color: "white",

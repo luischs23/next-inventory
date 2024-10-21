@@ -435,7 +435,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
       toast({
         title: "Error",
         description: "Failed to add product to invoice. Please try again.",
-        duration: 3000,
+        duration: 1000,
         variant: "destructive",
       })
     }
@@ -536,7 +536,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
       toast({
         title: "Error",
         description: "Failed to return the product. Please try again.",
-        duration: 3000,
+        duration: 1000,
         variant: "destructive",
       })
     }
@@ -690,7 +690,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
       toast({
         title: "Success",
         description: "Invoice saved successfully.",
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",

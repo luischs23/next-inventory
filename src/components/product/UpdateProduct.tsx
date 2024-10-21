@@ -62,10 +62,12 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const [exhibitionBarcode, setExhibitionBarcode] = useState('')
   const { toast } = useToast()
   const router = useRouter()
-  const [lastBarcode, setLastBarcode] = useState('')
-  const [boxNumber, setBoxNumber] = useState(0)
-  const [productNumber, setProductNumber] = useState(0)
-
+  const [, setLastBarcode] = useState('')
+  const [, setBoxNumber] = useState(0)
+  const [, setProductNumber] = useState(0)
+  const [, setLastProductNumber] = useState(0)
+  const [productBoxNumber, setProductBoxNumber] = useState(0)
+  const [lastUsedProductNumbers, setLastUsedProductNumbers] = useState<{[key: string]: number}>({});
   
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')
@@ -90,6 +92,27 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             baseprice: formatNumber(productData.baseprice.toString()),
             saleprice: formatNumber(productData.saleprice.toString())
           })
+
+          // Initialize lastUsedProductNumbers
+          const lastUsedNumbers: {[key: string]: number} = {};
+          Object.values(productData.sizes).forEach(size => {
+            size.barcodes.forEach(barcode => {
+              const boxNumber = barcode.slice(6, 12);
+              const productNumber = parseInt(barcode.slice(12));
+              lastUsedNumbers[boxNumber] = Math.max(lastUsedNumbers[boxNumber] || 0, productNumber);
+            });
+          });
+          setLastUsedProductNumbers(lastUsedNumbers);
+
+          // Find the last product number for this specific product
+          const lastBarcode = Object.values(productData.sizes)
+            .flatMap(size => size.barcodes)
+            .sort((a, b) => b.localeCompare(a))[0]
+
+          if (lastBarcode) {
+            setProductBoxNumber(parseInt(lastBarcode.slice(6, 12)))
+            setLastProductNumber(parseInt(lastBarcode.slice(12)))
+          }
         } else {
           console.error('Product not found')
         }
@@ -162,7 +185,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
       toast({
         title: "Barcode Printed",
         description: result.message,
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",
@@ -174,7 +197,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
       toast({
         title: "Error",
         description: "Failed to print barcode. Please try again.",
-        duration: 3000,
+        duration: 1000,
         variant: "destructive",
       });
     }
@@ -193,7 +216,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
       toast({
         title: "All Barcodes Printed",
         description: `All barcodes for size ${size} have been sent to the printer.`,
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",
@@ -216,7 +239,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
       toast({
         title: "All Sizes Printed",
         description: "All barcodes for all sizes have been sent to the printer.",
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",
@@ -279,7 +302,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         toast({
           title: "Image Updated",
           description: "The product image has been successfully updated.",
-          duration: 3000,
+          duration: 1000,
           style: {
             background: "#4CAF50",
             color: "white",
@@ -291,7 +314,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         toast({
           title: "Error",
           description: "Failed to update image. Please try again.",
-          duration: 3000,
+          duration: 1000,
           variant: "destructive",
         })
       } finally {
@@ -300,26 +323,50 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     }
   }
 
-  const generateBarcode = useCallback((currentProductNumber: number) => {
+  const generateBarcode = useCallback(() => {
     const date = new Date();
     const dateString = date.toISOString().slice(2, 10).replace(/-/g, '');
-    const boxString = boxNumber.toString().padStart(6, '0'); // Mantenemos el boxNumber actual
-    const productString = currentProductNumber.toString().padStart(6, '0');
+    const boxString = productBoxNumber.toString().padStart(6, '0');
+    const lastUsedNumber = lastUsedProductNumbers[boxString] || 0;
+    const newProductNumber = (lastUsedNumber % 99) + 1;
+    const productString = newProductNumber.toString().padStart(2, '0');
     
+    setLastUsedProductNumbers(prev => ({
+      ...prev,
+      [boxString]: newProductNumber
+    }));
     return `${dateString}${boxString}${productString}`;
-  }, [boxNumber]); // Asegurarnos de que el boxNumber no cambie
+  }, [productBoxNumber, lastUsedProductNumbers]);
 
   const handleAddSize = async () => {
     if (newSize && newQuantity > 0 && product) {
-      let localProductNumber = productNumber; // Usamos el número de producto actual
       const newBarcodes: string[] = [];
-  
-      // Generar códigos de barras sin cambiar el `boxNumber`
-      while (newBarcodes.length < newQuantity) {
-        localProductNumber++;
-        newBarcodes.push(generateBarcode(localProductNumber)); // Generar códigos con el boxNumber actual
+
+      // Find the last used barcode across all sizes
+      const lastUsedBarcode = Object.values(product.sizes)
+        .flatMap(size => size.barcodes)
+        .sort((a, b) => b.localeCompare(a))[0];
+
+      // Extract the box number and product number from the last used barcode
+      let currentBoxNumber = productBoxNumber;
+      let currentProductNumber = 0;
+      if (lastUsedBarcode) {
+        currentBoxNumber = parseInt(lastUsedBarcode.slice(6, 12));
+        currentProductNumber = parseInt(lastUsedBarcode.slice(12));
       }
-  
+
+      for (let i = 0; i < newQuantity; i++) {
+        currentProductNumber = (currentProductNumber % 99) + 1;
+        if (currentProductNumber === 1) {
+          currentBoxNumber++;
+        }
+        const date = new Date();
+        const dateString = date.toISOString().slice(2, 10).replace(/-/g, '');
+        const boxString = currentBoxNumber.toString().padStart(6, '0');
+        const productString = currentProductNumber.toString().padStart(2, '0');
+        newBarcodes.push(`${dateString}${boxString}${productString}`);
+      }
+
       const updatedProduct = {
         ...product,
         sizes: {
@@ -328,21 +375,20 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         },
         total: product.total + newQuantity
       };
-  
+
       try {
-        // Actualizar Firestore
         await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct);
-  
-        // Actualizar el estado local
+
         setProduct(updatedProduct);
-        setProductNumber(localProductNumber); // Actualizar el número de producto
+        setProductBoxNumber(currentBoxNumber);
+        setLastProductNumber(currentProductNumber);
         setNewSize('');
         setNewQuantity(0);
-  
+
         toast({
           title: "Size Added",
           description: `Size ${newSize} has been added to the inventory.`,
-          duration: 3000,
+          duration: 1000,
           style: {
             background: "#4CAF50",
             color: "white",
@@ -354,13 +400,12 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         toast({
           title: "Error",
           description: "Failed to add size. Please try again.",
-          duration: 3000,
+          duration: 1000,
           variant: "destructive",
         });
       }
     }
-  };
-  
+  };  
 
   const handleDeleteBarcode = (size: string, barcodeToDelete: string) => {
     if (product) {
@@ -388,21 +433,18 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
 
   const handleAddBarcode = (size: string) => {
     if (product) {
+      const newBarcode = generateBarcode();
       setProduct(prev => {
         if (!prev) return null;
-        const newProductNumber = productNumber + 1;
-        const newBarcode = generateBarcode(newProductNumber);
-        setProductNumber(newProductNumber);
+        const updatedSizes = { ...prev.sizes };
+        updatedSizes[size] = {
+          ...updatedSizes[size],
+          quantity: updatedSizes[size].quantity + 1,
+          barcodes: [...updatedSizes[size].barcodes, newBarcode]
+        };
         return {
           ...prev,
-          sizes: {
-            ...prev.sizes,
-            [size]: {
-              ...prev.sizes[size],
-              quantity: prev.sizes[size].quantity + 1,
-              barcodes: [...prev.sizes[size].barcodes, newBarcode]
-            }
-          },
+          sizes: updatedSizes,
           total: prev.total + 1
         };
       });
@@ -444,7 +486,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           toast({
             title: "Added to Exhibition",
             description: `Product added to exhibition in ${stores.find(s => s.id === selectedStore)?.name}.`,
-            duration: 3000,
+            duration: 1000,
             style: {
               background: "#2196F3",
               color: "white",
@@ -456,7 +498,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           toast({
             title: "Error",
             description: "Failed to add product to exhibition. Please try again.",
-            duration: 3000,
+            duration: 1000,
             variant: "destructive",
           })
         }
@@ -464,7 +506,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         toast({
           title: "Invalid Barcode",
           description: "The entered barcode does not match any product size.",
-          duration: 3000,
+          duration: 1000,
           variant: "destructive",
         })
       }
@@ -498,7 +540,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           toast({
             title: "Returned from Exhibition",
             description: "Product has been returned from exhibition. Remember to save changes.",
-            duration: 3000,
+            duration: 1000,
             style: {
               background: "#4CAF50",
               color: "white",
@@ -537,7 +579,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         toast({
           title: "Product Updated",
           description: "The product has been successfully updated.",
-          duration: 3000,
+          duration: 1000,
           style: {
             background: "#4CAF50",
             color: "white",
@@ -551,7 +593,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         toast({
           title: "Error",
           description: "Failed to update product. Please try again.",
-          duration: 3000,
+          duration: 1000,
           variant: "destructive",
         })
       }

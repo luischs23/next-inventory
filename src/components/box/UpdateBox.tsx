@@ -141,7 +141,7 @@ export default function UpdateBoxForm({ companyId, boxId, warehouseId }: UpdateB
         toast({
           title: "Image Updated",
           description: "The box image has been successfully updated.",
-          duration: 3000,
+          duration: 1000,
           style: {
             background: "#4CAF50",
             color: "white",
@@ -153,7 +153,7 @@ export default function UpdateBoxForm({ companyId, boxId, warehouseId }: UpdateB
         toast({
           title: "Error",
           description: "Failed to update image. Please try again.",
-          duration: 3000,
+          duration: 1000,
           variant: "destructive",
         })
       } finally {
@@ -176,7 +176,7 @@ export default function UpdateBoxForm({ companyId, boxId, warehouseId }: UpdateB
       toast({
         title: "Success",
         description: "Box updated successfully",
-        duration: 3000,
+        duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",
