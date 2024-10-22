@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs, FieldValue } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Switch } from "app/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { useToast } from "app/components/ui/use-toast"
+import { ChevronDown, ChevronUp } from 'lucide-react'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -25,8 +26,13 @@ interface SizeInputs {
   [key: string]: SizeInput
 }
 
+interface Warehouse {
+  id: string
+  name: string
+}
+
 interface ProductFormData {
-  brand: Brand
+   brand: Brand
   reference: string
   color: string
   gender: Gender
@@ -38,14 +44,39 @@ interface ProductFormData {
   baseprice: string
   saleprice: string
   exhibition: { [store: string]: string }
+  barcode: string
 }
 
 interface ProductFormComponentProps {
   companyId: string
-  warehouseId: string
+  warehouseId: string 
+  isBox: boolean
 }
 
-export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ companyId, warehouseId }) => {
+interface CommonData {
+  brand: Brand
+  reference: string
+  color: string
+  gender: Gender
+  comments: string
+  imageUrl: string
+  baseprice: number
+  saleprice: number
+  createdAt: FieldValue
+  warehouseId: string
+  sizes: SizeInputs
+  total: number
+  barcode:string
+}
+
+interface BoxData extends CommonData {
+}
+
+interface ProductData extends CommonData {
+  exhibition: { [store: string]: string }
+}
+
+export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ companyId, warehouseId, isBox }) => {
   const router = useRouter()
   const { toast } = useToast()
   const [formData, setFormData] = useState<ProductFormData>({
@@ -60,12 +91,41 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     imageUrl: '',
     baseprice: '',
     saleprice: '',
-    exhibition: {}
+    exhibition: {},
+    barcode:'',
   })
   const [imageError, setImageError] = useState('')
   const [boxNumber, setBoxNumber] = useState(1)
   const [globalProductNumber, setGlobalProductNumber] = useState(1)
+  const [showSizes, setShowSizes] = useState(false)
+  const [total1, setTotal1] = useState<number | null>(null)
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([])
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string | null>(null)
 
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      try {
+        const warehousesRef = collection(db, `companies/${companyId}/warehouses`)
+        const warehousesSnapshot = await getDocs(warehousesRef)
+        const warehousesData = warehousesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name
+        }))
+        setWarehouses(warehousesData)
+      } catch (error) {
+        console.error("Error fetching warehouses:", error)
+        toast({
+          title: "Error",
+          description: "Failed to fetch warehouses. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      }
+    }
+
+    fetchWarehouses()
+  }, [companyId, toast])
+  
   useEffect(() => {
     const fetchLastBarcode = async () => {
       const companiesRef = collection(db, 'companies')
@@ -99,7 +159,6 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
               lastBarcode = productLastBarcode
               lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
               lastProductNumber = parseInt(lastBarcode.slice(12))
-              lastProductNumber = 0
             }
           }
 
@@ -113,7 +172,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
             if (lastBox.barcode && lastBox.barcode > lastBarcode) {
               lastBarcode = lastBox.barcode
               lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
-              lastProductNumber = 0
+              lastProductNumber = parseInt(lastBarcode.slice(12))
             }
           }
         }
@@ -197,6 +256,18 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     setImageError('')
   }
 
+  const handleTotal1Change = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value === '' ? null : parseInt(e.target.value)
+    setTotal1(value)
+    if (isBox) {
+      setFormData(prev => ({ ...prev, total: value || 0 }))
+    }
+  }
+
+  const handleWarehouseChange = (value: string) => {
+    setSelectedWarehouse(value)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.image) {
@@ -204,33 +275,58 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
       return
     }
     try {
-      const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${formData.image.name}`)
+      const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/${isBox ? 'boxes' : 'products'}/${formData.image.name}`)
       await uploadBytes(imageRef, formData.image)
       const imageUrl = await getDownloadURL(imageRef)
 
-      const productData = {
+      const commonData: CommonData = {
         brand: formData.brand,
         reference: formData.reference,
         color: formData.color,
         gender: formData.gender,
-        sizes: Object.fromEntries(
-          Object.entries(formData.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
-        ),
-        total,
         comments: formData.comments,
         imageUrl,
         baseprice: parseInt(formData.baseprice.replace(/\./g, '')),
         saleprice: parseInt(formData.saleprice.replace(/\./g, '')),
-        exhibition: formData.exhibition,
         createdAt: serverTimestamp(),
         warehouseId: warehouseId,
+        sizes: formData.sizes,
+        total: isBox ? (showSizes ? total : (total1 || 0)) : total,
+        barcode: generateBarcode(0),
       }
 
-      await addDoc(collection(db, `companies/${companyId}/warehouses/${warehouseId}/products`), productData)
+      let dataToSave: BoxData | ProductData
+
+      if (isBox) {
+        dataToSave = {
+          ...commonData,
+        }
+      } else {
+        dataToSave = {
+          ...commonData,
+          exhibition: formData.exhibition,
+        }
+      }
+
+      
+      let collectionPath: string
+      let redirectPath: string | null = null
+
+      if (isBox && selectedWarehouse) {
+        // A warehouse is selected for a box
+        collectionPath = `companies/${companyId}/warehouses/${selectedWarehouse}/products`
+        redirectPath = `/companies/${companyId}/warehouses/${selectedWarehouse}/pares-inventory`
+      } else {
+        // No warehouse is selected, or it's not a box
+        collectionPath = `companies/${companyId}/warehouses/${warehouseId}/${isBox ? 'boxes' : 'products'}`
+        redirectPath = `/companies/${companyId}/warehouses/${warehouseId}/${isBox ? 'inventory' : 'pares-inventory'}`
+      }
+
+      await addDoc(collection(db, collectionPath), dataToSave)
 
       toast({
-        title: "Product Added",
-        description: "The product has been successfully added to the inventory.",
+        title: `${isBox ? 'Box' : 'Product'} Added`,
+        description: `The ${isBox ? 'box' : 'product'} has been successfully added to the inventory.`,
         duration: 1000,
         style: {
           background: "#4CAF50",
@@ -241,14 +337,15 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
       // Increment box number for the next product
       setBoxNumber(prevNumber => prevNumber + 1)
-      // Note: We're not resetting globalProductNumber here, as it should continue incrementing
 
-      router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
+      if (redirectPath) {
+        router.push(redirectPath)
+      }
     } catch (error) {
-      console.error('Error adding product:', error)
+      console.error(`Error adding ${isBox ? 'box' : 'product'}:`, error)
       toast({
         title: "Error",
-        description: "Failed to add product. Please try again.",
+        description: `Failed to add ${isBox ? 'box' : 'product'}. Please try again.`,
         duration: 1000,
         variant: "destructive",
       })
@@ -259,107 +356,162 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     ? ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
     : ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
-  return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>Add New Product</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="brand">Brand</Label>
-            <Select name="brand" onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select brand" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Nike">Nike</SelectItem>
-                <SelectItem value="Adidas">Adidas</SelectItem>
-                <SelectItem value="Puma">Puma</SelectItem>
-                <SelectItem value="Reebok">Reebok</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="reference">Reference</Label>
-            <Input id="reference" name="reference" value={formData.reference} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="color">Color</Label>
-            <Input id="color" name="color" value={formData.color} onChange={handleInputChange} />
-          </div>
-          <div>
-            <Label htmlFor="comments">Comments</Label>
-            <Input id="comments" name="comments" value={formData.comments} onChange={handleInputChange} />
-          </div>
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="gender">Gender</Label>
-            <Switch
-              id="gender"
-              checked={formData.gender === 'Hombre'}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, gender: checked ? 'Hombre' : 'Dama' }))}
+    const renderSizesAndTotal = () => (
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-4">
+          {sizeInputs.map((size) => (
+            <div key={size}>
+              <Label htmlFor={size}>{size}</Label>
+              <Input
+                id={size}
+                type="number"
+                value={formData.sizes[size]?.quantity || ''}
+                onChange={(e) => handleSizeChange(size, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
+            <Label htmlFor="total">Total</Label>
+            <Input
+              id="total"
+              type="number"
+              value={total}
+              readOnly
             />
-            <span>{formData.gender}</span>
           </div>
-          <div className="grid grid-cols-3 gap-4">
-            {sizeInputs.map((size) => (
-              <div key={size}>
-                <Label htmlFor={size}>{size}</Label>
+          {isBox && (
+            <div className="flex-1">
+              <Label htmlFor="warehouse">Warehouse</Label>
+              <Select value={selectedWarehouse || ''} onValueChange={handleWarehouseChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select  warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  {warehouses.map((warehouse) => (
+                    <SelectItem key={warehouse.id} value={warehouse.id}>{warehouse.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  
+    return (
+      <Card className="w-full max-w-2xl mx-auto">
+        <CardHeader>
+          <CardTitle>Add New {isBox ? 'Box' : 'Product'}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="brand">Brand</Label>
+              <Select name="brand" onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Nike">Nike</SelectItem>
+                  <SelectItem value="Adidas">Adidas</SelectItem>
+                  <SelectItem value="Puma">Puma</SelectItem>
+                  <SelectItem value="Reebok">Reebok</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="reference">Reference</Label>
+              <Input id="reference" name="reference" value={formData.reference} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="color">Color</Label>
+              <Input id="color" name="color" value={formData.color} onChange={handleInputChange} />
+            </div>
+            <div>
+              <Label htmlFor="comments">Comments</Label>
+              <Input id="comments" name="comments" value={formData.comments} onChange={handleInputChange} />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="gender">Gender</Label>
+              <Switch
+                id="gender"
+                checked={formData.gender === 'Hombre'}
+                onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, gender: checked ? 'Hombre' : 'Dama' }))}
+              />
+              <span>{formData.gender}</span>
+            </div>
+            {isBox ? (
+              <>
+                <div>
+                  <Label
+                    onClick={() => setShowSizes(!showSizes)}
+                    className="flex items-center cursor-pointer"
+                  >
+                    <span>Detail box</span>
+                    {showSizes ? 
+                      <ChevronUp className="h-4 w-4 ml-1" /> :
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    }
+                  </Label>
+                </div>
+                {showSizes ? (
+                  renderSizesAndTotal()
+                ) : (
+                  <div>
+                    <Label htmlFor="total1">Number of pairs</Label>
+                    <Input
+                      id="total1"
+                      name="total1"
+                      type="number"
+                      value={total1 === null ? '' : total1}
+                      onChange={handleTotal1Change}
+                      placeholder="Enter number of pairs"
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              renderSizesAndTotal()
+            )}
+            <div>
+              <Label htmlFor="image">Image</Label>
+              <Input 
+                id="image" 
+                name="image" 
+                type="file" 
+                accept="image/*" 
+                onChange={handleImageChange} 
+                required
+              />
+              {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
+            </div>
+            <div className='flex items-center space-x-4'>
+              <div>
+                <Label htmlFor="baseprice">Base Price</Label>
                 <Input
-                  id={size}
-                  type="number"
-                  value={formData.sizes[size]?.quantity || ''}
-                  onChange={(e) => handleSizeChange(size, e.target.value)}
+                  id="baseprice"
+                  name="baseprice"
+                  type="text"
+                  value={formData.baseprice}
+                  onChange={handleInputChange}
                 />
               </div>
-            ))}
-            <div>
-              <Label htmlFor="total">Total</Label>
-              <Input
-                id="total"
-                type="number"
-                value={total}
-                readOnly
-              />
+              <div>
+                <Label htmlFor="saleprice">Sale Price</Label>
+                <Input
+                  id="saleprice"
+                  name="saleprice"
+                  type="text"
+                  value={formData.saleprice}
+                  onChange={handleInputChange}
+                />
+              </div>
             </div>
-          </div>
-          <div>
-            <Label htmlFor="image">Image</Label>
-            <Input 
-              id="image" 
-              name="image" 
-              type="file" 
-              accept="image/*" 
-              onChange={handleImageChange} 
-              required
-            />
-            {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
-          </div>
-          <div className='flex items-center space-x-4'>
-            <div>
-              <Label htmlFor="baseprice">Base Price</Label>
-              <Input
-                id="baseprice"
-                name="baseprice"
-                type="text"
-                value={formData.baseprice}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="saleprice">Sale Price</Label>
-              <Input
-                id="saleprice"
-                name="saleprice"
-                type="text"
-                value={formData.saleprice}
-                onChange={handleInputChange}
-              />
-            </div>
-          </div>
-          <Button type="submit">Add Product</Button>
-        </form>
-      </CardContent>
-    </Card>
-  )
-}
+            <Button type="submit">Add {isBox ? 'Box' : 'Product'}</Button>
+          </form>
+        </CardContent>
+      </Card>
+    )
+  }

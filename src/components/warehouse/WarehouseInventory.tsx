@@ -11,7 +11,7 @@ import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { Card, CardContent} from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { Pencil, MoreHorizontal, ImageIcon, FileDown, Trash2, PlusIcon, Filter, ArrowLeft, SortDesc  } from 'lucide-react'
+import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, Filter, ArrowLeft, SortDesc  } from 'lucide-react'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
@@ -20,26 +20,33 @@ import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 
+interface SizeInput {
+  quantity: number
+  barcodes: string[]
+}
+
 interface Box {
   id: string
   brand: string
   reference: string
   color: string
   gender: 'Dama' | 'Hombre'
-  quantity: number
+  sizes: { [key: string]: SizeInput }
   imageUrl: string
+  total: number
   baseprice: number
   saleprice: number
   createdAt: number | Timestamp | FieldValue
+  comments: string
   barcode: string
 }
 
 interface WarehouseInventoryProps {
-    companyId: string
-    warehouseId: string
-  } 
+  companyId: string
+  warehouseId: string
+}
 
-  export default function WarehouseInventoryComponent({ companyId, warehouseId }: WarehouseInventoryProps) {
+export default function WarehouseInventoryComponent({ companyId, warehouseId }: WarehouseInventoryProps) {
   const [boxes, setBoxes] = useState<Box[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -82,10 +89,17 @@ interface WarehouseInventoryProps {
           createdAtValue = Timestamp.now().toMillis()
         }
 
+        // Safely calculate the total quantity
+        const total = data.sizes && typeof data.sizes === 'object'
+          ? Object.values(data.sizes as { [key: string]: SizeInput }).reduce((sum, size) => sum + (size?.quantity || 0), 0)
+          : 0
+
         return { 
           id: doc.id, 
           ...data,
           createdAt: createdAtValue,
+          total,
+          sizes: data.sizes || {}  // Ensure sizes is always an object
         } as Box
       })
       setBoxes(boxesList)
@@ -158,7 +172,7 @@ interface WarehouseInventoryProps {
   }
 
   const handleUpdate = (box: Box) => {
-    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-box/${box.id}`)
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${box.id}?isBox=true`)
   }
 
   const exportToExcel = () => {
@@ -170,10 +184,10 @@ interface WarehouseInventoryProps {
       'Reference': box.reference,
       'Color': box.color,
       'Gender': box.gender,
-      'Quantity': box.quantity,
+      'Sizes': JSON.stringify(box.sizes),
+      'Total Quantity': box.total,
       'Base Price': box.baseprice,
       'Sale Price': box.saleprice,
-      'Barcode': box.barcode,
       'Created At': box.createdAt instanceof Timestamp 
         ? box.createdAt.toDate().toISOString()
         : typeof box.createdAt === 'number'
@@ -185,7 +199,7 @@ interface WarehouseInventoryProps {
 
     worksheet['!cols'] = [
       { width: 5 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 },
-      { width: 10 }, { width: 15 }, { width: 15 }, { width: 20 }, { width: 20 }
+      { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 20 }
     ]
 
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Warehouse Inventory')
@@ -208,14 +222,14 @@ interface WarehouseInventoryProps {
     doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
     doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
 
-    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Quantity", "Base Price", "Sale Price"]
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Total", "Base Price", "Sale Price"]
     const tableRows = sortedBoxes.map((box, index) => [
       index + 1,
       box.brand,
       box.reference,
       box.color,
       box.gender,
-      box.quantity,
+      box.total,
       formatNumber(box.baseprice),
       formatNumber(box.saleprice)
     ])
@@ -235,14 +249,27 @@ interface WarehouseInventoryProps {
 
   const summaryInfo = useMemo(() => {
     const totalBoxes = filteredBoxes.length
-    const totalQuantity = filteredBoxes.reduce((sum, box) => sum + (Number(box.quantity) || 0), 0)
-    const totalBase = filteredBoxes.reduce((sum, box) => sum + box.baseprice * box.quantity, 0)
-    const totalSale = filteredBoxes.reduce((sum, box) => sum + box.saleprice * box.quantity, 0)
+    const totalQuantity = filteredBoxes.reduce((sum, box) => sum + box.total, 0)
+    const totalBase = filteredBoxes.reduce((sum, box) => sum + box.baseprice * box.total, 0)
+    const totalSale = filteredBoxes.reduce((sum, box) => sum + box.saleprice * box.total, 0)
     return { totalBoxes, totalQuantity, totalBase, totalSale }
   }, [filteredBoxes])
 
   const formatNumber = (num: number) => {
     return num.toLocaleString('es-ES')
+  }
+
+  const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
+    return Object.entries(sizes).sort((a, b) => {
+      const sizeA = a[0].toLowerCase().replace('t-', '')
+      const sizeB = b[0].toLowerCase().replace('t-', '')
+      
+      if (!isNaN(Number(sizeA)) && !isNaN(Number(sizeB))) {
+        return Number(sizeA) - Number(sizeB)
+      }
+      
+      return sizeA.localeCompare(sizeB)
+    })
   }
 
   if (loading) {
@@ -256,12 +283,12 @@ interface WarehouseInventoryProps {
   return (
     <div className="min-h-screen bg-blue-100">
       <header className="bg-teal-600 text-white p-4 flex items-center">
-        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Inventory WH</h1>
         <div className="flex space-x-2">
-          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-box`)}>
+          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product?isBox=true`)}>
             <PlusIcon className="h-4 w-4" />
           </Button>
           <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">
@@ -274,7 +301,7 @@ interface WarehouseInventoryProps {
       </header>
 
       <main className="container mx-auto p-4">
-      <div className="flex items-center space-x-2 mb-6">
+        <div className="flex items-center space-x-2 mb-6">
           <Input
             placeholder="Search by brand, reference, or color"
             value={searchTerm}
@@ -300,6 +327,7 @@ interface WarehouseInventoryProps {
             <SelectContent>
               <SelectItem value="entry">
                 <span className="flex items-center">
+                
                   <SortDesc className="mr-2 h-4 w-4" />
                 </span>
               </SelectItem>
@@ -319,37 +347,28 @@ interface WarehouseInventoryProps {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sortedBoxes.map((box) => (
-            <Card key={box.id} className="overflow-hidden">
-              <div className="flex">
-                <div className="w-2/5 h-44">
-                  {box.imageUrl ? (
-                    <Image
-                      src={box.imageUrl}
-                      alt={`${box.brand} ${box.reference}`}
-                      width={100}
-                      height={100}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                      <ImageIcon className="h-12 w-12 text-gray-400" />
-                    </div>
-                  )}
-                </div>
-                <CardContent className="w-2/3 p-4 relative">
-                  <div className="absolute top-2 right-2 flex">
-                    <Button variant="ghost" className="h-8 w-8 p-0 mr-1" onClick={() => handleUpdate(box)}>
+        <div className="space-y-4">
+          {sortedBoxes.map((box, index) => (
+            <div key={box.id} className="flex items-start">
+              <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
+              <Card className="flex-grow relative">
+                <CardContent className="p-4">
+                  <div className="absolute top-2 right-2 flex items-center">
+                    <Button
+                      variant="ghost"
+                      className="h-8 w-8 p-0 mr-1"
+                      onClick={() => handleUpdate(box)}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
+                          <span className="sr-only">Open menu</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent>
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setBoxToDelete(box)}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           <span>Delete</span>
@@ -357,15 +376,40 @@ interface WarehouseInventoryProps {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  <h2 className="font-bold mb-2">{box.brand}</h2>
-                  <p className="text-sm text-gray-600">{box.reference}</p>
-                  <p className="text-sm">{box.color} - {box.gender}</p>
-                  <p className="text-sm mt-2">Quantity: {box.quantity}</p>
-                  <p className="text-sm">Sale Price: ${formatNumber(box.saleprice)}</p>
-                  <p className="text-sm mt-2 text-gray-500">Barcode: {box.barcode}</p>
+                  <div className="flex items-center space-x-4">
+                    <div className="relative w-16 h-16 flex-shrink-0">
+                      <Image
+                        src={box.imageUrl}
+                        alt={`${box.brand} ${box.reference}`}
+                        fill
+                        sizes="(max-width: 64px) 150vw, 64px"
+                        className="object-cover rounded-md"
+                      />
+                    </div>
+                    <div className="flex-grow">
+                      <h3 className="font-semibold">{box.brand}</h3>
+                      <p className="text-sm text-gray-500">{box.reference}</p>
+                      <p className="text-sm">{box.color} - {box.gender}</p>
+                      <p className="text-sm">Sale: ${formatNumber(box.saleprice)}</p>
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <span className="font-medium text-sm">Barcode Box: {box.barcode}</span>
+                    <div className="grid grid-cols-3 gap-1 mt-1">
+                      {Object.keys(box.sizes).length > 0 ? (
+                        sortSizes(box.sizes).map(([size, { quantity }]) => (
+                          <div key={size} className="text-xs bg-gray-100 p-1 rounded">
+                            {size}: {quantity}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-xs text-red-500">No sizes available</div>
+                      )}
+                    </div>
+                  </div>
                 </CardContent>
-              </div>
-            </Card>
+              </Card>
+            </div>
           ))}
         </div>
       </main>
@@ -387,7 +431,6 @@ interface WarehouseInventoryProps {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      
       </AlertDialog>
     </div>
   )

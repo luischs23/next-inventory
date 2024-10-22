@@ -189,7 +189,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }
 
   const handleUpdate = (product: Product) => {
-    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${product.id}`)
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${product.id}?isBox=false`)
   }
 
   const exportToExcel = () => {
@@ -288,12 +288,12 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   return (
     <div className="min-h-screen bg-blue-100">
       <header className="bg-teal-600 text-white p-4 flex items-center">
-        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Pares Inventory</h1>
         <div className="flex space-x-2">
-          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
+          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product?isBox=false`)}>
             <PlusIcon className="h-4 w-4" />
           </Button>
           <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">

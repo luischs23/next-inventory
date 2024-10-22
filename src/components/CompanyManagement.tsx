@@ -214,7 +214,7 @@ export default function CompanyManagement() {
                         className="h-8 w-8 p-0"
                       >
                         <MoreVertical className="h-4 w-4" />
-                      </Button>
+                      </Button> 
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuItem onClick={() => router.push(`/companies/${company.id}/home`)}>
