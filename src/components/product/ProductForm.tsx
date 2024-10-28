@@ -32,7 +32,7 @@ interface Warehouse {
 }
 
 interface ProductFormData {
-   brand: Brand
+  brand: Brand
   reference: string
   color: string
   gender: Gender

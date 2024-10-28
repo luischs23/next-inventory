@@ -4,10 +4,13 @@ import winax from 'winax';
 interface PrintLabelData {
   text1: string;
   text2: string;
+  text3: string;
+  text4: string;
   barcode: string;
+  date?: string;
 }
 
-export async function printLabel(data: PrintLabelData): Promise<string> {
+export async function printLabel(data: PrintLabelData, isBox: boolean): Promise<string> {
   if (typeof window !== 'undefined') {
     throw new Error('This function can only be called on the server side');
   }
@@ -18,7 +21,7 @@ export async function printLabel(data: PrintLabelData): Promise<string> {
 
       const bpac = new winax.Object('bpac.Document');
       
-      const templatePath = path.join(process.cwd(), 'public', 'label_template.lbx');
+      const templatePath = path.join(process.cwd(), 'public', isBox ? 'box_template.lbx' : 'label_template.lbx');
       
       if (!bpac.Open(templatePath)) {
         throw new Error('Failed to open template file');
@@ -28,11 +31,11 @@ export async function printLabel(data: PrintLabelData): Promise<string> {
       bpac.SetPrinter('Brother QL-800', true);
 
       // Update the text fields with error checking
-      const textFields = ['text1', 'text2'] as const;
+      const textFields = ['text1', 'text2', 'text3', 'text4'] as const;
       textFields.forEach((field) => {
         const obj = bpac.GetObject(field);
         if (obj) {
-          obj.Text = data[field];
+          obj.Text = data[field].toUpperCase();
         } else {
           console.warn(`Field ${field} not found in template`);
         }
@@ -44,6 +47,16 @@ export async function printLabel(data: PrintLabelData): Promise<string> {
         barcodeObj.Text = data.barcode;
       } else {
         console.warn('Barcode field not found in template');
+      }
+
+      // Update the date field for box labels
+      if (isBox && data.date) {
+        const dateObj = bpac.GetObject('date');
+        if (dateObj) {
+          dateObj.Text = new Date(data.date).toLocaleDateString();
+        } else {
+          console.warn('Date field not found in template');
+        }
       }
 
       // Print the label

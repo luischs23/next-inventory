@@ -259,19 +259,6 @@ export default function WarehouseInventoryComponent({ companyId, warehouseId }: 
     return num.toLocaleString('es-ES')
   }
 
-  const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
-    return Object.entries(sizes).sort((a, b) => {
-      const sizeA = a[0].toLowerCase().replace('t-', '')
-      const sizeB = b[0].toLowerCase().replace('t-', '')
-      
-      if (!isNaN(Number(sizeA)) && !isNaN(Number(sizeB))) {
-        return Number(sizeA) - Number(sizeB)
-      }
-      
-      return sizeA.localeCompare(sizeB)
-    })
-  }
-
   if (loading) {
     return <div>Loading...</div>
   }
@@ -395,17 +382,6 @@ export default function WarehouseInventoryComponent({ companyId, warehouseId }: 
                   </div>
                   <div className="mt-2">
                     <span className="font-medium text-sm">Barcode Box: {box.barcode}</span>
-                    <div className="grid grid-cols-3 gap-1 mt-1">
-                      {Object.keys(box.sizes).length > 0 ? (
-                        sortSizes(box.sizes).map(([size, { quantity }]) => (
-                          <div key={size} className="text-xs bg-gray-100 p-1 rounded">
-                            {size}: {quantity}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-xs text-red-500">No sizes available</div>
-                      )}
-                    </div>
                   </div>
                 </CardContent>
               </Card>

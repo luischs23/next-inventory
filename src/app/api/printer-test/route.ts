@@ -7,9 +7,10 @@ export async function POST(request: Request) {
     
     // Parse the incoming request body
     const labelData = await request.json();
+    const isBox = labelData.isBox;
 
     console.log('Calling printLabel function with data:', labelData);
-    const result = await printLabel(labelData);
+    const result = await printLabel(labelData, isBox);
 
     console.log('Print job result:', result);
     return NextResponse.json({ message: result })
