@@ -13,7 +13,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div>
+    <div className='mb-14'>
       <section>
         <ParesInventory companyId={companyId} warehouseId={warehouseId} />
       </section>

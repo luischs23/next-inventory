@@ -35,6 +35,7 @@ interface Product {
   sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
+  total2: number
   baseprice: number
   saleprice: number
   createdAt: number | Timestamp | FieldValue
@@ -164,11 +165,22 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const handleDelete = async () => {
     if (productToDelete) {
       try {
+        // Get the product document
+        const productDoc = await getDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, productToDelete.id))
+        const productData = productDoc.data()
+
+        // Check if the product is a copy from a box
+        const isBoxCopy = productData && 'originalBoxId' in productData
+
+        // Delete the product document
         await deleteDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, productToDelete.id))
-        if (productToDelete.imageUrl) {
+
+        // Only delete the image if it's not a copy from a box
+        if (!isBoxCopy && productToDelete.imageUrl) {
           const imageRef = ref(storage, productToDelete.imageUrl)
           await deleteObject(imageRef)
         }
+
         setProducts(products.filter(p => p.id !== productToDelete.id))
         toast({
           title: "Success",
@@ -346,7 +358,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               onCheckedChange={setShowInactive}
             />
             <label htmlFor="show-inactive" className="text-sm font-medium">
-              {showInactive ? 'Inactive' : 'Active'}
+              {showInactive ? 'Cajas' : 'Pares'}
             </label>
           </div>
         </div>
@@ -409,7 +421,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     </div>
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-sm">Sizes Total: {product.total}</span>
+                    <span className="font-medium text-sm">Sizes Total: {product.total2}</span>
                     <div className="grid grid-cols-3 gap-1 mt-1">
                       {Object.keys(product.sizes).length > 0 ? (
                         sortSizes(product.sizes).map(([size, { quantity }]) => (
@@ -418,11 +430,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                           </div>
                         ))
                       ) : (
-                        <div className="text-xs text-red-500">No sizes available</div>
+                        <div className="text-xs text-red-500"></div>
                       )}
                     </div>
                   </div>
-                  {product.total === 0 && (
+                  {product.total2 === 0 && (
                     <div className="mt-2 text-sm text-red-500">
                       This product is out of stock.
                     </div>

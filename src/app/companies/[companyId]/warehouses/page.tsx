@@ -168,10 +168,6 @@ export default function WarehousesPage() {
     setIsPopupOpen(true)
   }
 
-  const handleBodegaInventoryClick = (warehouseId: string) => {
-    router.push(`/companies/${companyId}/warehouses/${warehouseId}/inventory`)
-  }
-
   const handleParesInventoryClick = (warehouseId: string) => {
     router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
   }
@@ -223,9 +219,6 @@ export default function WarehousesPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleBodegaInventoryClick(warehouse.id)}>
-                            Bodega Inventory
-                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleParesInventoryClick(warehouse.id)}>
                             Pares Inventory
                           </DropdownMenuItem>
