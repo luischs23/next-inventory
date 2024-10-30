@@ -4,8 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from 'app/app/context/AuthContext'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, doc, deleteDoc, Timestamp, FieldValue, getDoc, query } from 'firebase/firestore'
-import { ref, deleteObject } from 'firebase/storage'
+import { collection, getDocs, doc, deleteDoc, Timestamp, FieldValue, getDoc, query, setDoc, serverTimestamp} from 'firebase/firestore'
+import { ref, deleteObject, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
@@ -62,6 +62,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const router = useRouter()
   const { user, userRole } = useAuth()
   const [showInactive, setShowInactive] = useState(false)
+  const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([])
 
   const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
     return Object.entries(sizes).sort((a, b) => {
@@ -75,6 +76,22 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       return sizeA.localeCompare(sizeB)
     })
   }  
+
+  const fetchWarehouses = useCallback(async () => {
+    try {
+      const warehousesSnapshot = await getDocs(collection(db, `companies/${companyId}/warehouses`))
+      const warehousesList = warehousesSnapshot.docs
+        .map(doc => ({ id: doc.id, name: doc.data().name }))
+        .filter(warehouse => warehouse.id !== warehouseId)
+      setWarehouses(warehousesList)
+    } catch (error) {
+      console.error('Error fetching warehouses:', error)
+    }
+  }, [companyId, warehouseId])
+
+  useEffect(() => {
+    fetchWarehouses()
+  }, [fetchWarehouses])
   
   const fetchWarehouseDetails = useCallback(async () => {
     try {
@@ -208,6 +225,64 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     }
   }
 
+  const handleTransfer = async (product: Product, targetWarehouseId: string) => {
+    try {
+      // Get the original image name from the URL
+      const decodedUrl = decodeURIComponent(product.imageUrl)
+      const imagePath = decodedUrl.split('/o/')[1].split('?')[0]
+      
+      // Create references for the old and new locations
+      const oldImageRef = ref(storage, imagePath)
+      const newImagePath = imagePath.replace(warehouseId, targetWarehouseId)
+      const newImageRef = ref(storage, newImagePath)
+  
+      // Get the image data
+      const response = await fetch(product.imageUrl)
+      const blob = await response.blob()
+  
+      // Upload to new location first
+      await uploadBytes(newImageRef, blob)
+      const newImageUrl = await getDownloadURL(newImageRef)
+  
+      // Create a new document reference in the target warehouse
+      const targetProductRef = doc(collection(db, `companies/${companyId}/warehouses/${targetWarehouseId}/products`))
+      
+      // Prepare the product data for the new warehouse
+      const productData = {
+        ...product,
+        id: targetProductRef.id,
+        warehouseId: targetWarehouseId,
+        imageUrl: newImageUrl,
+        createdAt: serverTimestamp()
+      }
+  
+      // Add the product to the target warehouse
+      await setDoc(targetProductRef, productData)
+  
+      // Delete the old image
+      await deleteObject(oldImageRef)
+  
+      // Remove the product from the current warehouse
+      await deleteDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id))
+  
+      // Update local state
+      setProducts(products.filter(p => p.id !== product.id))
+  
+      toast({
+        title: "Success",
+        description: `Product ${product.brand} ${product.reference} has been transferred successfully.`,
+        style: { background: "#4CAF50", color: "white", fontWeight: "bold" },
+      })
+    } catch (error) {
+      console.error('Error transferring product:', error)
+      toast({
+        title: "Error",
+        description: `Failed to transfer the product ${product.brand} ${product.reference}.`,
+        variant: "destructive",
+      })
+    }
+  }
+
   const handleUpdate = (product: Product) => {
     router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${product.id}`)
   }
@@ -311,7 +386,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Inventory</h1>
+        <h1 className="text-xl font-bold flex-grow">Inventory {warehouseName}</h1>
         <div className="flex space-x-2">
           <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
             <PlusIcon className="h-4 w-4" />
@@ -419,6 +494,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                             <Trash2 className="mr-2 h-4 w-4" />
                             <span>Delete</span>
                           </DropdownMenuItem>
+                          {warehouses.map((warehouse) => (
+                          <DropdownMenuItem key={warehouse.id} onClick={() => handleTransfer(product, warehouse.id)}>
+                            Transfer to {warehouse.name}
+                          </DropdownMenuItem>
+                        ))}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Switch } from "app/components/ui/switch"
@@ -293,19 +293,35 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     if (file && product) {
       setImageLoading(true)
       try {
+        // Try to delete the old image if it exists
+        if (product.imageUrl) {
+          try {
+            const decodedUrl = decodeURIComponent(product.imageUrl)
+            const oldImagePath = decodedUrl.split('/o/')[1].split('?')[0]
+            const oldImageRef = ref(storage, oldImagePath)
+            await deleteObject(oldImageRef)
+          } catch (deleteError) {
+            // Silently handle the error if the old image doesn't exist
+            console.debug('Previous image not found or already deleted')
+          }
+        }
+  
+        // Upload new image
         const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${file.name}`)
         await uploadBytes(imageRef, file)
         const imageUrl = await getDownloadURL(imageRef)
         
+        // Update product document with new image URL
         await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), {
           imageUrl: imageUrl
         })
-
+  
+        // Update local state
         setProduct({
           ...product,
           imageUrl: imageUrl
         })
-
+  
         toast({
           title: "Image Updated",
           description: "The product image has been successfully updated.",
@@ -317,13 +333,6 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           },    
         })
       } catch (error) {
-        console.error('Error updating image:', error)
-        toast({
-          title: "Error",
-          description: "Failed to update image. Please try again.",
-          duration: 1000,
-          variant: "destructive",
-        })
       } finally {
         setImageLoading(false)
       }
