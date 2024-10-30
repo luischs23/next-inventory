@@ -220,7 +220,7 @@ export default function WarehousesPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           <DropdownMenuItem onClick={() => handleParesInventoryClick(warehouse.id)}>
-                            Pares Inventory
+                            Inventory
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

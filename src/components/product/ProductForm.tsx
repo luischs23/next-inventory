@@ -353,7 +353,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
                 id="total2"
                 name="total2"
                 type="number"
-                value={formData.total2}
+                value={formData.total2 || ''}
                 onChange={handleInputChange}
               />
             </div>
@@ -392,7 +392,10 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
               />
             </div>
           </div>
+          <div className="flex justify-end space-x-2">
+          <Button type="button" variant="outline" onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
           <Button type="submit">Add {isBox ? 'Box' : 'Product'}</Button>
+          </div>
         </form>
       </CardContent>
     </Card>

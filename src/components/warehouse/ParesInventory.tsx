@@ -42,6 +42,7 @@ interface Product {
   comments: string
   exhibition: { [store: string]: string }
   warehouseId: string
+  isBox: boolean
 }
 
 interface ParesInventoryProps {
@@ -57,9 +58,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [productToDelete, setProductToDelete] = useState<Product | null>(null)
   const [warehouseName, setWarehouseName] = useState<string>('')
-  const [showInactive, setShowInactive] = useState(false)
+  const [showBox, setshowBox] = useState(false)
   const router = useRouter()
   const { user, userRole } = useAuth()
+  const [showInactive, setShowInactive] = useState(false)
 
   const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
     return Object.entries(sizes).sort((a, b) => {
@@ -139,15 +141,21 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      const isInactive = product.total === 0 || Object.keys(product.sizes).length === 0
+      const isInactive = product.total === 0
       const matchesSearch = 
         product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.color.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesGender = genderFilter === 'all' || product.gender === genderFilter
-      return matchesSearch && matchesGender && (showInactive ? isInactive : !isInactive)
+      // Updated logic for boxes and inactive products
+      const matchesBoxFilter = showBox === product.isBox
+      const matchesInactiveFilter = product.isBox 
+        ? (showInactive ? !isInactive : isInactive)  // Reversed logic for boxes
+        : (showInactive ? isInactive : !isInactive)  // Original logic for pairs
+
+      return matchesSearch && matchesGender && matchesBoxFilter && matchesInactiveFilter
     })
-  }, [products, searchTerm, genderFilter, showInactive])
+  }, [products, searchTerm, genderFilter, showBox, showInactive])
 
   const sortedProducts = useMemo(() => {
     return [...filteredProducts].sort((a, b) => {
@@ -201,7 +209,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }
 
   const handleUpdate = (product: Product) => {
-    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${product.id}?isBox=false`)
+    router.push(`/companies/${companyId}/warehouses/${warehouseId}/update-product/${product.id}`)
   }
 
   const exportToExcel = () => {
@@ -232,7 +240,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 30 }, { width: 20 }
     ]
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Pares Inventory')
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory')
 
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -244,7 +252,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     const doc = new jsPDF()
 
     doc.setFontSize(18)
-    doc.text(`Pares Inventory (${warehouseName})`, 14, 22)
+    doc.text(`Inventory (${warehouseName})`, 14, 22)
 
     doc.setFontSize(12)
     doc.text(`Total Products: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
@@ -303,9 +311,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Pares Inventory</h1>
+        <h1 className="text-xl font-bold flex-grow">Inventory</h1>
         <div className="flex space-x-2">
-          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product?isBox=false`)}>
+          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
             <PlusIcon className="h-4 w-4" />
           </Button>
           <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">
@@ -353,15 +361,26 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           <div className="flex items-center space-x-2">
             <Switch
               id="show-inactive"
-              checked={showInactive}
+              checked={showBox}
               
+              onCheckedChange={setshowBox}
+            />
+            <label htmlFor="show-inactive" className="text-sm font-medium">
+              {showBox ? 'Cajas' : 'Pares'}
+            </label>
+          </div>
+         
+        </div>
+        <div className="flex ">
+            <Switch
+              id="show-inactive"
+              checked={showInactive}
               onCheckedChange={setShowInactive}
             />
             <label htmlFor="show-inactive" className="text-sm font-medium">
-              {showInactive ? 'Cajas' : 'Pares'}
+              {showInactive ? 'Inactive' : 'Active'}
             </label>
           </div>
-        </div>
 
         <Card className="mb-6">
           <CardContent className="p-4">
@@ -421,8 +440,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     </div>
                   </div>
                   <div className="mt-2">
-                    <span className="font-medium text-sm">Sizes Total: {product.total2}</span>
-                    <div className="grid grid-cols-3 gap-1 mt-1">
+                  <span className="font-medium text-sm">
+                    {product.isBox ? 'Box Total:' : 'Sizes Total:'} {product.isBox ? product.total2 : product.total}
+                  </span>
+                  <div className="grid grid-cols-3 gap-1 mt-1">
                       {Object.keys(product.sizes).length > 0 ? (
                         sortSizes(product.sizes).map(([size, { quantity }]) => (
                           <div key={size} className="text-xs bg-gray-100 p-1 rounded">
@@ -433,12 +454,12 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                         <div className="text-xs text-red-500"></div>
                       )}
                     </div>
+                </div>
+                {(product.isBox ? product.total2 : product.total) === 0 && (
+                  <div className="mt-2 text-sm text-red-500">
+                    This {product.isBox ? 'box' : 'product'} is out of stock.
                   </div>
-                  {product.total2 === 0 && (
-                    <div className="mt-2 text-sm text-red-500">
-                      This product is out of stock.
-                    </div>
-                  )}
+                )}
                 </CardContent>
               </Card>
             </div>

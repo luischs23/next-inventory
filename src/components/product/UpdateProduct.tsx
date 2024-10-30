@@ -7,6 +7,7 @@ import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } fr
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
+import { Switch } from "app/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { Card, CardContent} from "app/components/ui/card"
 import { Label } from "app/components/ui/label"
@@ -41,6 +42,7 @@ interface Product {
   saleprice: string
   exhibition: { [storeId: string]: { size: string, barcode: string } }
   isBox: boolean
+  barcode: string
 }
 
 interface UpdateProductProps {
@@ -71,6 +73,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const [, setLastProductNumber] = useState(0)
   const [productBoxNumber, setProductBoxNumber] = useState(0)
   const [lastUsedProductNumbers, setLastUsedProductNumbers] = useState<{[key: string]: number}>({});
+  const [updateEnabled, setUpdateEnabled] = useState(true)
   
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')
@@ -345,24 +348,21 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const handleAddSize = async () => {
     if (newSize && newQuantity > 0 && product) {
       const newBarcodes: string[] = [];
-
+  
       // Find the last used barcode across all sizes
       const lastUsedBarcode = Object.values(product.sizes)
         .flatMap(size => size.barcodes)
-        .sort((a, b) => b.localeCompare(a))[0];
-
+        .sort((a, b) => b.localeCompare(a))[0] || product.barcode;
+  
       // Extract the box number and product number from the last used barcode
-      let currentBoxNumber = productBoxNumber;
-      let currentProductNumber = 0;
-      if (lastUsedBarcode) {
-        currentBoxNumber = parseInt(lastUsedBarcode.slice(6, 12));
-        currentProductNumber = parseInt(lastUsedBarcode.slice(12));
-      }
-
+      let currentBoxNumber = parseInt(lastUsedBarcode.slice(6, 12));
+      let currentProductNumber = parseInt(lastUsedBarcode.slice(12));
+  
       for (let i = 0; i < newQuantity; i++) {
-        currentProductNumber = (currentProductNumber % 99) + 1;
-        if (currentProductNumber === 1) {
+        currentProductNumber++;
+        if (currentProductNumber > 99) {
           currentBoxNumber++;
+          currentProductNumber = 1;
         }
         const date = new Date();
         const dateString = date.toISOString().slice(2, 10).replace(/-/g, '');
@@ -370,7 +370,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         const productString = currentProductNumber.toString().padStart(2, '0');
         newBarcodes.push(`${dateString}${boxString}${productString}`);
       }
-
+  
       const updatedProduct = {
         ...product,
         sizes: {
@@ -379,16 +379,16 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         },
         total: product.total + newQuantity
       };
-
+  
       try {
         await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct);
-
+  
         setProduct(updatedProduct);
         setProductBoxNumber(currentBoxNumber);
         setLastProductNumber(currentProductNumber);
         setNewSize('');
         setNewQuantity(0);
-
+  
         toast({
           title: "Size Added",
           description: `Size ${newSize} has been added to the inventory.`,
@@ -409,7 +409,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
         });
       }
     }
-  };  
+  };
 
   const handleDeleteBarcode = (size: string, barcodeToDelete: string) => {
     if (product) {
@@ -612,15 +612,29 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     return <div>Product not found</div>
   }
 
+  const isUpdateEnabled = !updateEnabled || (updateEnabled && product.total === product.total2)
+
   return (
     <div className="min-h-screen bg-blue-100">
       <header className="bg-teal-600 text-white p-4 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Update Product</h1>
+        <h1 className="text-xl font-bold flex-grow">Update {isBox ? 'Box' : 'Product'}</h1>
+        {isBox && (
+        <div className="flex items-center space-x-2">
+                <Switch
+                  checked={updateEnabled}
+                  onCheckedChange={setUpdateEnabled}
+                  id="update-enabled"
+                />
+                <Label htmlFor="update-enabled">
+                  {updateEnabled ? 'Update Enabled' : 'Update Disabled'}
+                </Label>
+              </div>
+         )}
       </header>
-      <main className="container mx-auto p-4">
+    <main className="container mx-auto p-4">
     <Card className="w-full max-w-4xl mx-auto">
       <CardContent className='m-2'>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -641,9 +655,14 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
               <Label htmlFor="comments">Comments</Label>
               <Input id="comments" name="comments" value={product.comments} onChange={handleInputChange} />
             </div>
+            <div>
+              <Label htmlFor="barcode">Barcode</Label>
+              <Input id="barcode" name="barcode" value={product.barcode} disabled />
+            </div>
           </div>
           
           {/* Sizes */}
+          {updateEnabled && (
           <div>
             <Label>Sizes</Label>
             <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -707,8 +726,9 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
               ))}
             </div>
           </div>
-          
-          {/* Add new size */}
+           )}
+        
+        {updateEnabled && (
           <div className="flex flex-wrap gap-2">
             <Select value={newSize} onValueChange={setNewSize}>
               <SelectTrigger className="w-[150px]">
@@ -729,23 +749,26 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             />
             <Button type="button" onClick={handleAddSize}>Add Size</Button>
           </div>
-          <div className="flex items-center space-x-4">
+          )}
+          {updateEnabled && (
+          <div className="flex items-center space-x-2">
                 <div className="flex-grow">
                   <Label htmlFor="total">Total</Label>
                   <Input id="total" name="total" value={product.total} readOnly />
                 </div>
                 {isBox && (
                 <div className="flex-grow">
-                  <Label htmlFor="total2">Total 2</Label>
+                  <Label htmlFor="total2">Total Init</Label>
                   <Input id="total2" name="total" value={product.total2} readOnly />
                 </div>
                   )}
                 <Button type="button" onClick={handlePrintAllSizes} className="mt-6">
                   <PrinterIcon className="w-4 h-4 mr-2" /> Print All Sizes
                 </Button>
-            </div>
-          
+          </div>
+          )}
           {/* Exhibition */}
+          {updateEnabled && (
           <div>
             <Label>Exhibition</Label>
             <div className="flex flex-wrap gap-2 mt-2">
@@ -786,7 +809,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
                     })}
             </div>
           </div>
-          
+          )}
           {/* Image and Pricing */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <ProductImageUpload 
@@ -820,7 +843,10 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           </div>
           <div className="flex justify-end space-x-2">
           <Button type="button" variant="outline" onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
-          <Button type="submit">Update Product</Button>
+          <Button 
+            type="submit"
+            disabled={isBox && !isUpdateEnabled}
+            >Update Product</Button>
           </div>
         </form>
       </CardContent>
