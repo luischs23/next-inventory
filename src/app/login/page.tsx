@@ -3,42 +3,116 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signInWithEmailAndPassword } from 'firebase/auth'
-import { auth } from 'app/services/firebase/firebase.config'
+import { auth, db } from 'app/services/firebase/firebase.config'
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import Link from 'next/link'
 import { useAuth } from 'app/app/context/AuthContext'
+import { Loader2 } from 'lucide-react'
+
+interface UserData {
+ 
+  companyId: string
+  role: string
+  name: string
+  email: string
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { setUser } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
     if (!email || !password) {
       setError('Please fill in all fields')
+      setLoading(false)
       return
     }
 
     try {
+      // First, authenticate the user
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-      const user = userCredential.user
-      setUser(user)
-      
-      // Redirect based on user role
-      // You might want to fetch the user's role from Firestore here
-      // For now, we'll just redirect to the companies page
-      router.push('/companies')
+      const firebaseUser = userCredential.user
+
+      // Then, fetch the user's data from Firestore
+      let userData: UserData | null = null
+
+      // Check in the root 'users' collection first (for developers)
+      const rootUserDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
+      if (rootUserDoc.exists()) {
+        userData = rootUserDoc.data() as UserData
+      } else {
+        // If not found in root, check in company-specific collections
+        const companiesRef = collection(db, 'companies')
+        const companiesSnapshot = await getDocs(companiesRef)
+
+        for (const companyDoc of companiesSnapshot.docs) {
+          const usersRef = collection(db, `companies/${companyDoc.id}/users`)
+          const q = query(usersRef, where('email', '==', email))
+          const querySnapshot = await getDocs(q)
+
+          if (!querySnapshot.empty) {
+            userData = querySnapshot.docs[0].data() as UserData
+            userData.companyId = companyDoc.id
+            break
+          }
+        }
+      }
+
+      if (!userData) {
+        throw new Error('User account not found in the system')
+      }
+
+      // Set the user in context with additional data
+      setUser({
+        ...firebaseUser,
+        companyId: userData.companyId,
+        role: userData.role,
+        name: userData.name
+      })
+
+      // Redirect based on role and companyId
+      if (userData.role === 'developer') {
+        router.push('/companies')
+      } else if (userData.companyId) {
+        switch (userData.role) {
+          case 'general_manager':
+            router.push(`/companies/${userData.companyId}/home`)
+            break
+          case 'warehouse_manager':
+            router.push(`/companies/${userData.companyId}/home`)
+            break
+          case 'skater':
+          case 'warehouse_salesperson':
+            router.push(`/companies/${userData.companyId}/home`)
+            break
+          case 'pos_salesperson':
+            router.push(`/companies/${userData.companyId}/home`)
+            break
+          case 'customer':
+            router.push(`/companies/${userData.companyId}/home`)
+            break
+          default:
+            router.push(`/companies/${userData.companyId}/home`)
+        }
+      } else {
+        throw new Error('User not associated with any company')
+      }
     } catch (error) {
-      setError('Failed to log in. Please check your credentials.')
-      console.error(error)
+      console.error('Login error:', error)
+      setError(error instanceof Error ? error.message : 'Failed to log in. Please check your credentials.')
+      setLoading(false)
     }
   }
 
@@ -59,6 +133,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
             <div className="space-y-2">
@@ -70,10 +145,26 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                disabled={loading}
               />
             </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button type="submit" className="w-full">Log In</Button>
+            {error && (
+              <p className="text-red-500 text-sm">{error}</p>
+            )}
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Logging in...
+                </>
+              ) : (
+                'Log In'
+              )}
+            </Button>
           </form>
           <div className="mt-4 text-center space-y-2">
             <p className="text-sm">

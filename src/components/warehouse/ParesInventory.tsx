@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
-import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc } from 'lucide-react'
+import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc, Menu, ChevronDown, ChevronUp, Loader2, Download} from 'lucide-react'
+import { usePermissions } from '../../hooks/usePermissions'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
 import * as XLSX from 'xlsx'
@@ -20,6 +21,8 @@ import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import { Switch } from "app/components/ui/switch"
+import { Dialog, DialogContent, DialogTrigger } from "app/components/ui/dialog"
+import ParesInventorySkeleton from '../skeletons/ParesInventorySkeleton'
 
 interface SizeInput {
   quantity: number
@@ -43,6 +46,7 @@ interface Product {
   exhibition: { [store: string]: string }
   warehouseId: string
   isBox: boolean
+  barcode: string
 }
 
 interface ParesInventoryProps {
@@ -60,9 +64,49 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const [warehouseName, setWarehouseName] = useState<string>('')
   const [showBox, setshowBox] = useState(false)
   const router = useRouter()
-  const { user, userRole } = useAuth()
+  const { user, } = useAuth()
   const [showInactive, setShowInactive] = useState(false)
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([])
+  const [isOpen, setIsOpen] = useState(false)
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const [lastScrollY, setLastScrollY] = useState(0)
+  const [transferConfirmation, setTransferConfirmation] = useState<{ product: Product; targetWarehouseId: string } | null>(null);
+  const [isTransferring, setIsTransferring] = useState(false)
+  const [, setSelectedImage] = useState<string | null>(null)
+  const { hasPermission } = usePermissions()
+  const toggleDropdown = () => setIsOpen(!isOpen)
+
+  useEffect(() => {
+    const controlHeader = () => {
+      if (typeof window !== 'undefined') {
+        const currentScrollY = window.scrollY
+
+        if (currentScrollY < lastScrollY) {
+          // Scrolling up
+          setIsHeaderVisible(true)
+        } else if (currentScrollY > 100 && currentScrollY > lastScrollY) {
+          // Scrolling down and past the 100px mark
+          setIsHeaderVisible(false)
+        }
+
+        setLastScrollY(currentScrollY)
+      }
+    }
+
+    window.addEventListener('scroll', controlHeader)
+
+    return () => {
+      window.removeEventListener('scroll', controlHeader)
+    }
+  }, [lastScrollY])
+  
+  useEffect(() => {
+    if (user && (user.role === 'skater' || user.role === 'warehouse_salesperson' || hasPermission('read'))) {
+      fetchProducts()
+    } else {
+      router.push('/login')
+    }
+  }, [user, router])
 
   const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
     return Object.entries(sizes).sort((a, b) => {
@@ -159,10 +203,18 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const isInactive = product.total === 0
+
       const matchesSearch = 
         product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.color.toLowerCase().includes(searchTerm.toLowerCase())
+        product.color.toLowerCase().includes(searchTerm.toLowerCase()) ||  
+        product.barcode?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        Object.values(product.sizes).some(size => 
+          size.barcodes.some(barcode => 
+            barcode.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        )
+
       const matchesGender = genderFilter === 'all' || product.gender === genderFilter
       // Updated logic for boxes and inactive products
       const matchesBoxFilter = showBox === product.isBox
@@ -188,7 +240,17 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }, [filteredProducts, sortOrder])
 
   const handleDelete = async () => {
-    if (productToDelete) {
+    if (!productToDelete) return
+
+    if (!hasPermission('delete')) {
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to delete products.",
+        variant: "destructive",
+      })
+      setProductToDelete(null)
+      return
+    }
       try {
         // Get the product document
         const productDoc = await getDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, productToDelete.id))
@@ -222,10 +284,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       } finally {
         setProductToDelete(null)
       }
-    }
-  }
+  } 
+  
 
   const handleTransfer = async (product: Product, targetWarehouseId: string) => {
+    setIsTransferring(true);
     try {
       // Get the original image name from the URL
       const decodedUrl = decodeURIComponent(product.imageUrl)
@@ -280,6 +343,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         description: `Failed to transfer the product ${product.brand} ${product.reference}.`,
         variant: "destructive",
       })
+    }finally {
+      setIsTransferring(false);
+      setTransferConfirmation(null);
     }
   }
 
@@ -372,94 +438,133 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     return num.toLocaleString('es-ES')
   }
 
-  if (loading) {
-    return <div>Loading...</div>
+  const handleImageClick = (imageUrl: string) => {
+    setSelectedImage(imageUrl)
   }
 
-  if (!user) {
-    return <div>Please log in to view this page.</div>
+  const handleDownloadImage = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `product-image-${Date.now()}.jpg`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Error downloading image:', error)
+      toast({
+        title: "Error",
+        description: "Failed to download the image. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  if (loading) {
+    return ParesInventorySkeleton()
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
-      <header className="bg-teal-600 text-white p-4 flex items-center">
+    <div className="min-h-screen bg-blue-100 flex flex-col">
+      <header className="bg-teal-600 text-white p-3 flex items-center sticky top-0 z-20">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Inventory {warehouseName}</h1>
-        <div className="flex space-x-2">
-          <Button onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
-            <PlusIcon className="h-4 w-4" />
-          </Button>
-          <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">
-            <FileDown className="h-4 w-4" />
-          </Button>
-          <Button onClick={exportToExcel} className="bg-green-500 hover:bg-green-600">
-            <FileDown className="h-4 w-4" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="text-white">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
+              <PlusIcon className="h-4 w-4 mr-2" />
+              New Product
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToPDF}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Export PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToExcel}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Export Excel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>   
+      <div className={`transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>   
+      <div className="bg-white sticky top-16 z-10 p-4 shadow-md">
+        <div className='flex items-center space-x-3 mb-4'>
+            <div >
+                <Switch
+                  id="show-inactive"
+                  checked={showBox}
+                  onCheckedChange={setshowBox}
+                />
+                <label htmlFor="show-inactive" className="text-sm font-medium text-black">
+                  {showBox ? ' Cajas' : ' Pares'}
+                </label>
+              </div>
+            <div >
+              <Switch
+                id="show-inactive"
+                checked={showInactive}
+                onCheckedChange={setShowInactive}
+              />
+              <label htmlFor="show-inactive" className="text-sm font-medium  text-black">
+                {showInactive ? ' Inactive' : ' Active'}
+              </label>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <Filter className="h-4 w-4 text-black" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className='place-items-center'>
+                <DropdownMenuItem onClick={() => setGenderFilter('all')}>All</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setGenderFilter('Dama')}>Dama</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setGenderFilter('Hombre')}>Hombre</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+              <SelectTrigger className="w-[100px] text-black">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent className='it text-black'>
+                <SelectItem value="entry">
+                  <span className="flex items-center">
+                    <SortDesc className="mr-2 h-4 w-4" />
+                  </span>
+                </SelectItem>
+                <SelectItem value="alphabetical">A-Z</SelectItem>
+              </SelectContent>
+            </Select>        
+          </div>
+          <div className="flex items-center space-x-2 mb-2">
+            <Input
+              placeholder="Search by brand, reference, color or barcode"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="flex-grow  text-black"
+            /> 
+          </div>
+        </div>
+        </div>
+        <main className="container mx-auto p-4 flex-grow">
+        <div className='mb-2 text-black'>
+          <Button variant="ghost" onClick={toggleDropdown}>
+              {isOpen ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />} Summary Information
           </Button>
         </div>
-      </header>
-
-      <main className="container mx-auto p-4">
-        <div className="flex items-center space-x-2 mb-6">
-          <Input
-            placeholder="Search by brand, reference, or color"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow"
-          />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
-                <Filter className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setGenderFilter('all')}>All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGenderFilter('Dama')}>Dama</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGenderFilter('Hombre')}>Hombre</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
-            <SelectTrigger className="w-[100px]">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="entry">
-                <span className="flex items-center">
-                  <SortDesc className="mr-2 h-4 w-4" />
-                </span>
-              </SelectItem>
-              <SelectItem value="alphabetical">A-Z</SelectItem>
-            </SelectContent>
-          </Select>
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="show-inactive"
-              checked={showBox}
-              
-              onCheckedChange={setshowBox}
-            />
-            <label htmlFor="show-inactive" className="text-sm font-medium">
-              {showBox ? 'Cajas' : 'Pares'}
-            </label>
-          </div>
-         
-        </div>
-        <div className="flex ">
-            <Switch
-              id="show-inactive"
-              checked={showInactive}
-              onCheckedChange={setShowInactive}
-            />
-            <label htmlFor="show-inactive" className="text-sm font-medium">
-              {showInactive ? 'Inactive' : 'Active'}
-            </label>
-          </div>
-
-        <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {isOpen && (
+        <Card className="mb-4">
+        <CardContent className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>Total Products: {formatNumber(summaryInfo.totalItems)}</div>
               <div>Total Pares: {formatNumber(summaryInfo.totalPares)}</div>
               <div>Total Base: ${formatNumber(summaryInfo.totalBase)}</div>
@@ -467,85 +572,126 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </div>
           </CardContent>
         </Card>
-
+        )}
         <div className="space-y-4">
-        {sortedProducts.map((product, index) => (
+          {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
-              <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
-              <Card className="flex-grow relative">
-                <CardContent className="p-4">
-                  <div className="absolute top-2 right-2 flex items-center">
-                      <Button
-                        variant="ghost"
-                        className="h-8 w-8 p-0 mr-1"
-                        onClick={() => handleUpdate(product)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setProductToDelete(product)}>
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            <span>Delete</span>
-                          </DropdownMenuItem>
-                          {warehouses.map((warehouse) => (
-                          <DropdownMenuItem key={warehouse.id} onClick={() => handleTransfer(product, warehouse.id)}>
-                            Transfer to {warehouse.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="relative w-16 h-16 flex-shrink-0">
-                      <Image
-                        src={product.imageUrl}
-                        alt={product.reference}
-                        fill
-                        sizes="(max-width: 64px) 150vw, 64px"
-                        className="object-cover rounded-md"
-                      />
+              <div className="text-sm font-semibold mr-1 mt-2 text-black hidden md:block">{index + 1}</div>
+              <Card className="flex-grow relative md:flex md:items-center md:space-x-4">
+                <CardContent className="p-4 md:flex md:flex-grow md:items-center md:space-x-4">
+                  <div className="flex space-x-4 md:w-1/6 items-center justify-center">
+                    <div className="relative w-16 h-16 flex-shrink-0 ">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <Image
+                            src={product.imageUrl}
+                            alt={product.reference}
+                            fill
+                            sizes="(max-width: 64px) 150vw, 64px"
+                            className="object-cover rounded-md cursor-pointer"
+                            onClick={() => handleImageClick(product.imageUrl)}
+                          />
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                          <div className="relative w-full h-[300px]">
+                            <Image
+                              src={product.imageUrl}
+                              alt={product.reference}
+                              fill
+                              sizes="(max-width: 425px) 100vw, 425px"
+                              className="object-contain"
+                            />
+                          </div>
+                          <Button onClick={() => handleDownloadImage(product.imageUrl)} className="mt-4">
+                            <Download className="mr-2 h-4 w-4" />
+                            Download Image
+                          </Button>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                    <div className="flex-grow">
+                    <div className="flex-1 md:hidden">
                       <h3 className="font-semibold">{product.brand}</h3>
                       <p className="text-sm text-gray-500">{product.reference}</p>
                       <p className="text-sm">{product.color} - {product.gender}</p>
-                      <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p> 
+                      <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
                     </div>
                   </div>
-                  <div className="mt-2">
-                  <span className="font-medium text-sm">
-                    {product.isBox ? 'Box Total:' : 'Sizes Total:'} {product.isBox ? product.total2 : product.total}
-                  </span>
-                  <div className="grid grid-cols-3 gap-1 mt-1">
+                  <div className="hidden md:block md:w-1/6">
+                    <h3 className="font-semibold">{product.brand}</h3>
+                    <p className="text-sm text-gray-500">{product.reference}</p>
+                  </div>
+                  <div className="md:w-1/6 hidden md:block">
+                    <p className="text-sm">{product.color}</p>
+                    <p className="text-sm">{product.gender}</p>
+                  </div>
+                  <div className="md:w-1/6 hidden md:block">
+                    <p className="text-sm">Base: ${formatNumber(product.baseprice)}</p>
+                    <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
+                  </div>
+                  <div className="md:w-1/6 mt-2 md:mt-0">
+                    <span className="font-medium text-sm">
+                      {product.isBox ? 'Box Total:' : 'Sizes Total:'} {product.isBox ? product.total2 : product.total}
+                    </span>
+                  </div>
+                  <div className="md:w-2/6">
+                    <div className="grid grid-cols-3 gap-1 mt-1">
                       {Object.keys(product.sizes).length > 0 ? (
                         sortSizes(product.sizes).map(([size, { quantity }]) => (
-                          <div key={size} className="text-xs bg-gray-100 p-1 rounded">
-                            {size}: {quantity}
+                          <div key={size} className="text-sm bg-gray-100 p-1 rounded">
+                            <span className='font-semibold'>{size.replace('T-', '')} </span>: {quantity}
                           </div>
                         ))
                       ) : (
                         <div className="text-xs text-red-500"></div>
                       )}
                     </div>
+                  </div>
+                </CardContent>
+                <div className="absolute top-2 right-2 flex items-center">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" className="h-8 w-8 p-0">
+                        <span className="sr-only">Open menu</span>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {hasPermission('update') && (
+                        <DropdownMenuItem onClick={() => handleUpdate(product)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          <span>Update</span>
+                        </DropdownMenuItem>
+                      )}
+                      {hasPermission('delete') && (
+                        <DropdownMenuItem onClick={() => setProductToDelete(product)}>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
+                      )}
+                      {warehouses.map((warehouse) => (
+                        <DropdownMenuItem 
+                          key={warehouse.id} 
+                          onClick={() => setTransferConfirmation({ 
+                            product, 
+                            targetWarehouseId: warehouse.id 
+                          })}
+                        >
+                          Transfer to {warehouse.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 {(product.isBox ? product.total2 : product.total) === 0 && (
-                  <div className="mt-2 text-sm text-red-500">
+                  <div className="mt-2 text-sm text-red-500 md:absolute md:bottom-2 md:left-2">
                     This {product.isBox ? 'box' : 'product'} is out of stock.
                   </div>
                 )}
-                </CardContent>
               </Card>
             </div>
           ))}
         </div>
-      </main>
+    </main>
 
       <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
         <AlertDialogContent>
@@ -561,6 +707,46 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-600">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog 
+        open={!!transferConfirmation} 
+        onOpenChange={(open) => !open && !isTransferring && setTransferConfirmation(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Transfer</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to transfer the product
+              <span className="font-semibold">
+                {' '}{transferConfirmation?.product.brand} {transferConfirmation?.product.reference}{' '}
+              </span>
+              to the selected warehouse?
+              This action will move the product and all its associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isTransferring}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (transferConfirmation) {
+                  handleTransfer(transferConfirmation.product, transferConfirmation.targetWarehouseId);
+                }
+              }}
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={isTransferring}
+            >
+              {isTransferring ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Transferring...
+                </>
+              ) : (
+                'Transfer'
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

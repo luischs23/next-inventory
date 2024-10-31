@@ -1,16 +1,14 @@
 'use client'
 
-import { useParams, useSearchParams } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import UpdateProduct from 'app/components/product/UpdateProduct'
 
 export default function UpdateProductPage() {
-  const params = useParams()
-  const searchParams = useSearchParams()
-  
+  const params = useParams()  
   const companyId = params.companyId as string
   const productId = params.productId as string
   const warehouseId = params.warehouseId as string
-  const isBox = searchParams.get('isBox') === 'true'
+
 
   if (!companyId || !warehouseId || !productId) {
     return (
@@ -27,7 +25,6 @@ export default function UpdateProductPage() {
         companyId={companyId} 
         productId={productId} 
         warehouseId={warehouseId} 
-        isBox={isBox}
       />
     </div>
   )

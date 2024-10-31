@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Switch } from "app/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { useToast } from "app/components/ui/use-toast"
+import { ArrowLeft } from 'lucide-react'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -70,6 +71,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
   const [imageError, setImageError] = useState('')
   const [boxNumber, setBoxNumber] = useState(1)
   const [globalProductNumber, setGlobalProductNumber] = useState(1)
+  const [warehouseName, setWarehouseName] = useState<string>('')
 
   useEffect(() => {
     const fetchLastBarcode = async () => {
@@ -132,6 +134,27 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
     fetchLastBarcode()
   }, [companyId])
+
+  const fetchWarehouseDetails = useCallback(async () => {
+    try {
+      const warehouseDocRef = doc(db, `companies/${companyId}/warehouses`, warehouseId)
+      const warehouseDocSnap = await getDoc(warehouseDocRef)
+      if (warehouseDocSnap.exists()) {
+        const warehouseData = warehouseDocSnap.data()
+        setWarehouseName(warehouseData?.name || 'Unnamed Warehouse')
+      } else {
+        console.error('Warehouse document does not exist')
+        setWarehouseName('Unknown Warehouse')
+      }
+    } catch (error) {
+      console.error('Error fetching warehouse details:', error)
+      setWarehouseName('Error Loading Warehouse Name')
+    }
+  }, [companyId, warehouseId])
+
+  useEffect(() => {
+    fetchWarehouseDetails()
+  }, [fetchWarehouseDetails])
 
   const total = useMemo(() => {
     return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
@@ -271,8 +294,16 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     : ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
+    <div className='min-h-screen bg-blue-100'>
+    <header className="bg-teal-600 text-white p-3 flex items-center sticky top-0 z-20">
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>
+          <ArrowLeft className="h-6 w-6" />
+        </Button>
+        <h1 className="text-xl font-bold flex-grow">Create Product {warehouseName}</h1>
+    </header>
+    <main className="container mx-auto p-4">
+    <Card className="w-full max-w-4xl mx-auto">
+      <CardHeader className='m-2'>
         <CardTitle className="flex items-center justify-between">
           <span>{isBox ? 'Add New Box' : 'Add New Pairs'}</span>
           <div className="flex items-center space-x-2">
@@ -285,7 +316,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className='m-2'>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="brand">Brand</Label>
@@ -399,5 +430,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
         </form>
       </CardContent>
     </Card>
+    </main>
+    </div>
   )
 }

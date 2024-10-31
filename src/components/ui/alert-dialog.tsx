@@ -44,7 +44,7 @@ const AlertDialogContent = React.forwardRef<
     >
       {props.children}
       <AlertDialogPrimitive.Cancel className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-gray-100 data-[state=open]:text-gray-500">
-        <X className="h-4 w-4" />
+        <X className="h-4 w-4 text-black" />
         <span className="sr-only">Close</span>
       </AlertDialogPrimitive.Cancel>
     </AlertDialogPrimitive.Content>
@@ -86,7 +86,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
-    className={cn("text-lg font-semibold", className)}
+    className={cn("text-lg font-semibold text-black", className)}
     {...props}
   />
 ))
@@ -125,7 +125,7 @@ const AlertDialogCancel = React.forwardRef<
     ref={ref}
     className={cn(
       buttonVariants({ variant: "outline" }),
-      "mt-2 sm:mt-0",
+      "mt-2 text-black sm:mt-0",
       className
     )}
     {...props}

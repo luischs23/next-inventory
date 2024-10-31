@@ -30,7 +30,7 @@ interface Store {
 interface Product {
   id: string
   brand: string
-  reference: string
+  reference: string 
   color: string
   comments: string
   gender: 'Dama' | 'Hombre'
@@ -625,7 +625,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
 
   return (
     <div className="min-h-screen bg-blue-100">
-      <header className="bg-teal-600 text-white p-4 flex items-center">
+      <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>

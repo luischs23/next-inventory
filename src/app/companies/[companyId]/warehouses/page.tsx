@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
@@ -9,13 +9,9 @@ import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
-import { ArrowLeft, MoreVertical, X, Pencil } from 'lucide-react'
-import { 
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "app/components/ui/dropdown-menu"
+import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import Image from 'next/image'
 import { WarehouseCardSkeleton } from 'app/components/skeletons/WarehouseCardSkeleton'
 
@@ -35,10 +31,11 @@ export default function WarehousesPage() {
   const [newWarehouse, setNewWarehouse] = useState({ name: '', address: '', manager: '', phone: '' })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
   const companyId = params.companyId as string
+  const popupRef = useRef<HTMLDivElement>(null)
   
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -65,6 +62,12 @@ export default function WarehousesPage() {
 
     fetchWarehouses()
   }, [companyId])
+
+  useEffect(() => {
+    if (isPopupOpen && popupRef.current) {
+      popupRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isPopupOpen])
 
   const uploadImage = async (file: File) => {
     const storageRef = ref(storage, `companies/${companyId}/warehouse-images/${file.name}`)
@@ -173,7 +176,7 @@ export default function WarehousesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 mb-16">
       <header className="bg-teal-600 text-white p-4 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -209,21 +212,44 @@ export default function WarehousesPage() {
                   </div>
                   <CardContent className="w-2/3 p-4 relative">
                     <div className="absolute top-2 right-2 flex">
-                      <Button variant="ghost" className="h-8 w-8 p-0 mr-1" onClick={() => openEditPopup(warehouse)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem onClick={() => handleParesInventoryClick(warehouse.id)}>
-                            Inventory
+                    <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                    <DropdownMenuContent className='mr-2'>
+                      <DropdownMenuItem onClick={() => openEditPopup(warehouse)}>
+                        <Pencil className="h-4 w-4 mr-2" />Update
+                      </DropdownMenuItem>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Trash2 className="h-4 w-4 mr-2" />Delete
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the warehouse
+                              <span className="font-semibold"> {warehouse.name} </span>
+                              and remove the associated image from storage.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteWarehouse(warehouse)} className="bg-red-600">
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                      <DropdownMenuItem onClick={() => handleParesInventoryClick(warehouse.id)}>
+                        Inventory
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                     </div>
                     <h2 className="font-bold mb-2">{warehouse.name}</h2>
                     <p className="text-sm text-gray-600">{warehouse.address}</p>
@@ -238,8 +264,9 @@ export default function WarehousesPage() {
       </main>
 
       {isPopupOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end items-start p-4">
-          <Card className="w-full max-w-md bg-white">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start overflow-y-auto p-4">
+          <div ref={popupRef} className="w-full max-w-md bg-white rounded-lg shadow-xl mt-20 mb-20">
+          <Card className="max-h-[80vh] overflow-y-auto">
             <CardContent className="p-4">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">{editingWarehouse ? 'Edit Warehouse' : 'Create New Warehouse'}</h2>
@@ -307,20 +334,9 @@ export default function WarehousesPage() {
                   {loading ? 'Processing...' : (editingWarehouse ? 'Update Warehouse' : 'Create Warehouse')}
                 </Button>
               </form>
-              {editingWarehouse && (
-                <div className="mt-4">
-                  <Button 
-                    variant="destructive" 
-                    className="w-full"
-                    onClick={() => handleDeleteWarehouse(editingWarehouse)}
-                    disabled={loading}
-                  >
-                    Delete Warehouse
-                  </Button>
-                </div>
-                )}
             </CardContent>
           </Card>
+          </div>
         </div>
       )}
     </div>
