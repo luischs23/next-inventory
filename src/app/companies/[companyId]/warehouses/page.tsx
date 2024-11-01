@@ -176,7 +176,7 @@ export default function WarehousesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100 mb-16">
+    <div className="min-h-screen bg-blue-100 ">
       <header className="bg-teal-600 text-white p-4 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -187,7 +187,7 @@ export default function WarehousesPage() {
         </Button>
       </header>
 
-      <main className="container mx-auto p-4">
+      <main className="container mx-auto p-4 mb-16">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(2)].map((_, index) => (

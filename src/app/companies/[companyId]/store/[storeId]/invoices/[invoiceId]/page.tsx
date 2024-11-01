@@ -467,7 +467,7 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
           <p className="mb-2 text-lg font-semibold">Total Earn: ${invoice &&formatPrice(invoice.totalEarn)}</p>
           <div className="flex space-x-4 mt-4">
             <Button onClick={exportToPDF}>Export to PDF</Button>
-            <Link href={`/companies/${params.companyId}/stores/${params.storeId}/invoices`}>
+            <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices`}>
               <Button variant="outline">Invoice List</Button>
             </Link>
           </div>

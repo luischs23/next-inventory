@@ -1,17 +1,17 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter, useParams} from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import Link from 'next/link'
-import { ArrowLeft, MoreVertical, X, Pencil } from 'lucide-react'
+import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
 import Image from 'next/image'
 import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
 
@@ -22,11 +22,9 @@ interface Store {
   manager: string
   phone: string
   imageUrl: string
-  userId: string
 }
 
 export default function StoreListPage() {
-  const { user } = useAuth()
   const router = useRouter()
   const params = useParams()
   const companyId = params.companyId as string
@@ -44,11 +42,8 @@ export default function StoreListPage() {
   const [imageFile, setImageFile] = useState<File | null>(null)
 
   useEffect(() => {
-    if (!user) {
-    } else {
-      fetchStores()
-    }
-  }, [user, router, companyId])
+    fetchStores()
+  }, [companyId])
 
   const fetchStores = async () => {
     if (!companyId) return
@@ -76,7 +71,6 @@ export default function StoreListPage() {
     }
   }
 
-
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setImageFile(e.target.files[0])
@@ -91,7 +85,7 @@ export default function StoreListPage() {
 
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !imageFile || !companyId) return
+    if (!imageFile || !companyId) return
 
     setLoading(true)
     setError(null)
@@ -102,7 +96,6 @@ export default function StoreListPage() {
       const newStoreData = {
         ...newStore,
         imageUrl,
-        userId: user.uid,
         createdAt: new Date()
       }
       const docRef = await addDoc(storesRef, newStoreData)
@@ -120,7 +113,7 @@ export default function StoreListPage() {
 
   const handleUpdateStore = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !editingStore || !companyId) return
+    if (!editingStore || !companyId) return
 
     setLoading(true)
     setError(null)
@@ -151,29 +144,24 @@ export default function StoreListPage() {
     }
   }
 
-  const handleDeleteStore = async () => {
-    if (!user || !editingStore || !companyId) return
+  const handleDeleteStore = async (storeToDelete: Store) => {
+    if (!companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
       // Delete the store document from Firestore
-      await deleteDoc(doc(db, `companies/${companyId}/stores`, editingStore.id))
+      await deleteDoc(doc(db, `companies/${companyId}/stores`, storeToDelete.id))
 
       // Delete the store image from Storage
-      if (editingStore.imageUrl) {
-        const imageRef = ref(storage, editingStore.imageUrl)
+      if (storeToDelete.imageUrl) {
+        const imageRef = ref(storage, storeToDelete.imageUrl)
         await deleteObject(imageRef)
       }
 
       // Update local state
-      setStores(stores.filter(store => store.id !== editingStore.id))
-
-      setIsPopupOpen(false)
-      setEditingStore(null)
-      setNewStore({ name: '', address: '', manager: '', phone: '' })
-      setImageFile(null)
+      setStores(stores.filter(store => store.id !== storeToDelete.id))
     } catch (err) {
       console.error('Error deleting store:', err)
       setError('Failed to delete store. Please try again.')
@@ -194,8 +182,8 @@ export default function StoreListPage() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
-      <header className="bg-teal-600 text-white p-4 flex items-center">
+    <div className="min-h-screen bg-blue-100 ">
+      <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
@@ -209,7 +197,7 @@ export default function StoreListPage() {
         </Button>
       </header>
 
-      <main className="container mx-auto p-4">
+      <main className="container mx-auto p-4 mb-14">
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(2)].map((_, index) => (
@@ -234,16 +222,42 @@ export default function StoreListPage() {
                   </div>
                   <CardContent className="w-2/3 p-4 relative">
                     <div className="absolute top-2 right-2 flex">
-                      <Button variant="ghost" className="h-8 w-8 p-0 mr-1" onClick={() => openEditPopup(store)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent>
+                        <DropdownMenuContent className='mr-2'>
+                          <DropdownMenuItem onClick={() => openEditPopup(store)}>
+                              <Pencil className="mr-2 h-4 w-4" />
+                              <span>Update</span>
+                          </DropdownMenuItem>
+                          
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently delete the store
+                                  and remove all data associated with it.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDeleteStore(store)}>
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                          
                           <DropdownMenuItem>
                             <Link href={`/companies/${companyId}/store/${store.id}/invoices`}>Invoices</Link>
                           </DropdownMenuItem>
@@ -337,17 +351,6 @@ export default function StoreListPage() {
                   {loading ? 'Processing...' : (editingStore ? 'Update Store' : 'Create Store')}
                 </Button>
               </form>
-              {editingStore && (
-                <div className="mt-4">
-                  <Button 
-                    variant="destructive" 
-                    className="w-full"
-                    onClick={() => handleDeleteStore()}
-                  >
-                    Delete Store
-                  </Button>
-                </div>
-              )}  
             </CardContent>
           </Card>
         </div>

@@ -1,10 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, addDoc, serverTimestamp, Timestamp, query, where } from 'firebase/firestore'
+import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, addDoc, serverTimestamp, Timestamp, query, where} from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
@@ -33,7 +32,9 @@ interface Product {
   baseprice: number
   comments: string
   gender: string
-  createdAt: Timestamp  
+  createdAt: Timestamp 
+  barcode: string
+  total2: number
 }
 
 interface ProductWithBarcode extends Product {
@@ -41,8 +42,8 @@ interface ProductWithBarcode extends Product {
   barcode: string
   exhibitionStore?: string
   warehouseId: string
-  quantity: number
   isBox?: boolean
+  quantity: number
 }
 
 interface InvoiceItem extends ProductWithBarcode {
@@ -57,15 +58,11 @@ interface BoxItem extends Omit<InvoiceItem, 'size'> {
   gender: string
   baseprice: number
   size: string
-}
-
-interface Store {
-  name: string
+  total: number
 }
 
 export default function NewInvoicePage({ params }: { params: { companyId: string, storeId: string } }) {
   const { toast } = useToast()
-  const { user } = useAuth()
   const router = useRouter()
   const [invoice, setInvoice] = useState<(InvoiceItem | BoxItem)[]>([])
   const [totalSold, setTotalSold] = useState(0)
@@ -80,14 +77,12 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   const [warehouses, setWarehouses] = useState<{[id: string]: string}>({})
   const [salePrices, setSalePrices] = useState<{ [key: string]: string }>({})
   const [enabledItems, setEnabledItems] = useState<{ [key: string]: boolean }>({})
-  const [previousSalePrices, setPreviousSalePrices] = useState<{ [key: string]: number }>({})
+  const [, setPreviousSalePrices] = useState<{ [key: string]: number }>({})
   const [totalEarn, setTotalEarn] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetchInvoiceData = useCallback(async () => {
-    if (!user) return
-
-    const invoiceRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/${user.uid}/items`)
+    const invoiceRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`)
     const invoiceSnapshot = await getDocs(invoiceRef)
 
     const invoiceItems = invoiceSnapshot.docs.map(doc => {
@@ -111,12 +106,12 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
     setInvoice(sortedInvoiceItems)
     calculateTotals(sortedInvoiceItems)
     initializeItemStates(sortedInvoiceItems)
-  }, [user, params.companyId, params.storeId, toast])
+  }, [params.companyId, params.storeId, toast])
 
   const calculateTotals = useCallback((items: (InvoiceItem | BoxItem)[]) => {
     const totalSold = items.reduce((sum, item) => {
       if (item.sold) {
-        const quantity = item.isBox ? item.quantity : 1;
+        const quantity = item.isBox ? item.total2 : 1;
         return sum + (Number(item.salePrice) * quantity);
       }
       return sum;
@@ -124,7 +119,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   
     const totalEarn = items.reduce((sum, item) => {
       if (item.sold) {
-        const quantity = item.isBox ? item.quantity : 1;
+        const quantity = item.isBox ? item.total2 : 1;
         return sum + ((Number(item.salePrice) - Number(item.baseprice)) * quantity);
       }
       return sum;
@@ -153,8 +148,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   useEffect(() => {
     const initializePage = async () => {
       setLoading(true)
-      if (!user) {
-      } else {
+      
         try {
           await Promise.all([
             fetchInvoiceData(),
@@ -172,11 +166,11 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
         } finally {
           setLoading(false)
         }
-      }
+      
     }
 
     initializePage()
-  }, [user, router, fetchInvoiceData, params.companyId, params.storeId, toast])
+  }, [router, fetchInvoiceData, params.companyId, params.storeId, toast])
   
   const fetchStoreName = async () => {
     try {
@@ -308,14 +302,11 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
           }
         }
       }
-        if (foundProduct) break
-      }
-      if (foundProduct) break
-    }
-    // If not found in regular inventory, search in boxes
+
+       // If not found in regular inventory, search in boxes
     if (!foundProduct) {
       for (const warehouseId of Object.keys(warehouses)) {
-        const boxesRef = collection(db, `companies/${params.companyId}/warehouses/${warehouseId}/boxes`)
+        const boxesRef = collection(db, `companies/${params.companyId}/warehouses/${warehouseId}/products`)
         const boxesQuery = query(boxesRef, where('barcode', '==', searchBarcode))
         const boxesSnapshot = await getDocs(boxesQuery)
 
@@ -327,14 +318,17 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
             id: boxDoc.id,
             barcode: boxData.barcode,
             warehouseId: warehouseId,
-            quantity: boxData.quantity || 0,
+            total2: boxData.total2 || 0,
             isBox: true
           } as ProductWithBarcode
           break
         }
       }
     }
-
+        if (foundProduct) break
+      }
+      if (foundProduct) break
+    }
     setSearchedProduct(foundProduct)
   }
 
@@ -344,8 +338,6 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   }
 
   const handleAddToInvoice = async (product: ProductWithBarcode) => {
-    if (!user) return
-  
     try {
       if (product.exhibitionStore) {
         // Handle exhibition item
@@ -358,9 +350,17 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
           await updateDoc(productRef, { exhibition: updatedExhibition })
         }
       } else if (product.isBox) {
-        // Handle box item
-        const boxRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/boxes`, product.id)
-        await deleteDoc(boxRef)
+         // Handle box item
+      const boxRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/products`, product.id)
+      const boxDoc = await getDoc(boxRef)
+      if (boxDoc.exists()) {
+        const boxData = boxDoc.data() as Product
+        // Set total2 to zero
+        await updateDoc(boxRef, { total2: 0 })
+      } else {
+        console.error('Box document does not exist:', product.id)
+      }
+
       } else {
         // Handle regular inventory item
         const productRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/products`, product.id)
@@ -389,7 +389,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
           })
         }
       }
-      const invoiceRef = doc(collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/${user.uid}/items`))
+      const invoiceRef = doc(collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`))
   
       const newInvoiceItem: InvoiceItem | BoxItem = {
         ...product,
@@ -401,7 +401,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
         addedAt: serverTimestamp() as Timestamp,
         imageUrl: product.imageUrl, 
         isBox: product.isBox || false,
-        quantity: product.isBox ? product.quantity : 1,
+        total2: product.isBox ? product.total2 : 1,
         ...(product.exhibitionStore && { exhibitionStore: product.exhibitionStore }),
         ...(product.isBox && {
           comments: (product as BoxItem).comments || '',
@@ -442,11 +442,9 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   }
 
   const handleReturn = async (item: InvoiceItem | BoxItem) => {
-    if (!user) return
-
-    try { 
+   try { 
       // Remove the item from the invoice
-      await deleteDoc(doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/${user.uid}/items`, item.invoiceId))
+      await deleteDoc(doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`, item.invoiceId))
 
       if (item.exhibitionStore) {
         // Handle returning exhibition item
@@ -462,20 +460,24 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
         }
       } else if (item.isBox) {
         // Handle returning box item
-        const boxRef = doc(db, `companies/${params.companyId}/warehouses/${item.warehouseId}/boxes`, item.id)
+        const boxRef = doc(db, `companies/${params.companyId}/warehouses/${item.warehouseId}/products`, item.id)
         const boxData: Partial<BoxItem> = {
           brand: item.brand,
           reference: item.reference,
           color: item.color,
           barcode: item.barcode,
-          quantity: item.quantity,
+          total2: item.total2,
           imageUrl: item.imageUrl,
           saleprice: item.saleprice,
           warehouseId: item.warehouseId,
           comments: (item as BoxItem).comments,
           gender: (item as BoxItem).gender,
           baseprice: (item as BoxItem).baseprice,
-          size: item.size
+          total: (item as BoxItem).total,
+          sizes: item.sizes,
+          isBox: item.isBox,
+          exhibition: item.exhibition,
+          createdAt: item.createdAt,
         }
         await setDoc(boxRef, boxData)
       } else {
@@ -551,16 +553,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
   }
 
   const handleSold = async (item: InvoiceItem | BoxItem) => {
-    if (!user) {
-      console.error('User not authenticated');
-      toast({
-        title: "Error",
-        description: "You must be logged in to perform this action.",
-        duration: 1500,
-        variant: "destructive",
-      });
-      return;
-    }
+    
     const newSalePrice = parsePrice(salePrices[item.invoiceId] || String(item.salePrice))
     if (isNaN(newSalePrice)) {
       toast({
@@ -572,7 +565,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
       return
     }
     try {
-      const itemRef = doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/${user.uid}/items`, item.invoiceId)
+      const itemRef = doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`, item.invoiceId)
       await updateDoc(itemRef, { 
         sold: true,
         salePrice: newSalePrice,
@@ -618,15 +611,6 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
 
   const handleSaveInvoice = async () => {
     if (validateInputs()) {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "User not authenticated. Please log in and try again.",
-        variant: "destructive",
-      })
-      return
-    }
-
     if (invoice.length === 0) {
       toast({
         title: "Error",
@@ -641,14 +625,13 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
       const invoicesRef = collection(storeRef, 'invoices')
       const newInvoiceDoc = await addDoc(invoicesRef, {
         storeId: params.storeId,
-        userId: user.uid,
         customerName: customerName || "Unknown",
         customerPhone: customerPhone || "N/A",
         totalSold: totalSold || 0,
         totalEarn: totalEarn || 0,
         createdAt: serverTimestamp(),
         items: invoice.map(item => {
-          const quantity = item.isBox ? item.quantity : 1;
+          const quantity = item.isBox ? item.total2 : 1;
           const earn = (Number(item.salePrice) - Number(item.baseprice)) * quantity;
           return {
             productId: item.productId || item.id,
@@ -682,7 +665,7 @@ export default function NewInvoicePage({ params }: { params: { companyId: string
       setCustomerPhone('')
 
       // Delete the temporary invoice items
-      const invoiceRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/${user.uid}/items`)
+      const invoiceRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`)
       const invoiceSnapshot = await getDocs(invoiceRef)
       const deletePromises = invoiceSnapshot.docs.map(doc => deleteDoc(doc.ref))
       await Promise.all(deletePromises)
@@ -716,11 +699,11 @@ if (loading) {
 
   return (
     <div className="min-h-screen bg-blue-100">
-      <header className="bg-teal-600 text-white p-4 flex items-center">
+      <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">New Invoice - {storeName}</h1>
+        <h1 className="text-xl font-bold flex-grow">New Invoice {storeName}</h1>
         <Button onClick={handleSaveInvoice}>
         <Save className="h-4 w-4 mr-2" />
           Save Invoice

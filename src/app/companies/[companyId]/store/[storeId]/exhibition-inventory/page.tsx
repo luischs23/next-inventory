@@ -8,13 +8,16 @@ import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent} from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { Pencil, MoreHorizontal, FileDown, ArrowLeft, Filter, SortDesc } from 'lucide-react'
+import { Pencil, MoreHorizontal, FileDown, ArrowLeft, Filter, SortDesc, Menu, ChevronUp, ChevronDown, Download } from 'lucide-react'
 import { Switch } from "app/components/ui/switch"
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
+import ParesInventorySkeleton from 'app/components/skeletons/ParesInventorySkeleton'
+import { AlertDialog, AlertDialogContent, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
+import { toast } from 'app/components/ui/use-toast'
 
 interface Product {
   id: string
@@ -45,7 +48,35 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
   const [gender, setGender] = useState<'all' | 'Dama' | 'Hombre'>('all')
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [showUnassigned, setShowUnassigned] = useState(false)
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const [lastScrollTop, setLastScrollTop] = useState(0)
+  const [isOpen, setIsOpen] = useState(false)
+  const toggleDropdown = () => setIsOpen(!isOpen)
 
+  useEffect(() => {
+    const controlHeader = () => {
+      if (typeof window !== 'undefined') {
+        const currentScrollTop = window.scrollY
+
+        if (currentScrollTop < lastScrollTop) {
+          // Scrolling up
+          setIsHeaderVisible(true)
+        } else if (currentScrollTop > 100 && currentScrollTop > lastScrollTop) {
+          // Scrolling down and past the 100px mark
+          setIsHeaderVisible(false)
+        }
+
+        setLastScrollTop(currentScrollTop)
+      }
+    }
+
+    window.addEventListener('scroll', controlHeader)
+
+    return () => {
+      window.removeEventListener('scroll', controlHeader)
+    }
+  }, [lastScrollTop])
+    
   useEffect(() => {
     const fetchStoreAndProducts = async () => {
       setLoading(true)
@@ -116,8 +147,8 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
       }
       return sum + 1 // For assigned products, each product represents one pair
     }, 0)
-    const totalBase = filteredProducts.reduce((sum, product) => sum + product.baseprice, 0)
-    const totalSale = filteredProducts.reduce((sum, product) => sum + product.saleprice, 0)
+    const totalBase = filteredProducts.reduce((sum, product) => sum + Number(product.baseprice), 0)
+    const totalSale = filteredProducts.reduce((sum, product) => sum + Number(product.saleprice), 0)
     return { totalItems, totalPares, totalBase, totalSale }
   }, [filteredProducts, showUnassigned])
 
@@ -196,86 +227,136 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
     doc.save(`${storeName}_${showUnassigned ? 'unassigned' : 'exhibition'}_inventory.pdf`)
   }
 
+  const handleDownloadImage = async (imageUrl: string, productName: string) => {
+    try {
+      const response = await fetch(imageUrl)
+      if (!response.ok) throw new Error('Image download failed')
+      const blob = await response.blob()
+      const fileName = `${productName.replace(/\s+/g, '-').toLowerCase()}-${Date.now()}.jpg`
+      const url = window.URL.createObjectURL(blob)
+  
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+  
+      toast({
+        title: "Success",
+        description: "Image downloaded successfully.",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error('Error downloading image:', error)
+      toast({
+        title: "Error",
+        description: "Failed to download the image. Please try again...",
+        variant: "destructive",
+      })
+    }
+  }
+  
+
   if (loading) {
-    return <div className="container mx-auto px-4 py-8">Loading...</div>
+    return ParesInventorySkeleton()
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
-      <header className="bg-teal-600 text-white p-3 flex items-center">
+    <div className="min-h-screen bg-blue-100 pt-14 pb-16">
+      <header className="bg-teal-600 text-white p-3 flex items-center fixed top-0 left-0 right-0 z-30">
         <Button variant="ghost" onClick={() => router.back()} className="text-white p-0 mr-2">
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">
           {showUnassigned ? 'Sin Exb' : 'Exb'} {storeName}
         </h1>
-        <div className="flex space-x-2 ml-4">
-          <Button onClick={exportToPDF} className="bg-red-500 hover:bg-red-600">
-            <FileDown className="h-4 w-4" />
-          </Button>
-          <Button onClick={exportToExcel} className="bg-green-500 hover:bg-green-600">
-            <FileDown className="h-4 w-4" />
-          </Button>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="text-white">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={exportToPDF}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Export PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={exportToExcel}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Export Excel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
-      <div className="flex items-center space-x-2 pl-6 pt-4">
-      <div >
-          <Switch
-            checked={showUnassigned}
-            onCheckedChange={setShowUnassigned}
-          />
-          <span>{showUnassigned ? '   Unassigned' : '   Assigned'}</span>
-      </div>  
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
-              {gender === 'all' ? 'All' : gender}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setGender('all')}>All</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGender('Dama')}>Dama</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setGender('Hombre')}>Hombre</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <SortDesc className="mr-2 h-4 w-4" />
-              {sortOrder === 'entry' ? 'Entry' : 'A-Z'}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setSortOrder('entry')}>Entry</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSortOrder('alphabetical')}>A-Z</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+
+      <div className={`bg-white sticky top-14 z-20 p-4 shadow-md transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>
+        <div className='flex items-center space-x-3 mb-4 text-black'>
+          <div>
+            <Switch
+              checked={showUnassigned}
+              onCheckedChange={setShowUnassigned}
+            />
+            <span>{showUnassigned ? '   Unassigned' : '   Assigned'}</span>
+          </div>  
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Filter className="mr-2 h-4 w-4 text-black" />
+                {gender === 'all' ? 'All' : gender}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setGender('all')}>All</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGender('Dama')}>Dama</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setGender('Hombre')}>Hombre</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <SortDesc className="mr-2 h-4 w-4 text-black" />
+                {sortOrder === 'entry' ? 'Entry' : 'A-Z'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setSortOrder('entry')}>Entry</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setSortOrder('alphabetical')}>A-Z</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>   
-        <div className="flex items-center space-x-2 mb-4 m-4">
-        <Input
-          placeholder="Search by brand, reference, or color"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="flex-grow"
-        />
+        <div className="flex items-center space-x-2 text-black">
+          <Input
+            placeholder="Search by brand, reference, or color"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="flex-grow text-black"
+          />
+        </div>
       </div>
-
-      <Card className="m-4">
-        <CardContent className="p-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
-            <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
-            <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
-            <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
-          </div>
-        </CardContent>
-      </Card>
-
+      <div className='text-black'>
+          <Button variant="ghost" onClick={toggleDropdown}>
+              {isOpen ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />} Summary Information
+          </Button>
+      </div>
+      {isOpen && (
+        <Card className="m-4">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
+              <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
+              <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
+              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
+            </div>
+          </CardContent>
+        </Card>
+       )}
+      <div>
       <div className="space-y-4 m-4">
         {sortedProducts.map((product, index) => (
           <div key={product.id} className="flex items-start">
-            <div className="text-sm font-semibold mr-1 mt-2">{index + 1}</div>
+            <div className="text-sm font-semibold mr-1 mt-2 text-black">{index + 1}</div>
             <Card className="flex-grow relative">
               <CardContent className="p-4">
                 <div className="absolute top-2 right-2">
@@ -296,16 +377,35 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="relative w-16 h-16 flex-shrink-0">
-                    <Image
-                      src={product.imageUrl}
-                      alt={product.reference}
-                      fill
-                      sizes="(max-width: 64px) 100vw, 64px"
-                      className="object-cover rounded-md"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.svg"
-                      }}
-                    />
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Image
+                          src={product.imageUrl}
+                          alt={product.reference}
+                          fill
+                          sizes="(max-width: 64px) 100vw, 64px"
+                          className="object-cover rounded-md cursor-pointer"
+                          onError={(e) => {
+                            e.currentTarget.src = "/placeholder.svg"
+                          }}
+                        />
+                      </AlertDialogTrigger>
+                      <AlertDialogContent className="sm:max-w-[425px]">
+                        <div className="relative w-full h-[300px]">
+                          <Image
+                            src={product.imageUrl}
+                            alt={product.reference}
+                            fill
+                            sizes="(max-width: 425px) 100vw, 425px"
+                            className="object-contain"
+                          />
+                        </div>
+                        <Button onClick={() => handleDownloadImage(product.imageUrl, product.brand)} className="mt-4">
+                          <Download className="mr-2 h-4 w-4" />
+                          Download Image
+                        </Button>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                   <div className="flex-grow">
                     <h3 className="font-semibold">{product.brand}</h3>
@@ -316,19 +416,19 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                 <div className="mt-4 flex text-sm space-x-3">
                   <div className="font-medium">
                     
-                    {showUnassigned ? 'Sizes:' : 'Size:'}
+                  {showUnassigned ? 'Sizes:' : 'Size:'}
                   </div>
                   {showUnassigned
                     ? Object.entries(product.sizes)
-                        .filter(([_, sizeData]) => sizeData.quantity > 0)
+                        .filter(([, sizeData]) => sizeData.quantity > 0)
                         .map(([size]) => `${formatSize(size)} `)
                         .join(', ')
                     : formatSize(product.exhibition?.[params.storeId]?.size || '')}
                   <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
                 </div>
                 {!showUnassigned && (
-                  <div className="mt-2">
-                    <span className="font-medium text-sm">Barcode:</span> {product.exhibition?.[params.storeId]?.barcode}
+                  <div className="font-normal">
+                    <span className="font-normal text-sm">Barcode: {product.exhibition?.[params.storeId]?.barcode} </span>
                   </div>
                 )}
                 {showUnassigned && (
@@ -341,6 +441,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
           </div>
         ))}
       </div>
+    </div> 
     </div>
   )
 }

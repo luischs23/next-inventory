@@ -11,7 +11,7 @@ import { Input } from "app/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
 import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc, Menu, ChevronDown, ChevronUp, Loader2, Download} from 'lucide-react'
 import { usePermissions } from '../../hooks/usePermissions'
 import Image from 'next/image'
@@ -468,8 +468,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }
 
   return (
-    <div className="min-h-screen bg-blue-100 flex flex-col">
-      <header className="bg-teal-600 text-white p-3 flex items-center sticky top-0 z-20">
+    <div className="min-h-screen bg-blue-100 flex flex-col pt-14">
+      <header className="bg-teal-600 text-white p-3 flex items-center fixed top-0 left-0 right-0 z-30">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
@@ -496,7 +496,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           </DropdownMenuContent>
         </DropdownMenu>
       </header>   
-      <div className={`transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>   
+    <div className={`transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>   
       <div className="bg-white sticky top-16 z-10 p-4 shadow-md">
         <div className='flex items-center space-x-3 mb-4'>
             <div >
@@ -508,7 +508,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                 <label htmlFor="show-inactive" className="text-sm font-medium text-black">
                   {showBox ? ' Cajas' : ' Pares'}
                 </label>
-              </div>
+            </div>
             <div >
               <Switch
                 id="show-inactive"
@@ -581,8 +581,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                 <CardContent className="p-4 md:flex md:flex-grow md:items-center md:space-x-4">
                   <div className="flex space-x-4 md:w-1/6 items-center justify-center">
                     <div className="relative w-16 h-16 flex-shrink-0 ">
-                      <Dialog>
-                        <DialogTrigger asChild>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
                           <Image
                             src={product.imageUrl}
                             alt={product.reference}
@@ -591,8 +591,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                             className="object-cover rounded-md cursor-pointer"
                             onClick={() => handleImageClick(product.imageUrl)}
                           />
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="sm:max-w-[425px]">
                           <div className="relative w-full h-[300px]">
                             <Image
                               src={product.imageUrl}
@@ -606,8 +606,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                             <Download className="mr-2 h-4 w-4" />
                             Download Image
                           </Button>
-                        </DialogContent>
-                      </Dialog>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                     <div className="flex-1 md:hidden">
                       <h3 className="font-semibold">{product.brand}</h3>
@@ -691,7 +691,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </div>
           ))}
         </div>
-    </main>
+      </main>
 
       <AlertDialog open={!!productToDelete} onOpenChange={() => setProductToDelete(null)}>
         <AlertDialogContent>
