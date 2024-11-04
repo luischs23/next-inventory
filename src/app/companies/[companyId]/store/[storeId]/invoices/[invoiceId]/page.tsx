@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from 'app/app/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
 import { doc, getDoc, getDocs, updateDoc, collection, Timestamp, arrayUnion, increment, DocumentData} from 'firebase/firestore'
@@ -9,12 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
-import Link from 'next/link'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import Image from 'next/image'
 import { toast } from 'app/components/ui/use-toast'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronUp, FileDown, Menu } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from 'app/components/ui/dropdown-menu'
+import InvoiceDetailSkeleton from 'app/components/skeletons/InvoiceDetailSkeleton'
+import { usePermissions } from 'app/hooks/usePermissions'
 
 interface InvoiceItem {
   id: string
@@ -87,7 +88,6 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
 }
 
 export default function InvoicePage({ params }: { params: { companyId: string, storeId: string, invoiceId: string } }) {
-  const { user } = useAuth()
   const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [storeName, setStoreName] = useState<string>('')
@@ -98,23 +98,25 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
   const [newSalePrice, setNewSalePrice] = useState('')
   const [searchResult, setSearchResult] = useState<InvoiceItem | null>(null)
   const [imageError, setImageError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const { hasPermission } = usePermissions()
 
   const formatPrice = (price: number): string => {
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
   useEffect(() => { 
-    if (!user) {
-      router.push('/login')
-    } else {
+
       fetchInvoice()
       fetchWarehouses()
       fetchStores()
-    }
-  }, [user, router])
+    
+  }, [])
 
   const fetchInvoice = async () => {
-    if (!user) return
+
+    setLoading(true)
+    try {
 
     const storeRef = doc(db, `companies/${params.companyId}/stores`, params.storeId)
     const storeDoc = await getDoc(storeRef)
@@ -131,6 +133,11 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
           totalEarn: data.totalEarn,
         })
       }
+    }
+    } catch (err) {
+      console.error('Error fetching store and invoices:', err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -448,11 +455,31 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
   }
 
   if (!invoice) {
-    return <div>Loading...</div>
+    return InvoiceDetailSkeleton()
   }
 
   return (
-    <div className="container mx-auto p-4">
+    <div className="min-h-screen bg-white">
+      <header className="bg-teal-600 text-white p-3 flex items-center">
+        <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
+          <ArrowLeft className="h-6 w-6" />
+        </Button>
+        <h1 className="text-xl font-bold flex-grow">Invoice {storeName}</h1>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="text-white">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={exportToPDF}>
+              <FileDown className="h-4 w-4 mr-2" />
+              Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+      <main className='m-4 mb-20'>
       <Card className="mb-2">
         <CardHeader>
           <CardTitle className="text-2xl font-bold">Invoice for {invoice?.customerName}</CardTitle>
@@ -465,15 +492,10 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
           <p className="mb-2">Customer Phone: {invoice.customerPhone}</p>
           <p className="mb-2 text-lg font-semibold">Total Sold: ${invoice && formatPrice(invoice.totalSold)}</p>
           <p className="mb-2 text-lg font-semibold">Total Earn: ${invoice &&formatPrice(invoice.totalEarn)}</p>
-          <div className="flex space-x-4 mt-4">
-            <Button onClick={exportToPDF}>Export to PDF</Button>
-            <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices`}>
-              <Button variant="outline">Invoice List</Button>
-            </Link>
-          </div>
         </CardContent>
       </Card>
       <div className="grid gap-4">
+      {hasPermission('update') && (
        <CollapsibleSection title="Cambios"> 
             <div>
               <Label htmlFor="returnBarcode">Return</Label>
@@ -503,6 +525,7 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
               </div>
             </div>
             </CollapsibleSection>
+          )}
           </div>
           
           {searchResult && (
@@ -584,6 +607,7 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
           </div>
         </CardContent>
       </Card>
+      </main>
     </div>
   )
 }

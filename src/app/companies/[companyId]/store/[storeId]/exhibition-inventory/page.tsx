@@ -18,6 +18,7 @@ import 'jspdf-autotable'
 import ParesInventorySkeleton from 'app/components/skeletons/ParesInventorySkeleton'
 import { AlertDialog, AlertDialogContent, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
 import { toast } from 'app/components/ui/use-toast'
+import { usePermissions } from 'app/hooks/usePermissions'
 
 interface Product {
   id: string
@@ -52,6 +53,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
   const [lastScrollTop, setLastScrollTop] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
   const toggleDropdown = () => setIsOpen(!isOpen)
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     const controlHeader = () => {
@@ -158,28 +160,39 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
 
   const formatSize = (size: string) => {
     const match = size.match(/^T-?(\d+)$/)
-    return match ? `T-${match[1]}` : size
+    return match ? `${match[1]}` : size
   }
 
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new()
     
-    const worksheetData = sortedProducts.map(product => ({
-      'Brand': product.brand,
-      'Reference': product.reference,
-      'Color': product.color,
-      'Gender': product.gender,
-      'Size': showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size,
-      'Barcode': showUnassigned ? '' : product.exhibition?.[params.storeId]?.barcode,
-      'Base Price': product.baseprice,
-      'Sale Price': product.saleprice,
-    }))
+    const worksheetData = sortedProducts.map(product => {
+      const baseData = {
+        'Brand': product.brand,
+        'Reference': product.reference,
+        'Color': product.color,
+        'Gender': product.gender,
+        'Size': showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size,
+        'Barcode': showUnassigned ? '' : product.exhibition?.[params.storeId]?.barcode,
+      }
+
+      if (hasPermission('update')) {
+        return {
+          ...baseData,
+          'Base Price': product.baseprice,
+          'Sale Price': product.saleprice,
+        }
+      }
+
+      return baseData
+    })
 
     const worksheet = XLSX.utils.json_to_sheet(worksheetData)
 
     worksheet['!cols'] = [
       { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 },
-      { width: 15 }, { width: 20 }, { width: 15 }, { width: 15 },
+      { width: 15 }, { width: 20 },
+      ...(hasPermission('update') ? [{ width: 15 }, { width: 15 }] : []),
     ]
 
     XLSX.utils.book_append_sheet(workbook, worksheet, showUnassigned ? 'Unassigned Products' : 'Exhibition Inventory')
@@ -199,20 +212,35 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
     doc.setFontSize(12)
     doc.text(`Total Items: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
     doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
-    doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
-    doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+    if (hasPermission('update')) {
+      doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
+      doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+    }
 
-    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Size", "Base Price", "Sale Price"]
-    const tableRows = sortedProducts.map((product, index) => [
-      index + 1,
-      product.brand,
-      product.reference,
-      product.color,
-      product.gender,
-      showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size,
-      formatNumber(product.baseprice),
-      formatNumber(product.saleprice)
-    ])
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Size"]
+    if (hasPermission('update')) {
+      tableColumn.push("Base Price", "Sale Price")
+    }
+
+    const tableRows = sortedProducts.map((product, index) => {
+      const baseRow = [
+        index + 1,
+        product.brand,
+        product.reference,
+        product.color,
+        product.gender,
+        showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size,
+      ]
+
+      if (hasPermission('update')) {
+        baseRow.push(
+          formatNumber(product.baseprice),
+          formatNumber(product.saleprice)
+        )
+      }
+
+      return baseRow
+    })
 
     doc.autoTable({
       head: [tableColumn],
@@ -346,8 +374,12 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
             <div className="grid grid-cols-2 gap-4">
               <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
               <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
+              {hasPermission('update') && (
+              <>
               <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
               <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
+              </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -360,6 +392,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
             <Card className="flex-grow relative">
               <CardContent className="p-4">
                 <div className="absolute top-2 right-2">
+                {hasPermission('update') && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -368,12 +401,15 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => router.push(`/companies/${params.companyId}/warehouses/${product.warehouseId}/update-product/${product.id}`)}>
+                    
+                      <DropdownMenuItem onClick={() => router.push(`/companies/${params.companyId}/warehouses/${product.warehouseId}/update-product/${product.id}`)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         <span>Update</span>
                       </DropdownMenuItem>
+                    
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  )}
                 </div>
                 <div className="flex items-center space-x-4">
                   <div className="relative w-16 h-16 flex-shrink-0">
@@ -415,7 +451,6 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                 </div>
                 <div className="mt-4 flex text-sm space-x-3">
                   <div className="font-medium">
-                    
                   {showUnassigned ? 'Sizes:' : 'Size:'}
                   </div>
                   {showUnassigned
@@ -432,8 +467,8 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                   </div>
                 )}
                 {showUnassigned && (
-                  <div className="mt-2">
-                    <span className="font-medium text-sm">Total:</span> {product.total}
+                  <div >
+                    <span className="font-normal text-sm">Total: {product.total}</span> 
                   </div>
                 )}
               </CardContent>

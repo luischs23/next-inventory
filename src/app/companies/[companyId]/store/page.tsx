@@ -13,6 +13,7 @@ import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
 import Image from 'next/image'
+import { usePermissions } from 'app/hooks/usePermissions'
 import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
 
 interface Store {
@@ -40,6 +41,8 @@ export default function StoreListPage() {
     phone: '',
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const { hasPermission } = usePermissions()
+
 
   useEffect(() => {
     fetchStores()
@@ -188,6 +191,7 @@ export default function StoreListPage() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Stores</h1>
+        {hasPermission('delete') && (
         <Button variant="secondary" onClick={() => {
           setEditingStore(null)
           setNewStore({ name: '', address: '', manager: '', phone: '' })
@@ -195,6 +199,7 @@ export default function StoreListPage() {
         }}>
           + Add Store
         </Button>
+        )}
       </header>
 
       <main className="container mx-auto p-4 mb-14">
@@ -229,11 +234,13 @@ export default function StoreListPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className='mr-2'>
+                        {hasPermission('update') && (
                           <DropdownMenuItem onClick={() => openEditPopup(store)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               <span>Update</span>
                           </DropdownMenuItem>
-                          
+                        )}
+                         {hasPermission('delete') && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
@@ -257,7 +264,7 @@ export default function StoreListPage() {
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
-                          
+                         )}
                           <DropdownMenuItem>
                             <Link href={`/companies/${companyId}/store/${store.id}/invoices`}>Invoices</Link>
                           </DropdownMenuItem>

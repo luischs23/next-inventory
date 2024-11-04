@@ -21,7 +21,6 @@ import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import { Switch } from "app/components/ui/switch"
-import { Dialog, DialogContent, DialogTrigger } from "app/components/ui/dialog"
 import ParesInventorySkeleton from '../skeletons/ParesInventorySkeleton'
 
 interface SizeInput {
@@ -474,6 +473,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Inventory {warehouseName}</h1>
+        {hasPermission('update') && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="text-white">
@@ -495,6 +495,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
       </header>   
     <div className={`transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>   
       <div className="bg-white sticky top-16 z-10 p-4 shadow-md">
@@ -556,6 +557,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         </div>
         </div>
         <main className="container mx-auto p-4 flex-grow">
+        {hasPermission('update') && (
+        <>
         <div className='mb-2 text-black'>
           <Button variant="ghost" onClick={toggleDropdown}>
               {isOpen ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />} Summary Information
@@ -573,10 +576,12 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           </CardContent>
         </Card>
         )}
+        </>
+        )}
         <div className="space-y-4">
           {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
-              <div className="text-sm font-semibold mr-1 mt-2 text-black hidden md:block">{index + 1}</div>
+              <div className="text-sm font-semibold mr-1 mt-2 text-black md:block">{index + 1}</div>
               <Card className="flex-grow relative md:flex md:items-center md:space-x-4">
                 <CardContent className="p-4 md:flex md:flex-grow md:items-center md:space-x-4">
                   <div className="flex space-x-4 md:w-1/6 items-center justify-center">
@@ -648,6 +653,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                   </div>
                 </CardContent>
                 <div className="absolute top-2 right-2 flex items-center">
+                {hasPermission('update') && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -656,12 +662,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      {hasPermission('update') && (
                         <DropdownMenuItem onClick={() => handleUpdate(product)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           <span>Update</span>
                         </DropdownMenuItem>
-                      )}
                       {hasPermission('delete') && (
                         <DropdownMenuItem onClick={() => setProductToDelete(product)}>
                           <Trash2 className="mr-2 h-4 w-4" />
@@ -681,6 +685,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                       ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                  )}
                 </div>
                 {(product.isBox ? product.total2 : product.total) === 0 && (
                   <div className="mt-2 text-sm text-red-500 md:absolute md:bottom-2 md:left-2">

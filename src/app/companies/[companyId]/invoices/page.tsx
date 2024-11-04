@@ -231,7 +231,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
           />
         </div>
 
-        <div className="bg-white rounded-lg p-4 mb-4 shadow text-slate-900">
+        <div className="bg-white rounded-lg p-4 mb-2 shadow text-slate-900">
           <div className="grid grid-cols-3 gap-4">
             <div>
               <h3 className="text-sm font-semibold">Total Items</h3>
@@ -261,7 +261,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
         ) : stores.length === 0 ? (
           <p className="text-center mt-8">You dont have any inovices yet. Create one to get started!</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {filteredInvoices.map((invoice, index) => (
               <div key={invoice.id} className="relative">
                 <div className="absolute top-0 left-0 bg-teal-600 text-white px-2 py-1 rounded-tl-lg rounded-br-lg z-10">

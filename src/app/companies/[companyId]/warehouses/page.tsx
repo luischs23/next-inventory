@@ -9,6 +9,7 @@ import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
+import { usePermissions } from 'app/hooks/usePermissions'
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
@@ -36,6 +37,7 @@ export default function WarehousesPage() {
   const params = useParams()
   const companyId = params.companyId as string
   const popupRef = useRef<HTMLDivElement>(null)
+  const { hasPermission } = usePermissions()
   
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -182,10 +184,12 @@ export default function WarehousesPage() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Warehouses</h1>
+        {hasPermission('delete') && (
         <Button variant="secondary" onClick={() => setIsPopupOpen(true)}>
           + Add Warehouse
         </Button>
-      </header>
+        )}
+      </header> 
 
       <main className="container mx-auto p-4 mb-16">
         {loading ? (
@@ -219,14 +223,18 @@ export default function WarehousesPage() {
                   </Button>
                 </DropdownMenuTrigger>
                     <DropdownMenuContent className='mr-2'>
+                    {hasPermission('update') && (
                       <DropdownMenuItem onClick={() => openEditPopup(warehouse)}>
                         <Pencil className="h-4 w-4 mr-2" />Update
                       </DropdownMenuItem>
+                    )}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
+                        {hasPermission('delete') && (
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             <Trash2 className="h-4 w-4 mr-2" />Delete
                           </DropdownMenuItem>
+                        )}
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>

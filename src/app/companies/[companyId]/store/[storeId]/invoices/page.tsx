@@ -9,8 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
 import Link from 'next/link'
+import { Skeleton } from "app/components/ui/skeleton"
 import { ArrowLeft, MoreVertical } from 'lucide-react'
 import { toast } from "app/components/ui/use-toast"
+import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
+import { usePermissions } from 'app/hooks/usePermissions'
 
 interface Invoice {
   id: string
@@ -31,6 +34,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     fetchStoreAndInvoices()
@@ -96,9 +100,23 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
       }
     }
   }
-
   if (loading) {
-    return <div className="min-h-screen bg-blue-100 flex items-center justify-center">Loading...</div>
+    return (
+      <div className="min-h-screen bg-blue-100">
+        <header className="bg-teal-600 text-white p-4 flex items-center">
+          <Skeleton className="h-6 w-6 mr-2" />
+          <Skeleton className="h-8 w-48 mr-2 flex-grow" />
+          <Skeleton className="h-10 w-32" />
+        </header>
+        <main className="container mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, index) => (
+              <InvoiceSkeleton key={index} />
+            ))}
+          </div>
+        </main>
+      </div>
+    )
   }
 
   if (error) {
@@ -107,27 +125,29 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
 
   return (
     <div className="min-h-screen bg-blue-100">
-      <header className="bg-teal-600 text-white p-4 flex items-center">
+      <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Invoices for {storeName}</h1>
+        <h1 className="text-xl font-bold flex-grow">Invoices {storeName}</h1>
+        {hasPermission('create') && (
         <Link href={`/companies/${params.companyId}/store/${params.storeId}/new-invoice`}>
           <Button variant="secondary">+ New Invoice</Button>
         </Link>
+        )}
       </header>
-      <main className="container mx-auto p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <main className="container mx-auto p-4 pb-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {invoices.map((invoice, index) => (
             <div key={invoice.id} className="relative">
-              <span className="absolute top-0 left-0 -mt-2 -ml-2 bg-teal-600 text-white rounded-full w-8 h-8 flex items-center justify-center z-10">
+              <span className="absolute top-0 left-0 bg-teal-600 text-white px-2 py-1 rounded-tl-lg rounded-br-lg z-10">
                 {index + 1}
               </span>
-              <Card className="border-2 border-teal-600">
+              <Card className="border-2 shadow-md p-2">
                 <CardHeader className="relative">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0 absolute top-2 right-2">
+                      <Button variant="ghost" className="h-6 w-6 p-0 absolute top-1 right-1">
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -137,17 +157,19 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                           View Details
                         </Link>
                       </DropdownMenuItem>
+                      {hasPermission('delete') && (
                       <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>
                         Delete
                       </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
-                  <p className="text-sm text-gray-600">{invoice.customerPhone}</p>
-                  <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                  <p className="text-sm ">{invoice.customerPhone}</p>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-lg font-bold text-teal-800">Total: ${formatPrice(invoice.totalSold)}</p>
+                <CardContent className='flex justify-between items-center'>
+                  <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                  <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
                 </CardContent>
               </Card>
             </div>
