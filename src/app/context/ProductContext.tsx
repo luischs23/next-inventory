@@ -44,18 +44,18 @@ export const useProducts = () => {
 export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
-  const { user, userRole, companyId } = useAuth()
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
     const fetchProducts = async () => {
-      if (!user || !companyId) {
+      if (authLoading || !user || !user.companyId) {
         setLoading(false)
         return
       }
 
       try {
         setLoading(true)
-        const productsCollection = collection(db, `companies/${companyId}/products`)
+        const productsCollection = collection(db, `companies/${user.companyId}/products`)
         const productsQuery = query(productsCollection)
         const productsSnapshot = await getDocs(productsQuery)
         const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product))
@@ -68,16 +68,16 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     fetchProducts()
-  }, [user, companyId])
+  }, [user, authLoading])
 
   const addNewProduct = async (product: Omit<Product, 'id' | 'createdAt'>) => {
-    if (userRole !== 'admin' || !companyId) {
+    if (user?.role !== 'admin' || !user.companyId) {
       console.error('Only admins can add products')
       return
     }
 
     try {
-      const productsCollection = collection(db, `companies/${companyId}/products`)
+      const productsCollection = collection(db, `companies/${user.companyId}/products`)
       const newProductRef = await addDoc(productsCollection, {
         ...product,
         createdAt: serverTimestamp(),
@@ -98,13 +98,13 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }
 
   const updateProduct = async (product: Product) => {
-    if (userRole !== 'admin' || !companyId) {
+    if (user?.role !== 'admin' || !user.companyId) {
       console.error('Only admins can update products')
       return
     }
 
     try {
-      const productRef = doc(db, `companies/${companyId}/products`, product.id)
+      const productRef = doc(db, `companies/${user.companyId}/products`, product.id)
       const { id, createdAt, ...updateData } = product
       await updateDoc(productRef, updateData)
 
@@ -117,13 +117,13 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }
 
   const removeProduct = async (id: string) => {
-    if (userRole !== 'admin' || !companyId) {
+    if (user?.role !== 'admin' || !user.companyId) {
       console.error('Only admins can remove products')
       return
     }
 
     try {
-      const productRef = doc(db, `companies/${companyId}/products`, id)
+      const productRef = doc(db, `companies/${user.companyId}/products`, id)
       await deleteDoc(productRef)
 
       setProducts(prevProducts => prevProducts.filter(product => product.id !== id))

@@ -13,7 +13,8 @@ import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
 import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc, Menu, ChevronDown, ChevronUp, Loader2, Download} from 'lucide-react'
-import { usePermissions } from '../../hooks/usePermissions'
+import { usePermissions } from '../../hooks/useAuthAndPermissions'
+import { useRouteProtection } from 'app/hooks/useRouteProtection'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
 import * as XLSX from 'xlsx'
@@ -73,6 +74,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const [isTransferring, setIsTransferring] = useState(false)
   const [, setSelectedImage] = useState<string | null>(null)
   const { hasPermission } = usePermissions()
+  const { isAuthorized } = useRouteProtection('create')
   const toggleDropdown = () => setIsOpen(!isOpen)
 
   useEffect(() => {
@@ -460,6 +462,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         variant: "destructive",
       })
     }
+  }
+
+  if (!isAuthorized) {
+    return null // or a loading spinner
   }
 
   if (loading) {

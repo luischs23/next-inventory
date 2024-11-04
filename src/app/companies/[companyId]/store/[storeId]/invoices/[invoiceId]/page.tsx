@@ -15,7 +15,7 @@ import { toast } from 'app/components/ui/use-toast'
 import { ArrowLeft, ChevronDown, ChevronUp, FileDown, Menu } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from 'app/components/ui/dropdown-menu'
 import InvoiceDetailSkeleton from 'app/components/skeletons/InvoiceDetailSkeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { usePermissions } from 'app/hooks/useAuthAndPermissions'
 
 interface InvoiceItem {
   id: string

@@ -13,7 +13,7 @@ import { Skeleton } from "app/components/ui/skeleton"
 import { ArrowLeft, MoreVertical } from 'lucide-react'
 import { toast } from "app/components/ui/use-toast"
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { usePermissions } from 'app/hooks/useAuthAndPermissions'
 
 interface Invoice {
   id: string

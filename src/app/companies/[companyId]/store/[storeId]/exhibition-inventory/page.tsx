@@ -18,7 +18,7 @@ import 'jspdf-autotable'
 import ParesInventorySkeleton from 'app/components/skeletons/ParesInventorySkeleton'
 import { AlertDialog, AlertDialogContent, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
 import { toast } from 'app/components/ui/use-toast'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { usePermissions } from 'app/hooks/useAuthAndPermissions'
 
 interface Product {
   id: string
