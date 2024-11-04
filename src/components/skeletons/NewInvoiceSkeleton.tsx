@@ -1,0 +1,78 @@
+'use client'
+
+import { Button } from "app/components/ui/button"
+import { Input } from "app/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { Skeleton } from "app/components/ui/skeleton"
+import { ArrowLeft, Search, Save } from 'lucide-react'
+
+export default function NewInvoiceSkeleton() {
+  return (
+    <div className="min-h-screen bg-blue-100">
+      <header className="bg-teal-600 text-white p-4 flex items-center">
+        <Button variant="ghost" className="text-white p-0 mr-2" disabled>
+          <ArrowLeft className="h-6 w-6" />
+        </Button>
+        <h1 className="text-xl font-bold flex-grow">New Invoice - <Skeleton className="h-6 w-32 inline-block" /></h1>
+        <Button disabled>
+          <Save className="h-4 w-4 mr-2" />
+          Save Invoice
+        </Button>
+      </header>
+      <main className="container mx-auto p-4 space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Search Product</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex space-x-2">
+              <Input
+                placeholder="Enter barcode"
+                disabled
+              />
+              <Button disabled>
+                <Search className="h-4 w-4 mr-2" />
+                Search
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent className="flex space-x-4">
+            <Input
+              placeholder="Customer Name"
+              disabled
+            />
+            <Input
+              placeholder="Customer Phone"
+              disabled
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice Items</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[...Array(3)].map((_, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <Skeleton className="h-12 w-12 rounded-md" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-[200px]" />
+                    <Skeleton className="h-4 w-[150px]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    </div>
+  )
+}
