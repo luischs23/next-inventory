@@ -9,9 +9,11 @@ import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import Link from 'next/link'
 import { toast } from "app/components/ui/use-toast"
-import { ArrowLeft, ChevronDown, MoreHorizontal, Pencil } from 'lucide-react'
+import { ArrowLeft, MoreHorizontal, Pencil, Calendar, Store, Menu } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "app/components/ui/dropdown-menu"
 import InvoicesPageSkeleton from 'app/components/skeletons/InvoicesPageSkeleton'
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogCancel } from "app/components/ui/alert-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 
 interface InvoiceItem {
   productId: string
@@ -43,6 +45,8 @@ interface Invoice {
   totalEarn: number
   items: InvoiceItem[]
   companyId: string
+  invoiceId: string
+  status: 'open' | 'closed'
 }
 
 interface Store {
@@ -50,7 +54,7 @@ interface Store {
   name: string
 }
 
-export default function InvoicesPage({ params }: { params: { companyId: string, storeId: string } }) {
+export default function InvoicesPage({ params }: { params: { companyId: string} }) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -60,6 +64,14 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
   const [selectedStore, setSelectedStore] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<'date' | 'name'>('date')
   const [, setCompanyName] = useState<string>('')
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)
+  const [selectedMonth, setSelectedMonth] = useState<number | undefined>(undefined)
+  const [selectedDay, setSelectedDay] = useState<number | undefined>(undefined)
+  const [availableYears, setAvailableYears] = useState<number[]>([])
+  const [availableMonths, setAvailableMonths] = useState<number[]>([])
+  const [availableDays, setAvailableDays] = useState<number[]>([])
+  const [activeCardId, setActiveCardId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchCompanyAndStoresAndInvoices = async () => {
@@ -100,6 +112,10 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
         }
         setInvoices(allInvoices)
         setFilteredInvoices(allInvoices)
+
+        // Set available years
+        const years = Array.from(new Set(allInvoices.map(invoice => invoice.createdAt.toDate().getFullYear())))
+        setAvailableYears(years.sort((a, b) => b - a))
       } catch (err) {
         console.error('Error fetching company, stores and invoices:', err)
         toast({
@@ -115,10 +131,42 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
     fetchCompanyAndStoresAndInvoices()
   }, [params.companyId, router])
 
-
   useEffect(() => {
     filterAndSortInvoices()
-  }, [selectedStore, sortOrder, searchTerm, invoices])
+  }, [selectedStore, sortOrder, searchTerm, invoices, selectedYear, selectedMonth, selectedDay])
+
+  useEffect(() => {
+    if (selectedYear) {
+      const months = Array.from(new Set(invoices
+        .filter(invoice => invoice.createdAt.toDate().getFullYear() === selectedYear)
+        .map(invoice => invoice.createdAt.toDate().getMonth())
+      ))
+      setAvailableMonths(months.sort((a, b) => a - b))
+      setSelectedMonth(undefined)
+      setSelectedDay(undefined)
+    } else {
+      setAvailableMonths([])
+      setSelectedMonth(undefined)
+      setSelectedDay(undefined)
+    }
+  }, [selectedYear, invoices])
+
+  useEffect(() => {
+    if (selectedYear && selectedMonth !== undefined) {
+      const days = Array.from(new Set(invoices
+        .filter(invoice => {
+          const date = invoice.createdAt.toDate()
+          return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+        })
+        .map(invoice => invoice.createdAt.toDate().getDate())
+      ))
+      setAvailableDays(days.sort((a, b) => a - b))
+      setSelectedDay(undefined)
+    } else {
+      setAvailableDays([])
+      setSelectedDay(undefined)
+    }
+  }, [selectedYear, selectedMonth, invoices])
 
   const filterAndSortInvoices = () => {
     let filtered = invoices
@@ -140,12 +188,30 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
       )
     }
 
+    // Filter by date
+    if (selectedYear) {
+      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getFullYear() === selectedYear)
+    }
+    if (selectedMonth !== undefined) {
+      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getMonth() === selectedMonth)
+    }
+    if (selectedDay) {
+      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getDate() === selectedDay)
+    }
+
     // Sort
     if (sortOrder === 'date') {
       filtered.sort((a, b) => b.createdAt.seconds - a.createdAt.seconds)
     } else {
       filtered.sort((a, b) => a.customerName.localeCompare(b.customerName))
     }
+
+    // Sort by status and invoiceId
+    filtered.sort((a, b) => {
+      if (a.status === 'open' && b.status !== 'open') return -1
+      if (a.status !== 'open' && b.status === 'open') return 1
+      return parseInt(b.invoiceId) - parseInt(a.invoiceId)
+    })
 
     setFilteredInvoices(filtered)
   }
@@ -161,10 +227,12 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
       hour12: false
     })
   }
-
-  const formatPrice = (price: number) => {
+  const formatPrice = (price: number | undefined) => {
+    if (price === undefined || price === null) {
+      return '0'
+    }
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-  }
+  } 
  
   const calculateTotalProductItems = (invoices: Invoice[]) => {
     return invoices.reduce((sum, invoice) => {
@@ -183,6 +251,21 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
   const totalSold = filteredInvoices.reduce((sum, invoice) => sum + (invoice.totalSold || 0), 0)
   const totalEarn = filteredInvoices.reduce((sum, invoice) => sum + (invoice.totalEarn || 0), 0)
 
+  const handleClearFilters = () => {
+    setSelectedYear(undefined)
+    setSelectedMonth(undefined)
+    setSelectedDay(undefined)
+    setIsFilterDialogOpen(false)
+  }
+
+  const handleCardClick = (invoiceId: string) => {
+    setActiveCardId(activeCardId === invoiceId ? null : invoiceId)
+  }
+  const formatInvoiceId = (invoiceId: string | undefined) => {
+    if (!invoiceId) return '...'
+    return invoiceId.slice(-4)
+  }
+
   return (
     <div className="min-h-screen bg-blue-100 pb-16">
       <header className="bg-teal-600 text-white p-4 flex items-center sticky top-0 z-50">
@@ -190,11 +273,71 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Invoices</h1>
+        <AlertDialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" className="text-white p-2 mr-2">
+              <Calendar className="h-6 w-6" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Filter Invoices</AlertDialogTitle>
+              <AlertDialogDescription>
+                Select a date range to filter invoices.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-4">
+              <Select value={selectedYear?.toString()} onValueChange={(value) => setSelectedYear(value ? parseInt(value) : undefined)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select 
+                value={selectedMonth?.toString()} 
+                onValueChange={(value) => setSelectedMonth(value ? parseInt(value) : undefined)}
+                disabled={!selectedYear}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMonths.map((month) => (
+                    <SelectItem key={month} value={month.toString()}>
+                      {new Date(2000, month).toLocaleString('default', { month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select 
+                value={selectedDay?.toString()} 
+                onValueChange={(value) => setSelectedDay(value ? parseInt(value) : undefined)}
+                disabled={!selectedYear || selectedMonth === undefined}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDays.map((day) => (
+                    <SelectItem key={day} value={day.toString()}>{day}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AlertDialogFooter className="flex justify-between items-end">
+              <AlertDialogCancel className='bg-black text-white'>Close</AlertDialogCancel>
+              <Button onClick={handleClearFilters} variant="outline">Clear Filters</Button>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="secondary" className="mr-2">
-              {selectedStore === 'all' ? 'All Stores' : stores.find(s => s.id === selectedStore)?.name}
-              <ChevronDown className="ml-2 h-4 w-4" />
+            <Button variant="ghost" className="text-white p-2 mr-2">
+              <Store className="h-6 w-6" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
@@ -209,13 +352,17 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="secondary">
-              Sort
-              <ChevronDown className="ml-2 h-4 w-4" />
+              <Menu className="h-6 w-6" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setSortOrder('date')}>By Date</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setSortOrder('name')}>By Name</DropdownMenuItem>
+            {stores.map(store => (
+              <DropdownMenuItem key={store.id} asChild>
+                <Link href={`/companies/${params.companyId}/store/${store.id}/invoices`}>
+                  {store.name}
+                </Link>
+              </DropdownMenuItem>
+            ))}
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
@@ -237,10 +384,6 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
               <h3 className="text-sm font-semibold">Total Items</h3>
               <p className="text-lg">{totalInvoices}</p>
             </div>
-            {/* <div>
-              <h3 className="text-sm font-semibold">Total Products</h3>
-              <p className="text-lg">{totalProductItems}</p>
-            </div> */}
             <div>
               <h3 className="text-sm font-semibold">Total Sold</h3>
               <p className="text-lg">${formatPrice(totalSold)}</p>
@@ -259,21 +402,15 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
             ))}
           </div>
         ) : stores.length === 0 ? (
-          <p className="text-center mt-8">You dont have any inovices yet. Create one to get started!</p>
+          <p className="text-center mt-8">You dont have any invoices yet. Create one to get started!</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {filteredInvoices.map((invoice, index) => (
+            {filteredInvoices.map((invoice) => (
               <div key={invoice.id} className="relative">
-                <div className="absolute top-0 left-0 bg-teal-600 text-white px-2 py-1 rounded-tl-lg rounded-br-lg z-10">
-                  {index + 1}
-                </div>
-                <Card className="mt-4 overflow-hidden">
+                <Card className="mt-4 overflow-hidden" onClick={() => handleCardClick(invoice.id)}>
                   <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="text-sm text-gray-500 mt-1">{formatDate(invoice.createdAt)}</p>
-                        <h3 className="font-semibold">{invoice.customerName}</h3>
-                      </div>
+                    <div className="absolute top-2 right-2 mt-4">
+                    {activeCardId === invoice.id && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
@@ -281,6 +418,13 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
+                          {invoice.status === 'open' && (
+                          <DropdownMenuItem asChild>
+                            <Link href={`/companies/${params.companyId}/store/${invoice.storeId}/invoices/${invoice.id}/edit`}>
+                              Edit Invoice
+                            </Link>
+                          </DropdownMenuItem>
+                            )}  
                           <DropdownMenuItem>
                             <Link href={`/companies/${invoice.companyId}/store/${invoice.storeId}/invoices/${invoice.id}`} className="flex items-center">
                               <Pencil className="mr-2 h-4 w-4" />
@@ -289,24 +433,37 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
+                    )}
                     </div>
-                    <div className='flex justify-between w-full'>
-                      <div className="text-sm">
-                        <p className="text-gray-700">Phone: {invoice.customerPhone}</p>
-                        <p className="text-gray-500">Store: {invoice.storeName}</p>
+                    <div className='w-full'>
+                      <div>
+                        <span className="absolute top-0 left-0 bg-teal-600 text-white px-2 py-1 rounded-tl-lg rounded-br-lg z-10">
+                         {formatInvoiceId(invoice.invoiceId)}
+                        </span>
+                        <h3 className="font-semibold">{invoice.customerName}</h3>
                       </div>
-                      <div className="text-right">
-                        <div className='flex flex-col items-end'>
+                      <div className="text-sm">
+                        <p className="text-gray-700">Phone: {invoice.customerPhone}</p>                                        
+                      </div>
+                        <div className='flex flex-col items-end mt-1'>
                           <div className='flex justify-end'>
                             <p className="text-sm font-semibold mr-2">Total:</p>
                             <p className="text-sm">${formatPrice(invoice.totalSold)}</p>
                           </div>
-                          <div className='flex justify-end'>
+                      </div>
+                      <div className='flex justify-between items-center'>
+                        <p className="text-gray-500 text-sm">Store: {invoice.storeName}</p>
+                        <div className='flex justify-end'>
                             <p className="text-sm font-semibold mr-2">Earn:</p>
                             <p className="text-sm">${formatPrice(invoice.totalEarn)}</p>
-                          </div>
                         </div>
                       </div>
+                      <div className='flex justify-between items-center mt-2'>
+                          <p className={`text-sm font-medium ${invoice.status === 'open' ? 'text-yellow-600' : 'text-green-600'}`}>
+                            Status: {invoice.status}
+                          </p>
+                          <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                        </div>  
                     </div>
                   </CardContent>
                 </Card>
@@ -315,10 +472,6 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
           </div>
         )}
       </main>
-
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
-        {/* Add your navigation items here */}
-      </nav>
     </div>
   )
 }

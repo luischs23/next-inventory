@@ -137,7 +137,10 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
     }
   }
 
-  const formatPrice = (price: number): string => {
+  const formatPrice = (price: number | undefined) => {
+    if (price === undefined || price === null) {
+      return '0'
+    }
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 

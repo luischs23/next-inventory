@@ -1,22 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo} from 'react'
 import { useRouter } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, doc, getDoc, Timestamp, deleteDoc, addDoc, serverTimestamp, query, orderBy} from 'firebase/firestore'
+import { collection, getDocs, doc, getDoc, Timestamp, deleteDoc, addDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import Link from 'next/link'
 import { Skeleton } from "app/components/ui/skeleton"
-import { ArrowLeft, Calendar, MoreVertical, Plus } from 'lucide-react'
+import { ArrowLeft, Calendar, MoreVertical, Menu, PlusIcon } from 'lucide-react'
 import { toast } from "app/components/ui/use-toast"
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
 import { usePermissions } from 'app/hooks/usePermissions'
-import { InvoiceCalendar } from 'app/components/InvoiceCalendar'
 
 interface Invoice {
   id: string
@@ -25,6 +25,7 @@ interface Invoice {
   totalSold: number
   customerPhone: string
   status: 'open' | 'closed'
+  invoiceId: string
 }
 
 interface Store { 
@@ -39,15 +40,70 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [error, setError] = useState<string | null>(null)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
   const [isNewInvoiceDialogOpen, setIsNewInvoiceDialogOpen] = useState(false)
+  const [isEditInvoiceDialogOpen, setIsEditInvoiceDialogOpen] = useState(false)
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
   const [newCustomerName, setNewCustomerName] = useState('')
   const [newCustomerPhone, setNewCustomerPhone] = useState('')
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
-  const [isCalendarDialogOpen, setIsCalendarDialogOpen] = useState(false)
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
+  const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const { hasPermission } = usePermissions()
+
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)
+  const [selectedMonth, setSelectedMonth] = useState<number | undefined>(undefined)
+  const [selectedDay, setSelectedDay] = useState<number | undefined>(undefined)
+
+  const [availableYears, setAvailableYears] = useState<number[]>([])
+  const [availableMonths, setAvailableMonths] = useState<number[]>([])
+  const [availableDays, setAvailableDays] = useState<number[]>([])
 
   useEffect(() => {
     fetchStoreAndInvoices()
   }, [params.companyId, params.storeId])
+
+  useEffect(() => {
+    if (invoices.length > 0) {
+      const years = Array.from(new Set(invoices.map(invoice => invoice.createdAt.toDate().getFullYear())))
+      setAvailableYears(years.sort((a, b) => b - a))
+    }
+  }, [invoices])
+
+  useEffect(() => {
+    if (selectedYear) {
+      const months = Array.from(new Set(invoices
+        .filter(invoice => invoice.createdAt.toDate().getFullYear() === selectedYear)
+        .map(invoice => invoice.createdAt.toDate().getMonth())
+      ))
+      setAvailableMonths(months.sort((a, b) => a - b))
+      setSelectedMonth(undefined)
+      setSelectedDay(undefined)
+    } else {
+      setAvailableMonths([])
+      setSelectedMonth(undefined)
+      setSelectedDay(undefined)
+    }
+  }, [selectedYear, invoices])
+
+  useEffect(() => {
+    if (selectedYear && selectedMonth !== undefined) {
+      const days = Array.from(new Set(invoices
+        .filter(invoice => {
+          const date = invoice.createdAt.toDate()
+          return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+        })
+        .map(invoice => invoice.createdAt.toDate().getDate())
+      ))
+      setAvailableDays(days.sort((a, b) => a - b))
+      setSelectedDay(undefined)
+    } else {
+      setAvailableDays([])
+      setSelectedDay(undefined)
+    }
+  }, [selectedYear, selectedMonth, invoices])
+
+  useEffect(() => {
+    filterInvoices()
+  }, [selectedYear, selectedMonth, selectedDay, invoices])
 
   const fetchStoreAndInvoices = async () => {
     setLoading(true)
@@ -79,6 +135,28 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
     }
   }
 
+  const filterInvoices = () => {
+    let filtered = invoices
+    if (selectedYear) {
+      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getFullYear() === selectedYear)
+    }
+    if (selectedMonth !== undefined) {
+      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getMonth() === selectedMonth)
+    }
+    if (selectedDay) {
+      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getDate() === selectedDay)
+    }
+    setFilteredInvoices(filtered)
+  }
+
+  const sortedInvoices = useMemo(() => {
+    return [...filteredInvoices].sort((a, b) => {
+      if (a.status === 'open' && b.status !== 'open') return -1
+      if (a.status !== 'open' && b.status === 'open') return 1
+      return parseInt(b.invoiceId) - parseInt(a.invoiceId)
+    })
+  }, [filteredInvoices])
+
   const formatDate = (timestamp: Timestamp) => {
     const date = timestamp.toDate()
     return date.toLocaleDateString()
@@ -88,22 +166,12 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
-  const handleDateSelect = (date: Date | undefined) => {
-    if (date) {
-      const filtered = invoices.filter(invoice => 
-        invoice.createdAt.toDate().toDateString() === date.toDateString()
-      )
-      setFilteredInvoices(filtered)
-    } else {
-      setFilteredInvoices(invoices)
-    }
-  }
-
   const handleDelete = async () => {
     if (invoiceToDelete) {
       try {
         await deleteDoc(doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, invoiceToDelete.id))
         setInvoices(invoices.filter(invoice => invoice.id !== invoiceToDelete.id))
+        setFilteredInvoices(filteredInvoices.filter(invoice => invoice.id !== invoiceToDelete.id))
         toast({
           title: "Success",
           description: `Invoice for ${invoiceToDelete.customerName} has been deleted successfully.`,
@@ -138,7 +206,8 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         customerPhone: newCustomerPhone,
         createdAt: Timestamp.now(),
         totalSold: 0,
-        status: 'open'
+        status: 'open',
+        invoiceId: ''
       }
 
       setInvoices([newInvoice, ...invoices])
@@ -160,6 +229,57 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         variant: "destructive",
       })
     }
+  }
+
+  const handleEditInvoice = async () => {
+    if (editingInvoice) {
+      try {
+        await updateDoc(doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, editingInvoice.id), {
+          customerName: newCustomerName,
+          customerPhone: newCustomerPhone,
+        })
+
+        const updatedInvoice = { ...editingInvoice, customerName: newCustomerName, customerPhone: newCustomerPhone }
+        setInvoices(invoices.map(invoice => invoice.id === editingInvoice.id ? updatedInvoice : invoice))
+        setFilteredInvoices(filteredInvoices.map(invoice => invoice.id === editingInvoice.id ? updatedInvoice : invoice))
+        setIsEditInvoiceDialogOpen(false)
+        setEditingInvoice(null)
+        setNewCustomerName('')
+        setNewCustomerPhone('')
+
+        toast({
+          title: "Success",
+          description: "Invoice updated successfully.",
+          variant: "default",
+        })
+      } catch (error) {
+        console.error('Error updating invoice:', error)
+        toast({
+          title: "Error",
+          description: "Failed to update invoice. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleClearFilters = () => {
+    setSelectedYear(undefined)
+    setSelectedMonth(undefined)
+    setSelectedDay(undefined)
+    setFilteredInvoices(invoices)
+    setIsFilterDialogOpen(false)
+  }
+
+  const openEditDialog = (invoice: Invoice) => {
+    setEditingInvoice(invoice)
+    setNewCustomerName(invoice.customerName)
+    setNewCustomerPhone(invoice.customerPhone)
+    setIsEditInvoiceDialogOpen(true)
+  }
+
+  const handleCardClick = (invoiceId: string) => {
+    setActiveCardId(activeCardId === invoiceId ? null : invoiceId)
   }
 
   if (loading) {
@@ -192,7 +312,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Invoices {storeName}</h1>
-        <AlertDialog open={isCalendarDialogOpen} onOpenChange={setIsCalendarDialogOpen}>
+        <AlertDialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" className="text-white p-2 mr-2">
               <Calendar className="h-6 w-6" />
@@ -200,39 +320,87 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Select Date</AlertDialogTitle>
+              <AlertDialogTitle>Filter Invoices</AlertDialogTitle>
               <AlertDialogDescription>
-                Choose a date to filter invoices.
+                Select a date range to filter invoices.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <InvoiceCalendar 
-              invoices={invoices.map(invoice => ({
-                id: invoice.id,
-                createdAt: invoice.createdAt.toDate()
-              }))}
-              onSelectDate={handleDateSelect}
-            />
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <div className="space-y-4">
+              <Select value={selectedYear?.toString()} onValueChange={(value) => setSelectedYear(value ? parseInt(value) : undefined)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((year) => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select 
+                value={selectedMonth?.toString()} 
+                onValueChange={(value) => setSelectedMonth(value ? parseInt(value) : undefined)}
+                disabled={!selectedYear}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMonths.map((month) => (
+                    <SelectItem key={month} value={month.toString()}>
+                      {new Date(2000, month).toLocaleString('default', { month: 'long' })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select 
+                value={selectedDay?.toString()} 
+                onValueChange={(value) => setSelectedDay(value ? parseInt(value) : undefined)}
+                disabled={!selectedYear || selectedMonth === undefined}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Day" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableDays.map((day) => (
+                    <SelectItem key={day} value={day.toString()}>{day}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AlertDialogFooter className="flex justify-between items-end">
+              <AlertDialogCancel className='bg-black text-white'>Close</AlertDialogCancel>
+              <Button onClick={handleClearFilters} variant="outline">Clear Filters</Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
         {hasPermission('create') && (
-          <Button variant="secondary" onClick={() => setIsNewInvoiceDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Invoice
-          </Button>
+          
+          <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="text-white">
+              <Menu className="h-6 w-6" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setIsNewInvoiceDialogOpen(true)}>
+              <PlusIcon className="h-4 w-4 mr-2" />
+              New Invoice
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+       
         )}
       </header>
       <main className="container mx-auto p-4 pb-20">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredInvoices.map((invoice, index) => (
+        {sortedInvoices.map((invoice) => (
             <div key={invoice.id} className="relative">
-              <span className="absolute top-0 left-0 bg-teal-600 text-white px-2 py-1 rounded-tl-lg rounded-br-lg z-10">
-                {index + 1}
-              </span>
-              <Card className={`border-2 shadow-md p-2 ${invoice.status === 'open' ? 'border-yellow-500' : 'border-green-500'}`}>
+              
+              <Card 
+                className={`border-2 shadow-md p-2 ${invoice.status === 'open' ? 'border-yellow-500' : 'border-green-500'}`}
+                onClick={() => handleCardClick(invoice.id)}>
                 <CardHeader className="relative">
+                {activeCardId === invoice.id && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-6 w-6 p-0 absolute top-1 right-1">
@@ -240,35 +408,31 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      {invoice.status === 'open' ? (
-                        <>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
-                              View Details
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}/edit`}>
-                              Edit Invoice
-                            </Link>
-                          </DropdownMenuItem>
-                        </>
-                      ) : (
-                        <>
-                          <DropdownMenuItem asChild>
-                            <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
-                              View Details
-                            </Link>
-                          </DropdownMenuItem>
-                          {hasPermission('delete') && (
-                            <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>
-                              Delete
-                            </DropdownMenuItem>
-                          )}
-                        </>
+                    {invoice.status === 'closed' && (
+                      <DropdownMenuItem asChild>
+                        <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
+                          View Details
+                        </Link>
+                      </DropdownMenuItem>
+                    )}                      
+                      {invoice.status === 'open' && (
+                        <DropdownMenuItem asChild>
+                          <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}/edit`}>
+                            Edit Invoice
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem onClick={() => openEditDialog(invoice)}>
+                        Edit Card
+                      </DropdownMenuItem>
+                      {invoice.status === 'closed' && hasPermission('delete') && (
+                        <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>
+                          Delete
+                        </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
+                )}
                   <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
                   <p className="text-sm ">{invoice.customerPhone}</p>
                 </CardHeader>
@@ -276,12 +440,13 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                   <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
                   <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
                 </CardContent>
-                <CardContent>
+                <CardContent className='flex justify-between items-center'>
                   <p className={`text-sm font-medium ${invoice.status === 'open' ? 'text-yellow-600' : 'text-green-600'}`}>
                     Status: {invoice.status === 'open' ? 'Open' : 'Closed'}
                   </p>
+                  <p className="text-sm text-gray-500">{invoice.invoiceId}</p>
                 </CardContent>
-                </Card>
+              </Card>
             </div>
           ))}
         </div>
@@ -339,7 +504,47 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
             </div>
           </div>
           <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button onClick={handleCreateNewInvoice}>Create Invoice</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isEditInvoiceDialogOpen} onOpenChange={setIsEditInvoiceDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Edit Invoice</AlertDialogTitle>
+            <AlertDialogDescription>
+              Update customer details for this invoice.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="edit-name"
+                value={newCustomerName}
+                onChange={(e) => setNewCustomerName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-phone" className="text-right">
+                Phone
+              </Label>
+              <Input
+                id="edit-phone"
+                value={newCustomerPhone}
+                onChange={(e) => setNewCustomerPhone(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button onClick={handleEditInvoice}>Update Invoice</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
