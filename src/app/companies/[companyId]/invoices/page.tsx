@@ -59,7 +59,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
   const [stores, setStores] = useState<Store[]>([])
   const [selectedStore, setSelectedStore] = useState<string>('all')
   const [sortOrder, setSortOrder] = useState<'date' | 'name'>('date')
-  const [companyName, setCompanyName] = useState<string>('')
+  const [, setCompanyName] = useState<string>('')
 
   useEffect(() => {
     const fetchCompanyAndStoresAndInvoices = async () => {
@@ -271,7 +271,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string, 
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                        <p className="text-sm text-gray-500 mt-1">{formatDate(invoice.createdAt)}</p>
                         <h3 className="font-semibold">{invoice.customerName}</h3>
                       </div>
                       <DropdownMenu>

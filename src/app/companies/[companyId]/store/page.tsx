@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams} from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc} from 'firebase/firestore'
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import Image from 'next/image'
 import { usePermissions } from 'app/hooks/usePermissions'
 import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
 
 interface Store {
   id: string
@@ -25,11 +26,19 @@ interface Store {
   imageUrl: string
 }
 
+interface User {
+  id: string
+  name: string
+  surname: string
+  role: string
+}
+
 export default function StoreListPage() {
   const router = useRouter()
   const params = useParams()
   const companyId = params.companyId as string
   const [stores, setStores] = useState<Store[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
@@ -42,36 +51,55 @@ export default function StoreListPage() {
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const { hasPermission } = usePermissions()
-
-
+  const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
+  
   useEffect(() => {
-    fetchStores()
+    fetchStoresAndUsers()
   }, [companyId])
 
-  const fetchStores = async () => {
+  const fetchStoresAndUsers = async () => {
     if (!companyId) return
 
     setLoading(true)
     setError(null)
 
     try {
+      // Fetch stores
       const storesRef = collection(db, `companies/${companyId}/stores`)
-      const querySnapshot = await getDocs(storesRef)
-      const storeList = querySnapshot.docs.map(doc => ({
+      const storesSnapshot = await getDocs(storesRef)
+      const storeList = storesSnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       } as Store))
       setStores(storeList)
+
+      // Fetch all users
+      const usersRef = collection(db, `companies/${companyId}/users`)
+      const usersSnapshot = await getDocs(usersRef)
+      const userList = usersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as User))
+      setUsers(userList)
     } catch (err) {
-      console.error('Error fetching stores:', err)
-      if (err instanceof Error) {
-        setError(`Failed to fetch stores: ${err.message}`)
-      } else {
-        setError('Failed to fetch stores. Please try again later.')
-      }
+      console.error('Error fetching data:', err)
+      setError('Failed to fetch data. Please try again later.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const getAvailableManagers = () => {
+    const assignedManagers = stores.map(store => store.manager)
+    return users.filter(user => 
+      user.role === 'pos_salesperson' && 
+      (!assignedManagers.includes(user.id) || user.id === newStore.manager)
+    )
+  }
+
+  const getManagerFullName = (managerId: string) => {
+    const manager = users.find(user => user.id === managerId)
+    return manager ? `${manager.name} ${manager.surname}` : 'Not assigned'
   }
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,6 +212,10 @@ export default function StoreListPage() {
     setIsPopupOpen(true)
   }
 
+  const handleCardClick = (storeId: string) => {
+    setActiveStoreId(activeStoreId === storeId ? null : storeId)
+  }
+
   return (
     <div className="min-h-screen bg-blue-100 ">
       <header className="bg-teal-600 text-white p-3 flex items-center">
@@ -214,7 +246,11 @@ export default function StoreListPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {stores.map((store) => (
-              <Card key={store.id} className="overflow-hidden">
+              <Card 
+                key={store.id} 
+                className="overflow-hidden cursor-pointer"
+                onClick={() => handleCardClick(store.id)}
+              >
                 <div className="flex">
                   <div className="w-1/3">
                     <Image 
@@ -226,6 +262,7 @@ export default function StoreListPage() {
                     />
                   </div>
                   <CardContent className="w-2/3 p-4 relative">
+                  {activeStoreId === store.id && (
                     <div className="absolute top-2 right-2 flex">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -274,9 +311,10 @@ export default function StoreListPage() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
+                     )}
                     <h2 className="font-bold mb-2">{store.name}</h2>
                     <p className="text-sm text-gray-600">{store.address}</p>
-                    <p className="text-sm text-gray-600">Manager: {store.manager}</p>
+                    <p className="text-sm text-gray-600">Manager:  {getManagerFullName(store.manager)}</p>
                     <p className="text-sm text-gray-600">Phone: {store.phone}</p>
                   </CardContent>
                 </div>
@@ -324,12 +362,21 @@ export default function StoreListPage() {
                   <label htmlFor="manager" className="block text-sm font-medium text-gray-700">
                     Manager
                   </label>
-                  <Input
-                    id="manager"
+                  <Select
                     value={newStore.manager}
-                    onChange={(e) => setNewStore({...newStore, manager: e.target.value})}
-                    required
-                  />
+                    onValueChange={(value) => setNewStore({...newStore, manager: value})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a manager" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getAvailableManagers().map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name} {user.surname}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label htmlFor="phone" className="block text-sm font-medium text-gray-700">

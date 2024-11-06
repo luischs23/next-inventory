@@ -32,6 +32,7 @@ export default function WarehousesPage() {
   const [newWarehouse, setNewWarehouse] = useState({ name: '', address: '', manager: '', phone: '' })
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(true)
+  const [activeWarehouseId, setActiveWarehouseId] = useState<string | null>(null)
   const [, setError] = useState<string | null>(null)
   const router = useRouter()
   const params = useParams()
@@ -173,6 +174,10 @@ export default function WarehousesPage() {
     setIsPopupOpen(true)
   }
 
+  const handleCardClick = (warehouseId: string) => {
+    setActiveWarehouseId(activeWarehouseId === warehouseId ? null : warehouseId)
+  }
+
   const handleParesInventoryClick = (warehouseId: string) => {
     router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
   }
@@ -203,7 +208,10 @@ export default function WarehousesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {warehouses.map((warehouse) => (
-              <Card key={warehouse.id} className="overflow-hidden">
+              <Card 
+                key={warehouse.id} 
+                className="overflow-hidden"
+                onClick={() => handleCardClick(warehouse.id)}>
                 <div className="flex">
                   <div className="w-1/3">
                     <Image 
@@ -215,19 +223,22 @@ export default function WarehousesPage() {
                     />
                   </div>
                   <CardContent className="w-2/3 p-4 relative">
+                  
                     <div className="absolute top-2 right-2 flex">
                     <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 p-0">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                    <DropdownMenuContent className='mr-2'>
-                    {hasPermission('update') && (
-                      <DropdownMenuItem onClick={() => openEditPopup(warehouse)}>
-                        <Pencil className="h-4 w-4 mr-2" />Update
-                      </DropdownMenuItem>
-                    )}
+                    {activeWarehouseId === warehouse.id && (
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                           )}
+                          <DropdownMenuContent className='mr-2'>
+                          {hasPermission('update') && (
+                            <DropdownMenuItem onClick={() => openEditPopup(warehouse)}>
+                              <Pencil className="h-4 w-4 mr-2" />Update
+                            </DropdownMenuItem>
+                          )}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                         {hasPermission('delete') && (
@@ -263,6 +274,7 @@ export default function WarehousesPage() {
                     <p className="text-sm text-gray-600">{warehouse.address}</p>
                     <p className="text-sm text-gray-600">Manager: {warehouse.manager}</p>
                     <p className="text-sm text-gray-600">Phone: {warehouse.phone}</p>
+                    
                   </CardContent>
                 </div>
               </Card>

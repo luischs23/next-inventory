@@ -74,6 +74,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const [, setSelectedImage] = useState<string | null>(null)
   const { hasPermission } = usePermissions()
   const toggleDropdown = () => setIsOpen(!isOpen)
+  const [selectedCard, setSelectedCard] = useState<string | null>(null)
 
   useEffect(() => {
     const controlHeader = () => {
@@ -462,6 +463,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     }
   }
 
+  const handleCardClick = (productId: string) => {
+    setSelectedCard(selectedCard === productId ? null : productId)
+  }
+
   if (loading) {
     return ParesInventorySkeleton()
   }
@@ -522,8 +527,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon">
-                  <Filter className="h-4 w-4 text-black" />
+                <Button variant="outline" >
+                 <div className='mr-1'>Gender</div>
+                 <Filter className="h-4 w-4 text-black"/> 
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className='place-items-center'>
@@ -556,7 +562,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           </div>
         </div>
         </div>
-        <main className="container mx-auto p-4 flex-grow">
+        <main className="container mx-auto p-2 flex-grow">
         {hasPermission('update') && (
         <>
         <div className='mb-2 text-black'>
@@ -582,7 +588,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           {sortedProducts.map((product, index) => (
             <div key={product.id} className="flex items-start">
               <div className="text-sm font-semibold mr-1 mt-2 text-black md:block">{index + 1}</div>
-              <Card className="flex-grow relative md:flex md:items-center md:space-x-4">
+              <Card 
+                className="flex-grow relative md:flex md:items-center md:space-x-4 cursor-pointer"
+                onClick={() => handleCardClick(product.id)}
+              >               
                 <CardContent className="p-4 md:flex md:flex-grow md:items-center md:space-x-4">
                   <div className="flex space-x-4 md:w-1/6 items-center justify-center">
                     <div className="relative w-16 h-16 flex-shrink-0 ">
@@ -653,7 +662,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                   </div>
                 </CardContent>
                 <div className="absolute top-2 right-2 flex items-center">
-                {hasPermission('update') && (
+                {selectedCard === product.id && hasPermission('update') && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">

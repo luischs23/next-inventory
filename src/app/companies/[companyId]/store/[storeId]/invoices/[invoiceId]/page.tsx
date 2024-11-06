@@ -100,11 +100,7 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
   const [imageError, setImageError] = useState('')
   const [loading, setLoading] = useState(true)
   const { hasPermission } = usePermissions()
-
-  const formatPrice = (price: number): string => {
-    return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
-  }
-
+  
   useEffect(() => { 
 
       fetchInvoice()
@@ -139,6 +135,10 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
     } finally {
       setLoading(false)
     }
+  }
+
+  const formatPrice = (price: number): string => {
+    return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
   const fetchWarehouses = async () => {

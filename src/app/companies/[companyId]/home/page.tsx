@@ -20,7 +20,7 @@ import { db } from 'app/services/firebase/firebase.config'
 import { doc, getDoc } from 'firebase/firestore'
 
 export default function Home({ params }: { params: { companyId: string } }) {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const [companyName, setCompanyName] = useState('')
 

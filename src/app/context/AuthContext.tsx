@@ -7,6 +7,7 @@ import { doc, getDoc, collection, getDocs} from 'firebase/firestore'
 import { db } from 'app/services/firebase/firebase.config'
 
 interface ExtendedUser extends FirebaseUser {
+  id?: string
   role?: string
   companyId?: string | null
   name?: string
@@ -16,7 +17,7 @@ interface AuthContextType {
   user: ExtendedUser | null
   loading: boolean
   setUser: (user: ExtendedUser | null) => void
-}
+} 
 
 const AuthContext = createContext<AuthContextType>({ 
   user: null, 
