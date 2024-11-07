@@ -6,47 +6,49 @@ import { useRouter } from 'next/navigation'
 import { Button } from "app/components/ui/button"
 import { Card } from "app/components/ui/card"
 import Link from 'next/link'
-import { 
-  Store, 
-  Warehouse, 
-  FileText, 
-  Users, 
-  User, 
-  Settings, 
-  HelpCircle, 
-  LogOut 
-} from 'lucide-react'
+import Image from 'next/image'
+import { Store, Warehouse, FileText, Users, User } from 'lucide-react'
 import { db } from 'app/services/firebase/firebase.config'
-import { doc, getDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 
 export default function Home({ params }: { params: { companyId: string } }) {
   const { user } = useAuth()
   const router = useRouter()
   const [companyName, setCompanyName] = useState('')
+  const [userProfile, setUserProfile] = useState<{ name: string; photo: string } | null>(null)
 
   useEffect(() => {
-    const fetchCompanyName = async () => {
+    const fetchCompanyAndUserData = async () => {
       if (!user) {
-        router.push('/login')
-        return
+        return;
       }
-
       try {
-        const companyRef = doc(db, 'companies', params.companyId)
-        const companySnap = await getDoc(companyRef)
-        
+        const companyRef = doc(db, 'companies', params.companyId);
+        const companySnap = await getDoc(companyRef);
         if (companySnap.exists()) {
-          setCompanyName(companySnap.data().name)
+          setCompanyName(companySnap.data().name);
         } else {
-          console.error('Company not found')
-          router.push('/companies')
+          router.push('/companies');
+          return;
         }
+        // Fetch user profile data
+        const usersCollectionRef = collection(db, `companies/${params.companyId}/users`);
+        const userQuery = query(usersCollectionRef, where('uid', '==', user.uid));
+        const userQuerySnapshot = await getDocs(userQuery);
+    
+        if (!userQuerySnapshot.empty) {
+          const userData = userQuerySnapshot.docs[0].data();
+          setUserProfile({
+            name: userData.name || user.displayName || 'User',
+            photo: userData.photo || ''
+          });
+        } 
       } catch (error) {
-        console.error('Error fetching company:', error)
+        console.error('Error fetching data:', error);
       }
-    }
+    };
 
-    fetchCompanyName()
+    fetchCompanyAndUserData()
   }, [user, params.companyId, router])
 
   const menuItems = [
@@ -55,21 +57,32 @@ export default function Home({ params }: { params: { companyId: string } }) {
     { name: 'Invoices', icon: FileText, href: `/companies/${params.companyId}/invoices` },
     { name: 'Users', icon: Users, href: `/companies/${params.companyId}/users` },
     { name: 'Profile', icon: User, href: `/companies/${params.companyId}/profile` },
-    { name: 'Settings', icon: Settings, href: `/companies/${params.companyId}/settings` },
-    { name: 'Support', icon: HelpCircle, href: `/companies/${params.companyId}/support` },
   ]
 
-  const handleLogout = () => {  
-    logout()
-    router.push('/login')
-  }
-
   return (
-    <div className="min-h-svh bg-blue-100 flex flex-col">
+    <div className="min-h-svh bg-blue-100">
       {/* Header */}
       <header className="w-full p-4 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">{companyName}</h1>
-        <span className="text-gray-700 font-semibold">Welcome, {user?.displayName || 'User'}</span>
+        <div className="flex items-center">
+        <div className="flex flex-col items-end mr-2">
+          <span className="text-gray-700 font-semibold">Welcome,</span>
+          <span className="text-gray-600">{userProfile?.name || 'User'}</span>
+        </div>
+          {userProfile?.photo ? (
+            <Image
+              src={userProfile.photo}
+              alt="User"
+              width={40}
+              height={40}
+              className="rounded-md object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-gray-300 rounded-md flex items-center justify-center">
+              <User className="w-6 h-6 text-gray-600" />
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Main content */}
@@ -90,14 +103,6 @@ export default function Home({ params }: { params: { companyId: string } }) {
                 </Button>
               </Link>
             ))}
-            <Button
-              variant="outline"
-              className="w-full h-24 flex flex-col items-center justify-center text-gray-700 hover:bg-blue-50"
-              onClick={handleLogout}
-            >
-              <LogOut className="w-8 h-8 mb-2" />
-              <span className="text-xs">Sign Out</span>
-            </Button>
           </div>
         </Card>
       </main>

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
-import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc, Menu, ChevronDown, ChevronUp, Loader2, Download} from 'lucide-react'
+import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc, Menu, Loader2, Download} from 'lucide-react'
 import { usePermissions } from '../../hooks/usePermissions'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
@@ -21,7 +21,8 @@ import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import { Switch } from "app/components/ui/switch"
-import ParesInventorySkeleton from '../skeletons/ParesInventorySkeleton'
+import { Skeleton } from '../ui/skeleton'
+import { InvoiceSkeleton } from '../skeletons/InvoiceSkeleton'
 
 interface SizeInput {
   quantity: number
@@ -66,14 +67,13 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const { user, } = useAuth()
   const [showInactive, setShowInactive] = useState(false)
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([])
-  const [isOpen, setIsOpen] = useState(false)
-  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const [, setIsHeaderVisible] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
   const [transferConfirmation, setTransferConfirmation] = useState<{ product: Product; targetWarehouseId: string } | null>(null);
   const [isTransferring, setIsTransferring] = useState(false)
   const [, setSelectedImage] = useState<string | null>(null)
   const { hasPermission } = usePermissions()
-  const toggleDropdown = () => setIsOpen(!isOpen)
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [selectedCard, setSelectedCard] = useState<string | null>(null)
 
   useEffect(() => {
@@ -219,7 +219,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       // Updated logic for boxes and inactive products
       const matchesBoxFilter = showBox === product.isBox
       const matchesInactiveFilter = product.isBox 
-        ? (showInactive ? !isInactive : isInactive)  // Reversed logic for boxes
+        ? (showInactive ? isInactive : !isInactive)  // Reversed logic for boxes
         : (showInactive ? isInactive : !isInactive)  // Original logic for pairs
 
       return matchesSearch && matchesGender && matchesBoxFilter && matchesInactiveFilter
@@ -468,7 +468,22 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }
 
   if (loading) {
-    return ParesInventorySkeleton()
+    return (
+      <div className="min-h-screen bg-blue-100">
+        <header className="bg-teal-600 text-white p-4 flex items-center">
+          <Skeleton className="h-6 w-6 mr-2" />
+          <Skeleton className="h-8 w-48 mr-2 flex-grow" />
+          <Skeleton className="h-10 w-32" />
+        </header>
+        <main className="container mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, index) => (
+              <InvoiceSkeleton key={index} />
+            ))}
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -477,8 +492,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Inventory {warehouseName}</h1>
-        {hasPermission('update') && (
+        <h1 className="text-xl font-bold flex-grow">Inv-{showBox ? 'Cajas' : 'Pares'} {warehouseName}</h1>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="text-white">
@@ -490,6 +504,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               <PlusIcon className="h-4 w-4 mr-2" />
               New Product
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setIsFilterDialogOpen(true)}>
+            <Filter className="h-4 w-4 mr-2" />
+              Filters
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={exportToPDF}>
               <FileDown className="h-4 w-4 mr-2" />
               Export PDF
@@ -500,59 +518,72 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        )}
-      </header>   
-    <div className={`transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>   
-      <div className="bg-white sticky top-16 z-10 p-4 shadow-md">
-        <div className='flex items-center space-x-3 mb-4'>
-            <div >
+        <AlertDialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Filters</AlertDialogTitle>
+            <AlertDialogDescription>
+              Adjust your inventory filters here.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4">
+            <div className='flex items-center space-x-3 mb-4'>
+              <div>
                 <Switch
-                  id="show-inactive"
+                  id="show-box"
                   checked={showBox}
                   onCheckedChange={setshowBox}
                 />
-                <label htmlFor="show-inactive" className="text-sm font-medium text-black">
-                  {showBox ? ' Cajas' : ' Pares'}
+                <label htmlFor="show-box" className="text-sm font-medium text-black ml-2">
+                  {showBox ? 'Cajas' : 'Pares'}
                 </label>
+              </div>
+              <div>
+                <Switch
+                  id="show-inactive"
+                  checked={showInactive}
+                  onCheckedChange={setShowInactive}
+                />
+                <label htmlFor="show-inactive" className="text-sm font-medium text-black ml-2">
+                  {showInactive ? 'Inactive' : 'Active'}
+                </label>
+              </div>
             </div>
-            <div >
-              <Switch
-                id="show-inactive"
-                checked={showInactive}
-                onCheckedChange={setShowInactive}
-              />
-              <label htmlFor="show-inactive" className="text-sm font-medium  text-black">
-                {showInactive ? ' Inactive' : ' Active'}
-              </label>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" >
-                 <div className='mr-1'>Gender</div>
-                 <Filter className="h-4 w-4 text-black"/> 
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className='place-items-center'>
-                <DropdownMenuItem onClick={() => setGenderFilter('all')}>All</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setGenderFilter('Dama')}>Dama</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setGenderFilter('Hombre')}>Hombre</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Select onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
-              <SelectTrigger className="w-[100px] text-black">
-                <SelectValue placeholder="Sort by" />
+            <Select value={genderFilter} onValueChange={(value: 'all' | 'Dama' | 'Hombre') => setGenderFilter(value)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Gender">
+                  <div className="flex items-center">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <span>{genderFilter === 'all' ? 'All' : genderFilter}</span>
+                  </div>
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent className='it text-black'>
-                <SelectItem value="entry">
-                  <span className="flex items-center">
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="Dama">Dama</SelectItem>
+                <SelectItem value="Hombre">Hombre</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={sortOrder} onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Sort by">
+                  <div className="flex items-center">
                     <SortDesc className="mr-2 h-4 w-4" />
-                  </span>
-                </SelectItem>
+                    <span>{sortOrder === 'entry' ? 'Entry' : 'A-Z'}</span>
+                  </div>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="entry">Entry</SelectItem>
                 <SelectItem value="alphabetical">A-Z</SelectItem>
               </SelectContent>
-            </Select>        
+            </Select>
+  
           </div>
-          <div className="flex items-center space-x-2 mb-2">
+        </AlertDialogContent>
+        </AlertDialog>
+      </header>   
+          <div className="flex items-center space-x-2 mr-4 ml-4 mt-4">
             <Input
               placeholder="Search by brand, reference, color or barcode"
               value={searchTerm}
@@ -560,20 +591,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               className="flex-grow  text-black"
             /> 
           </div>
-        </div>
-        </div>
-        <main className="container mx-auto p-2 flex-grow">
+        <main className="container mx-auto p-4 flex-grow">
         {hasPermission('update') && (
-        <>
-        <div className='mb-2 text-black'>
-          <Button variant="ghost" onClick={toggleDropdown}>
-              {isOpen ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />} Summary Information
-          </Button>
-        </div>
-        {isOpen && (
         <Card className="mb-4">
         <CardContent className="p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>Total Products: {formatNumber(summaryInfo.totalItems)}</div>
               <div>Total Pares: {formatNumber(summaryInfo.totalPares)}</div>
               <div>Total Base: ${formatNumber(summaryInfo.totalBase)}</div>
@@ -581,8 +603,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </div>
           </CardContent>
         </Card>
-        )}
-        </>
         )}
         <div className="space-y-4">
           {sortedProducts.map((product, index) => (

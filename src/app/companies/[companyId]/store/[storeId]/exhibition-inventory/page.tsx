@@ -8,17 +8,19 @@ import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent} from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { Pencil, MoreHorizontal, FileDown, ArrowLeft, Filter, SortDesc, Menu, ChevronUp, ChevronDown, Download } from 'lucide-react'
+import { Pencil, MoreHorizontal, FileDown, ArrowLeft, Filter, SortDesc, Download } from 'lucide-react'
 import { Switch } from "app/components/ui/switch"
 import Image from 'next/image'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
-import ParesInventorySkeleton from 'app/components/skeletons/ParesInventorySkeleton'
-import { AlertDialog, AlertDialogContent, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
 import { toast } from 'app/components/ui/use-toast'
 import { usePermissions } from 'app/hooks/usePermissions'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
+import { Skeleton } from 'app/components/ui/skeleton'
+import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
 
 interface Product {
   id: string
@@ -49,11 +51,10 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
   const [gender, setGender] = useState<'all' | 'Dama' | 'Hombre'>('all')
   const [sortOrder, setSortOrder] = useState<'entry' | 'alphabetical'>('entry')
   const [showUnassigned, setShowUnassigned] = useState(false)
-  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const [, setIsHeaderVisible] = useState(true)
   const [lastScrollTop, setLastScrollTop] = useState(0)
-  const [isOpen, setIsOpen] = useState(false)
-  const toggleDropdown = () => setIsOpen(!isOpen)
   const { hasPermission } = usePermissions()
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
 
   useEffect(() => {
     const controlHeader = () => {
@@ -285,10 +286,24 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
       })
     }
   }
-  
 
   if (loading) {
-    return ParesInventorySkeleton()
+    return (
+      <div className="min-h-screen bg-blue-100">
+        <header className="bg-teal-600 text-white p-4 flex items-center">
+          <Skeleton className="h-6 w-6 mr-2" />
+          <Skeleton className="h-8 w-48 mr-2 flex-grow" />
+          <Skeleton className="h-10 w-32" />
+        </header>
+        <main className="container mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, index) => (
+              <InvoiceSkeleton key={index} />
+            ))}
+          </div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -300,10 +315,63 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
         <h1 className="text-xl font-bold flex-grow">
           {showUnassigned ? 'Sin Exb' : 'Exb'} {storeName}
         </h1>
+        <AlertDialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" className="text-white">
+              <Filter className="h-6 w-6" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Filters</AlertDialogTitle>
+              <AlertDialogDescription>
+                Adjust your inventory filters here.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  checked={showUnassigned}
+                  onCheckedChange={setShowUnassigned}
+                />
+                <span>{showUnassigned ? 'Unassigned' : 'Assigned'}</span>
+              </div>
+              <Select value={gender} onValueChange={(value: 'all' | 'Dama' | 'Hombre') => setGender(value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Gender">
+                    <div className="flex items-center">
+                      <Filter className="mr-2 h-4 w-4" />
+                      <span>{gender === 'all' ? 'All' : gender}</span>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="Dama">Dama</SelectItem>
+                  <SelectItem value="Hombre">Hombre</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortOrder} onValueChange={(value: 'entry' | 'alphabetical') => setSortOrder(value)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Sort Order">
+                    <div className="flex items-center">
+                      <SortDesc className="mr-2 h-4 w-4" />
+                      <span>{sortOrder === 'entry' ? 'Entry' : 'A-Z'}</span>
+                    </div>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="entry">Entry</SelectItem>
+                  <SelectItem value="alphabetical">A-Z</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="text-white">
-              <Menu className="h-6 w-6" />
+              <FileDown className="h-6 w-6" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -318,60 +386,18 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
-
-      <div className={`bg-white sticky top-14 z-20 p-4 shadow-md transition-transform duration-300 ${isHeaderVisible ? 'translate-y-0' : '-translate-y-full'}`}>
-        <div className='flex items-center space-x-3 mb-4 text-black'>
-          <div>
-            <Switch
-              checked={showUnassigned}
-              onCheckedChange={setShowUnassigned}
-            />
-            <span>{showUnassigned ? '   Unassigned' : '   Assigned'}</span>
-          </div>  
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <Filter className="mr-2 h-4 w-4 text-black" />
-                {gender === 'all' ? 'All' : gender}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setGender('all')}>All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGender('Dama')}>Dama</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setGender('Hombre')}>Hombre</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                <SortDesc className="mr-2 h-4 w-4 text-black" />
-                {sortOrder === 'entry' ? 'Entry' : 'A-Z'}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setSortOrder('entry')}>Entry</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setSortOrder('alphabetical')}>A-Z</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>   
-        <div className="flex items-center space-x-2 text-black">
+      <main className="container mx-auto relative z-0">
+        <div className=" m-2 mr-4 ml-4 mt-4 text-black">
           <Input
+            type="text"
             placeholder="Search by brand, reference, or color"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            className="flex-grow text-black"
+            className="w-full text-black"
           />
         </div>
-      </div>
-      <div className='text-black'>
-          <Button variant="ghost" onClick={toggleDropdown}>
-              {isOpen ? <ChevronUp className="h-6 w-6" /> : <ChevronDown className="h-6 w-6" />} Summary Information
-          </Button>
-      </div>
-      {isOpen && (
-        <Card className="m-4">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-lg p-4 m-4 shadow text-slate-900">
+            <div className="grid grid-cols-2 gap-3">
               <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
               <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
               {hasPermission('update') && (
@@ -380,10 +406,8 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
               <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
               </>
               )}
-            </div>
-          </CardContent>
-        </Card>
-       )}
+          </div>
+         </div>
       <div>
       <div className="space-y-4 m-4">
         {sortedProducts.map((product, index) => (
@@ -401,12 +425,10 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                    
                       <DropdownMenuItem onClick={() => router.push(`/companies/${params.companyId}/warehouses/${product.warehouseId}/update-product/${product.id}`)}>
                         <Pencil className="mr-2 h-4 w-4" />
                         <span>Update</span>
                       </DropdownMenuItem>
-                    
                     </DropdownMenuContent>
                   </DropdownMenu>
                   )}
@@ -477,6 +499,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
         ))}
       </div>
     </div> 
+    </main>
     </div>
   )
 }

@@ -9,11 +9,12 @@ import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import Link from 'next/link'
 import { toast } from "app/components/ui/use-toast"
-import { ArrowLeft, MoreHorizontal, Pencil, Calendar, Store, Menu } from 'lucide-react'
+import { ArrowLeft, MoreHorizontal, Pencil, Calendar, Store, Menu, FolderTree } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "app/components/ui/dropdown-menu"
-import InvoicesPageSkeleton from 'app/components/skeletons/InvoicesPageSkeleton'
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogCancel } from "app/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
+import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
+import { Skeleton } from 'app/components/ui/skeleton'
 
 interface InvoiceItem {
   productId: string
@@ -266,6 +267,25 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
     return invoiceId.slice(-4)
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-blue-100">
+        <header className="bg-teal-600 text-white p-4 flex items-center">
+          <Skeleton className="h-6 w-6 mr-2" />
+          <Skeleton className="h-8 w-48 mr-2 flex-grow" />
+          <Skeleton className="h-10 w-32" />
+        </header>
+        <main className="container mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(6)].map((_, index) => (
+              <InvoiceSkeleton key={index} />
+            ))}
+          </div>
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-blue-100 pb-16">
       <header className="bg-teal-600 text-white p-4 flex items-center sticky top-0 z-50">
@@ -336,7 +356,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
         </AlertDialog>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="text-white p-2 mr-2">
+            <Button variant="ghost" className="text-white p-2">
               <Store className="h-6 w-6" />
             </Button>
           </DropdownMenuTrigger>
@@ -351,8 +371,8 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
         </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="secondary">
-              <Menu className="h-6 w-6" />
+            <Button variant="ghost">
+              <FolderTree className="h-6 w-6" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
@@ -394,16 +414,6 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
             </div>
           </div>
         </div>
-
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(2)].map((_, index) => (
-              <InvoicesPageSkeleton key={index} />
-            ))}
-          </div>
-        ) : stores.length === 0 ? (
-          <p className="text-center mt-8">You dont have any invoices yet. Create one to get started!</p>
-        ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {filteredInvoices.map((invoice) => (
               <div key={invoice.id} className="relative">
@@ -470,7 +480,6 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
               </div>
             ))}
           </div>
-        )}
       </main>
     </div>
   )

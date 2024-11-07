@@ -39,9 +39,6 @@ const CompanyNavbar: React.FC<CompanyNavbarProps> = ({ companyId }) => {
             <span className="sr-only">{item.label}</span>
           </Link>
         ))}
-        <div className="pt-2">
-          <ThemeToggle />
-        </div>
       </div>
     </nav>
   )
