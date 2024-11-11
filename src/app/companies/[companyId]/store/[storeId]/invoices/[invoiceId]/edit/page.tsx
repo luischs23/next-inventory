@@ -409,35 +409,36 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
           await updateDoc(productRef, { exhibition: updatedExhibition })
         }
       } else if (product.isBox) {
-         // Handle box item
-      const boxRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/products`, product.id)
-      const boxDoc = await getDoc(boxRef)
-      if (boxDoc.exists()) {
-        const boxData = boxDoc.data() as Product
-        // Set total2 to zero
-        await updateDoc(boxRef, { total2: 0 })
-      } else {
-        console.error('Box document does not exist:', product.id)
-      }
-
+        // Handle box item
+        const boxRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/products`, product.id)
+        const boxDoc = await getDoc(boxRef)
+        if (boxDoc.exists()) {
+          const boxData = boxDoc.data() as Product
+          // Set total2 to zero
+          await updateDoc(boxRef, { total2: 0 })
+        } else {
+          console.error('Box document does not exist:', product.id)
+        }
       } else {
         // Handle regular inventory item
         const productRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/products`, product.id)
         const productDoc = await getDoc(productRef)
         if (productDoc.exists()) {
           const productData = productDoc.data() as Product
-          const updatedSizes = { 
-            [product.size]: {
-              quantity: (productData.sizes[product.size]?.quantity || 1) - 1,
-              barcodes: (productData.sizes[product.size]?.barcodes || []).filter(b => b !== product.barcode)
+          const updatedSizes = { ...productData.sizes }
+          
+          if (updatedSizes[product.size]) {
+            updatedSizes[product.size] = {
+              quantity: (updatedSizes[product.size].quantity || 1) - 1,
+              barcodes: (updatedSizes[product.size].barcodes || []).filter(b => b !== product.barcode)
             }
-          }
             
             // Remove the size if quantity becomes 0
             if (updatedSizes[product.size].quantity === 0) {
               delete updatedSizes[product.size]
             }
-               
+          }
+          
           const newTotal = (productData.total || 0) - 1
   
           await updateDoc(productRef, {
@@ -446,6 +447,7 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
           })
         }
       }
+  
       const invoiceRef = doc(collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`))
   
       const newInvoiceItem: InvoiceItem | BoxItem = {
@@ -455,9 +457,9 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
         brand: product.brand,
         reference: product.reference,
         color: product.color,
-        size: product.size,
-        sizes: { [product.size]: { quantity: 1, barcodes: [product.barcode] } },
-        total: 1,
+        size: product.isBox ? 'N/A' : product.size,
+        sizes: product.isBox ? {} : { [product.size]: { quantity: 1, barcodes: [product.barcode] } },
+        total: product.isBox ? product.total : 1,
         barcode: product.barcode,
         imageUrl: product.imageUrl,
         saleprice: product.saleprice,
@@ -471,11 +473,11 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
         addedAt: serverTimestamp() as Timestamp,
         warehouseId: product.warehouseId,
         isBox: product.isBox || false,
-        quantity: 1,
+        quantity: product.isBox ? product.total2 : 1,
         ...(product.exhibitionStore && { exhibitionStore: product.exhibitionStore }),
         ...(product.exhibition && { exhibition: product.exhibition })
       };
-
+  
       await setDoc(invoiceRef, newInvoiceItem)
   
       // Re-fetch invoice data to ensure all totals and states are up-to-date
@@ -486,9 +488,11 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
   
       toast({
         title: "Product Added",
-        description: product.exhibitionStore 
-          ? "The exhibition product has been added to the invoice." 
-          : "The product has been added to the invoice.",
+        description: product.isBox 
+          ? "The box has been added to the invoice." 
+          : (product.exhibitionStore 
+            ? "The exhibition product has been added to the invoice." 
+            : "The product has been added to the invoice."),
         duration: 1500,
         style: {
           background: "#4CAF50",
@@ -767,13 +771,13 @@ if (loading) {
   return <NewInvoiceSkeleton />
 }
 
-  return (
+return (
     <div className="min-h-screen bg-blue-100">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Invoice {storeName} {invoiceCustomerName}</h1>
+        <h1 className="text-xl font-bold flex-grow">Invoice F{invoiceCustomerName}</h1>
         <Button onClick={handleSaveInvoice}>
         <Save className="h-4 w-4 mr-2" />
           Save Invoice

@@ -47,6 +47,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false) 
   const { hasPermission } = usePermissions()
 
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)
@@ -176,6 +177,8 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           title: "Success",
           description: `Invoice for ${invoiceToDelete.customerName} has been deleted successfully.`,
           variant: "default",
+          duration: 500,
+          style: { background: "#4CAF50", color: "white", fontWeight: "bold" },
         })
       } catch (error) {
         console.error('Error deleting invoice:', error)
@@ -183,14 +186,18 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           title: "Error",
           description: `Failed to delete the invoice for ${invoiceToDelete.customerName}.`,
           variant: "destructive",
+          
         })
       } finally {
         setInvoiceToDelete(null)
-      }
+      }  
     }
   }
 
   const handleCreateNewInvoice = async () => {
+    if (isCreatingInvoice) return // Prevent multiple submissions
+
+    setIsCreatingInvoice(true)
     try {
       const newInvoiceRef = await addDoc(collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`), {
         customerName: newCustomerName,
@@ -220,6 +227,12 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         title: "Success",
         description: "New invoice created successfully.",
         variant: "default",
+        duration: 700,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
       })
     } catch (error) {
       console.error('Error creating new invoice:', error)
@@ -228,6 +241,8 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         description: "Failed to create new invoice. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsCreatingInvoice(false)
     }
   }
 
@@ -292,7 +307,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         </header>
         <main className="container mx-auto p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, index) => (
+            {[...Array(1)].map((_, index) => (
               <InvoiceSkeleton key={index} />
             ))}
           </div>
@@ -418,14 +433,14 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                       {invoice.status === 'open' && (
                         <DropdownMenuItem asChild>
                           <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}/edit`}>
-                            Edit Invoice
+                            Add products
                           </Link>
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem onClick={() => openEditDialog(invoice)}>
                         Edit Card
                       </DropdownMenuItem>
-                      {invoice.status === 'closed' && hasPermission('delete') && (
+                      {hasPermission('delete') && (
                         <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>
                           Delete
                         </DropdownMenuItem>
@@ -505,7 +520,9 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <Button onClick={handleCreateNewInvoice}>Create Invoice</Button>
+            <Button onClick={handleCreateNewInvoice} disabled={isCreatingInvoice}>
+              {isCreatingInvoice ? 'Creating...' : 'Create Invoice'}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

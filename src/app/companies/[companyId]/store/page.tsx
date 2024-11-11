@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams} from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc} from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc} from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
@@ -16,6 +16,7 @@ import Image from 'next/image'
 import { usePermissions } from 'app/hooks/usePermissions'
 import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
+import { useToast } from "app/components/ui/use-toast"
 
 interface Store {
   id: string
@@ -43,6 +44,7 @@ export default function StoreListPage() {
   const [error, setError] = useState<string | null>(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [editingStore, setEditingStore] = useState<Store | null>(null)
+  const { toast } = useToast()
   const [newStore, setNewStore] = useState({
     name: '',
     address: '',
@@ -52,6 +54,7 @@ export default function StoreListPage() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const { hasPermission } = usePermissions()
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
+  const [storeToDelete, setStoreToDelete] = useState<Store | null>(null)
   
   useEffect(() => {
     fetchStoresAndUsers()
@@ -108,8 +111,28 @@ export default function StoreListPage() {
     }
   }
 
+  const getUniqueFileName = async (originalName: string) => {
+    const storageRef = ref(storage, `companies/${companyId}/store-images`)
+    const fileList = await listAll(storageRef)
+    const existingFiles = fileList.items.map(item => item.name)
+
+    let uniqueName = originalName
+    let counter = 1
+
+    while (existingFiles.includes(uniqueName)) {
+      const nameParts = originalName.split('.')
+      const extension = nameParts.pop()
+      const baseName = nameParts.join('.')
+      uniqueName = `${baseName}${counter}.${extension}`
+      counter++
+    }
+
+    return uniqueName
+  }
+
   const uploadImage = async (file: File) => {
-    const storageRef = ref(storage, `companies/${companyId}/store-images/${file.name}`)
+    const uniqueFileName = await getUniqueFileName(file.name)
+    const storageRef = ref(storage, `companies/${companyId}/store-images/${uniqueFileName}`)
     await uploadBytes(storageRef, file)
     return getDownloadURL(storageRef)
   }
@@ -134,9 +157,26 @@ export default function StoreListPage() {
       setIsPopupOpen(false)
       setNewStore({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+
+      toast({
+        title: "Store Created",
+        description: "The new store has been successfully created.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (err) {
       console.error('Error creating store:', err)
       setError('Failed to create store. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to create store. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -151,25 +191,61 @@ export default function StoreListPage() {
 
     try {
       const updatedData: Partial<Store> = { ...newStore }
+      const storeRef = doc(db, `companies/${companyId}/stores`, editingStore.id)
+      
       if (imageFile) {
+        // Delete the old image if it exists
+        if (editingStore.imageUrl) {
+          const oldImageRef = ref(storage, editingStore.imageUrl)
+          try {
+            await deleteObject(oldImageRef)
+          } catch (deleteError) {
+            console.error('Error deleting old image:', deleteError)
+            // Continue with the update even if delete fails
+          }
+        }
+
+        // Upload the new image with a unique filename
         const imageUrl = await uploadImage(imageFile)
         updatedData.imageUrl = imageUrl
       }
 
-      const storeRef = doc(db, `companies/${companyId}/stores`, editingStore.id)
+      // Update the store document
       await updateDoc(storeRef, updatedData)
 
+      // Fetch the updated store data
+      const updatedStoreDoc = await getDoc(storeRef)
+      const updatedStore = { id: updatedStoreDoc.id, ...updatedStoreDoc.data() } as Store
+
+      // Update the stores state
       setStores(stores.map(store => 
-        store.id === editingStore.id ? { ...store, ...updatedData } : store
+        store.id === editingStore.id ? updatedStore : store
       ))
 
       setIsPopupOpen(false)
       setEditingStore(null)
       setNewStore({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+
+      toast({
+        title: "Store Updated",
+        description: "The store has been successfully updated.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (err) {
       console.error('Error updating store:', err)
       setError('Failed to update store. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to update store. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -193,11 +269,29 @@ export default function StoreListPage() {
 
       // Update local state
       setStores(stores.filter(store => store.id !== storeToDelete.id))
+
+      toast({
+        title: "Store Deleted",
+        description: "The store has been successfully deleted.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (err) {
       console.error('Error deleting store:', err)
       setError('Failed to delete store. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to delete store. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
+      setStoreToDelete(null)
     }
   }
 
@@ -278,29 +372,10 @@ export default function StoreListPage() {
                           </DropdownMenuItem>
                         )}
                          {hasPermission('delete') && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                <span>Delete</span>
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This action cannot be undone. This will permanently delete the store
-                                  and remove all data associated with it.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteStore(store)}>
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <DropdownMenuItem onSelect={() => setStoreToDelete(store)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
                          )}
                           <DropdownMenuItem>
                             <Link href={`/companies/${companyId}/store/${store.id}/invoices`}>Invoices</Link>
@@ -324,6 +399,25 @@ export default function StoreListPage() {
         )}
         {error && <p className="text-red-500 mt-4">{error}</p>}
       </main>
+
+      <AlertDialog open={!!storeToDelete} onOpenChange={() => setStoreToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the store
+              <span className="font-semibold"> {storeToDelete?.name} </span>
+              and remove all data associated with it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => storeToDelete && handleDeleteStore(storeToDelete)} className="bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {isPopupOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end items-start p-4">

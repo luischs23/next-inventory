@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Switch } from "app/components/ui/switch"
@@ -14,8 +14,10 @@ import { Label } from "app/components/ui/label"
 import Barcode from 'react-barcode'
 import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft, PrinterIcon} from 'lucide-react'
 import { useToast } from "app/components/ui/use-toast"
+import { ProductFormSkeleton } from '../skeletons/ProductFormSkeleton'
 import ProductImageUpload from '../ui/ProductImageUpload'
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog'
+import { Skeleton } from '../ui/skeleton'
 
 interface SizeInput {
   quantity: number
@@ -74,6 +76,9 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const [productBoxNumber, setProductBoxNumber] = useState(0)
   const [lastUsedProductNumbers, setLastUsedProductNumbers] = useState<{[key: string]: number}>({});
   const [updateEnabled, setUpdateEnabled] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [newImageFile, setNewImageFile] = useState<File | null>(null)
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')
@@ -265,7 +270,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const sortedSizes = useMemo(() => {
     if (!product) return []
     return Object.entries(product.sizes)
-      .filter(([_, sizeData]) => sizeData.barcodes.length > 0)
+      .filter(([, sizeData]) => sizeData.barcodes.length > 0)
       .sort(([a], [b]) => {
         const aNum = parseInt(a.split('-')[1])
         const bNum = parseInt(b.split('-')[1])
@@ -289,8 +294,37 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     }
   }
 
-  const handleImageChange = async (file: File | null) => {
-    if (file && product) {
+  const getUniqueFileName = async (originalName: string) => {
+    const storageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products`)
+    const fileList = await listAll(storageRef)
+    const existingFiles = fileList.items.map(item => item.name)
+
+    let uniqueName = originalName
+    let counter = 1
+
+    while (existingFiles.includes(uniqueName)) {
+      const nameParts = originalName.split('.')
+      const extension = nameParts.pop()
+      const baseName = nameParts.join('.')
+      uniqueName = `${baseName}${counter}.${extension}`
+      counter++
+    }
+
+    return uniqueName
+  }
+
+  const handleImageChange = async (file: File | null): Promise<void> => {
+    if (file) {
+      setNewImageFile(file)
+      setPreviewImageUrl(URL.createObjectURL(file))
+    } else {
+      setNewImageFile(null)
+      setPreviewImageUrl(null)
+    }
+  }
+
+  const uploadNewImage = async () => {
+    if (newImageFile && product) {
       setImageLoading(true)
       try {
         // Try to delete the old image if it exists
@@ -301,42 +335,27 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             const oldImageRef = ref(storage, oldImagePath)
             await deleteObject(oldImageRef)
           } catch (deleteError) {
-            // Silently handle the error if the old image doesn't exist
             console.debug('Previous image not found or already deleted')
           }
         }
-  
+
+        // Generate a unique filename
+        const uniqueFileName = await getUniqueFileName(newImageFile.name)
+    
         // Upload new image
-        const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${file.name}`)
-        await uploadBytes(imageRef, file)
+        const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${uniqueFileName}`)
+        await uploadBytes(imageRef, newImageFile)
         const imageUrl = await getDownloadURL(imageRef)
         
-        // Update product document with new image URL
-        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), {
-          imageUrl: imageUrl
-        })
-  
-        // Update local state
-        setProduct({
-          ...product,
-          imageUrl: imageUrl
-        })
-  
-        toast({
-          title: "Image Updated",
-          description: "The product image has been successfully updated.",
-          duration: 1000,
-          style: {
-            background: "#4CAF50",
-            color: "white",
-            fontWeight: "bold", 
-          },    
-        })
+        return imageUrl
       } catch (error) {
+        console.error('Error uploading new image:', error)
+        throw error
       } finally {
         setImageLoading(false)
       }
     }
+    return null
   }
 
   const generateBarcode = useCallback(() => {
@@ -466,7 +485,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
 
   const handleAddExhibition = async () => {
     if (product && selectedStore && exhibitionBarcode) {
-      const size = Object.entries(product.sizes).find(([_, sizeData]) => 
+      const size = Object.entries(product.sizes).find(([, sizeData]) => 
         sizeData.barcodes.includes(exhibitionBarcode)
       )?.[0]
   
@@ -566,20 +585,29 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!product) return
+      if (!product || isSubmitting) return
   
+      setIsSubmitting(true)
       try {
         const updatedSizes = Object.fromEntries(
-          Object.entries(product.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
+          Object.entries(product.sizes).filter(([, sizeData]) => sizeData.quantity > 0)
         )
   
-        const updatedProduct = {
+        const updatedProduct= {
           ...product,
           sizes: updatedSizes,
           total: Object.values(updatedSizes).reduce((sum, size) => sum + size.quantity, 0),
           baseprice: parseFormattedNumber(product.baseprice),
           saleprice: parseFormattedNumber(product.saleprice),
           isBox: isBox && product.total !== product.total2
+        }
+  
+        // Upload new image if there is one
+        if (newImageFile) {
+          const newImageUrl = await uploadNewImage()
+          if (newImageUrl) {
+            updatedProduct.imageUrl = newImageUrl
+          }
         }
   
         await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct)
@@ -589,6 +617,9 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           baseprice: formatNumber(updatedProduct.baseprice.toString()),
           saleprice: formatNumber(updatedProduct.saleprice.toString())
         })
+  
+        setNewImageFile(null)
+        setPreviewImageUrl(null)
   
         toast({
           title: "Product Updated",
@@ -610,11 +641,28 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           duration: 1000,
           variant: "destructive",
         })
+      } finally {
+        setIsSubmitting(false)
       }
     }
 
   if (loading) {
-    return <div>Loading...</div>
+    return (
+      <div className="min-h-screen bg-blue-100">
+        <header className="bg-teal-600 text-white p-4 flex items-center">
+          <Skeleton className="h-6 w-6 mr-2" />
+          <Skeleton className="h-8 w-48 mr-2 flex-grow" />
+          <Skeleton className="h-10 w-32" />
+        </header>
+        <main className="container mx-auto p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(1)].map((_, index) => (
+              <ProductFormSkeleton key={index} />
+            ))}
+          </div>
+        </main>
+      </div>
+    ) 
   }
 
   if (!product) {
@@ -821,8 +869,8 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           )}
           {/* Image and Pricing */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <ProductImageUpload 
-                  imageUrl={product?.imageUrl || '/placeholder.svg'}
+              <ProductImageUpload 
+                  imageUrl={previewImageUrl || product?.imageUrl || '/placeholder.svg'}
                   altText={`${product?.brand} ${product?.reference}`}
                   onImageChange={handleImageChange}
                   isLoading={imageLoading}
@@ -851,11 +899,19 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             </div>
           </div>
           <div className="flex justify-end space-x-2">
-          <Button type="button" variant="outline" onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
-          <Button 
-            type="submit"
-            disabled={isBox && !isUpdateEnabled}
-            >Update Product</Button>
+            <Button 
+              type="button" 
+              variant="outline" 
+              onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}
+            >
+              Cancel
+            </Button>
+            <Button 
+              type="submit"
+              disabled={isBox && !isUpdateEnabled || isSubmitting}
+            >
+              {isSubmitting ? 'Updating...' : 'Update Product'}
+            </Button>
           </div>
         </form>
       </CardContent>

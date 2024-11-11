@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from 'firebase/storage'
 import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import Image from 'next/image'
 import { WarehouseCardSkeleton } from 'app/components/skeletons/WarehouseCardSkeleton'
+import { useToast } from "app/components/ui/use-toast"
 
 interface Warehouse {
   id: string
@@ -39,6 +40,7 @@ export default function WarehousesPage() {
   const companyId = params.companyId as string
   const popupRef = useRef<HTMLDivElement>(null)
   const { hasPermission } = usePermissions()
+  const { toast } = useToast()
   
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -72,8 +74,28 @@ export default function WarehousesPage() {
     }
   }, [isPopupOpen])
 
+  const getUniqueFileName = async (originalName: string) => {
+    const storageRef = ref(storage, `companies/${companyId}/warehouse-images`)
+    const fileList = await listAll(storageRef)
+    const existingFiles = fileList.items.map(item => item.name)
+
+    let uniqueName = originalName
+    let counter = 1
+
+    while (existingFiles.includes(uniqueName)) {
+      const nameParts = originalName.split('.')
+      const extension = nameParts.pop()
+      const baseName = nameParts.join('.')
+      uniqueName = `${baseName}${counter}.${extension}`
+      counter++
+    }
+
+    return uniqueName
+  }
+
   const uploadImage = async (file: File) => {
-    const storageRef = ref(storage, `companies/${companyId}/warehouse-images/${file.name}`)
+    const uniqueFileName = await getUniqueFileName(file.name)
+    const storageRef = ref(storage, `companies/${companyId}/warehouse-images/${uniqueFileName}`)
     await uploadBytes(storageRef, file)
     return getDownloadURL(storageRef)
   }
@@ -98,9 +120,25 @@ export default function WarehousesPage() {
       setIsPopupOpen(false)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      toast({
+        title: "Warehouse Created",
+        description: "The new warehouse has been successfully created.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (err) {
       console.error('Error creating warehouse:', err)
       setError('Failed to create warehouse. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to create warehouse. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -116,6 +154,18 @@ export default function WarehousesPage() {
     try {
       const updatedData: Partial<Warehouse> = { ...newWarehouse }
       if (imageFile) {
+        // Delete the old image if it exists
+        if (editingWarehouse.imageUrl) {
+          const oldImageRef = ref(storage, editingWarehouse.imageUrl)
+          try {
+            await deleteObject(oldImageRef)
+          } catch (deleteError) {
+            console.error('Error deleting old image:', deleteError)
+            // Continue with the update even if delete fails
+          }
+        }
+
+        // Upload the new image with a unique filename
         const imageUrl = await uploadImage(imageFile)
         updatedData.imageUrl = imageUrl
       }
@@ -131,9 +181,25 @@ export default function WarehousesPage() {
       setEditingWarehouse(null)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      toast({
+        title: "Warehouse Updated",
+        description: "The warehouse has been successfully updated.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (err) {
       console.error('Error updating warehouse:', err)
       setError('Failed to update warehouse. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to update warehouse. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -155,9 +221,25 @@ export default function WarehousesPage() {
       setEditingWarehouse(null)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      toast({
+        title: "Warehouse Deleted",
+        description: "The warehouse has been successfully deleted.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
     } catch (err) {
       console.error('Error deleting warehouse:', err)
       setError('Failed to delete warehouse. Please try again.')
+      toast({
+        title: "Error",
+        description: "Failed to delete warehouse. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -184,7 +266,7 @@ export default function WarehousesPage() {
 
   return (
     <div className="min-h-screen bg-blue-100 ">
-      <header className="bg-teal-600 text-white p-4 flex items-center">
+      <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>

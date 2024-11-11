@@ -23,6 +23,7 @@ import 'jspdf-autotable'
 import { Switch } from "app/components/ui/switch"
 import { Skeleton } from '../ui/skeleton'
 import { InvoiceSkeleton } from '../skeletons/InvoiceSkeleton'
+import FloatingScrollButton from '../ui/FloatingScrollButton'
 
 interface SizeInput {
   quantity: number
@@ -286,7 +287,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       }
   } 
   
-
   const handleTransfer = async (product: Product, targetWarehouseId: string) => {
     setIsTransferring(true);
     try {
@@ -485,14 +485,17 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       </div>
     )
   }
-
+//Inv-{showBox ? 'Cajas' : 'Pares'}
   return (
     <div className="min-h-screen bg-blue-100 flex flex-col pt-14">
       <header className="bg-teal-600 text-white p-3 flex items-center fixed top-0 left-0 right-0 z-30">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Inv-{showBox ? 'Cajas' : 'Pares'} {warehouseName}</h1>
+        <h1 className="text-xl font-bold flex-grow">{warehouseName}</h1>
+        <Button onClick={() => setIsFilterDialogOpen(true)} variant="ghost" >
+            <Filter className="h-4 w-4" />
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="text-white">
@@ -503,10 +506,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             <DropdownMenuItem onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}>
               <PlusIcon className="h-4 w-4 mr-2" />
               New Product
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setIsFilterDialogOpen(true)}>
-            <Filter className="h-4 w-4 mr-2" />
-              Filters
             </DropdownMenuItem>
             <DropdownMenuItem onClick={exportToPDF}>
               <FileDown className="h-4 w-4 mr-2" />
@@ -578,7 +577,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                 <SelectItem value="alphabetical">A-Z</SelectItem>
               </SelectContent>
             </Select>
-  
           </div>
         </AlertDialogContent>
         </AlertDialog>
@@ -605,9 +603,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         </Card>
         )}
         <div className="space-y-4">
-          {sortedProducts.map((product, index) => (
+          {sortedProducts.map((product) => (
             <div key={product.id} className="flex items-start">
-              <div className="text-sm font-semibold mr-1 mt-2 text-black md:block">{index + 1}</div>
+              <div className="text-sm font-semibold mr-1 mt-2 text-black md:block"></div>
               <Card 
                 className="flex-grow relative md:flex md:items-center md:space-x-4 cursor-pointer"
                 onClick={() => handleCardClick(product.id)}
@@ -615,7 +613,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                 <CardContent className="p-4 md:flex md:flex-grow md:items-center md:space-x-4">
                   <div className="flex space-x-4 md:w-1/6 items-center justify-center">
                     <div className="relative w-16 h-16 flex-shrink-0 ">
-                      <AlertDialog>
+                      <AlertDialog >
                         <AlertDialogTrigger asChild>
                           <Image
                             src={product.imageUrl}
@@ -626,7 +624,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                             onClick={() => handleImageClick(product.imageUrl)}
                           />
                         </AlertDialogTrigger>
-                        <AlertDialogContent className="sm:max-w-[425px]">
+                        <AlertDialogContent className="sm:max-w-[425px] bg-slate-400/20">
                           <div className="relative w-full h-[300px]">
                             <Image
                               src={product.imageUrl}
@@ -662,17 +660,21 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     <p className="text-sm">Base: ${formatNumber(product.baseprice)}</p>
                     <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
                   </div>
-                  <div className="md:w-1/6 mt-2 md:mt-0">
+                  <div className="md:w-1/6 mt-2 md:mt-0 flex justify-between items-center">
                     <span className="font-medium text-sm">
                       {product.isBox ? 'Box Total:' : 'Sizes Total:'} {product.isBox ? product.total2 : product.total}
                     </span>
+                    <span className="text-sm text-gray-500">
+                      {product.barcode}
+                    </span>
                   </div>
                   <div className="md:w-2/6">
-                    <div className="grid grid-cols-3 gap-1 mt-1">
+                    <div className="grid grid-cols-5 gap-1 mt-1">
                       {Object.keys(product.sizes).length > 0 ? (
                         sortSizes(product.sizes).map(([size, { quantity }]) => (
                           <div key={size} className="text-sm bg-gray-100 p-1 rounded">
-                            <span className='font-semibold'>{size.replace('T-', '')} </span>: {quantity}
+                            <span className='font-normal'>{size.replace('T-', '')}</span>
+                            <span className='font-semibold'>: {quantity}</span>
                           </div>
                         ))
                       ) : (
@@ -785,6 +787,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <FloatingScrollButton/>
     </div>
   )
 }

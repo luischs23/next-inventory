@@ -9,7 +9,7 @@ import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import Link from 'next/link'
 import { toast } from "app/components/ui/use-toast"
-import { ArrowLeft, MoreHorizontal, Pencil, Calendar, Store, Menu, FolderTree } from 'lucide-react'
+import { ArrowLeft, MoreHorizontal, Pencil, Calendar, Store, FolderTree } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogCancel } from "app/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
@@ -63,7 +63,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
   const [loading, setLoading] = useState(false)
   const [stores, setStores] = useState<Store[]>([])
   const [selectedStore, setSelectedStore] = useState<string>('all')
-  const [sortOrder, setSortOrder] = useState<'date' | 'name'>('date')
+  const [sortOrder, ] = useState<'date' | 'name'>('date')
   const [, setCompanyName] = useState<string>('')
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)

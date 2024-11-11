@@ -3,8 +3,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL, listAll } from 'firebase/storage'
+import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc} from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -13,6 +13,8 @@ import { Switch } from "app/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { useToast } from "app/components/ui/use-toast"
 import { ArrowLeft } from 'lucide-react'
+import { ProductFormSkeleton } from '../skeletons/ProductFormSkeleton'
+import { Skeleton } from '../ui/skeleton'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -68,72 +70,79 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     exhibition: {},
     barcode:'',
   })
+  const [loading, setLoading] = useState(true)
   const [imageError, setImageError] = useState('')
+  const [dateString, setDateString] = useState('')
   const [boxNumber, setBoxNumber] = useState(1)
-  const [globalProductNumber, setGlobalProductNumber] = useState(1)
+  const [sizeNumber, setSizeNumber] = useState(1)
   const [warehouseName, setWarehouseName] = useState<string>('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [totalSizesCount, setTotalSizesCount] = useState(0)
 
   useEffect(() => {
     const fetchLastBarcode = async () => {
-      const companiesRef = collection(db, 'companies')
-      const companyQuery = query(companiesRef, limit(1))
-      const companySnapshot = await getDocs(companyQuery)
+      const warehousesRef = collection(db, `companies/${companyId}/warehouses`)
+      const warehousesSnapshot = await getDocs(warehousesRef)
       
-      if (!companySnapshot.empty) {
-        const companyDoc = companySnapshot.docs[0]
-        const warehousesRef = collection(companyDoc.ref, 'warehouses')
-        const warehousesQuery = query(warehousesRef)
-        const warehousesSnapshot = await getDocs(warehousesQuery)
+      let lastGlobalBoxNumber = 0
 
-        let lastBarcode = ''
-        let lastBoxNumber = 0
-        let lastProductNumber = 0
+      for (const warehouseDoc of warehousesSnapshot.docs) {
+        const productsRef = collection(warehouseDoc.ref, 'products')
+        const q = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
+        const productSnapshot = await getDocs(q)
 
-        for (const warehouseDoc of warehousesSnapshot.docs) {
-          // Check products
-          const productsRef = collection(warehouseDoc.ref, 'products')
-          const productQuery = query(productsRef, orderBy('createdAt', 'desc'), limit(1))
-          const productSnapshot = await getDocs(productQuery)
-
-          if (!productSnapshot.empty) {
-            const lastProduct = productSnapshot.docs[0].data() as ProductFormData
-            const productLastBarcode = Object.values(lastProduct.sizes)
-              .flatMap((size: SizeInput) => size.barcodes)
-              .sort()
-              .pop()
-
-            if (productLastBarcode && productLastBarcode > lastBarcode) {
-              lastBarcode = productLastBarcode
-              lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
-              lastProductNumber = parseInt(lastBarcode.slice(12))
-              lastProductNumber = 0
-            }
+        if (!productSnapshot.empty) {
+          const lastProduct = productSnapshot.docs[0].data()
+          const lastBarcode = lastProduct.barcode || ''
+          
+          if (lastBarcode) {
+            const lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
+            lastGlobalBoxNumber = Math.max(lastGlobalBoxNumber, lastBoxNumber)
           }
-
-          // Check boxes
-          const boxesRef = collection(warehouseDoc.ref, 'boxes')
-          const boxQuery = query(boxesRef, orderBy('createdAt', 'desc'), limit(1))
-          const boxSnapshot = await getDocs(boxQuery)
-
-          if (!boxSnapshot.empty) {
-            const lastBox = boxSnapshot.docs[0].data()
-            if (lastBox.barcode && lastBox.barcode > lastBarcode) {
-              lastBarcode = lastBox.barcode
-              lastBoxNumber = parseInt(lastBarcode.slice(6, 12))
-              lastProductNumber = 0
-            }
-          }
-        }
-
-        if (lastBarcode) {
-          setBoxNumber(lastBoxNumber + 1)
-          setGlobalProductNumber(lastProductNumber + 1)
         }
       }
+
+      // Set the box number to the next available number
+      setBoxNumber(lastGlobalBoxNumber + 1)
+
+      updateDateString()
     }
 
     fetchLastBarcode()
   }, [companyId])
+
+  useEffect(() => {
+    // Simulate loading delay
+    const timer = setTimeout(() => {
+      setLoading(false)
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  const total = useMemo(() => {
+    return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
+  }, [formData.sizes])
+
+  const formatNumber = (value: string) => {
+    const number = value.replace(/[^\d]/g, '')
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  }
+
+  const updateDateString = useCallback(() => {
+    const date = new Date()
+    const year = date.getFullYear().toString().slice(-2)
+    const month = (date.getMonth() + 1).toString().padStart(2, '0')
+    const day = date.getDate().toString().padStart(2, '0')
+    setDateString(`${year}${month}${day}`)
+  }, [])
+
+  const incrementBoxNumber = useCallback(() => {
+    setBoxNumber(prevNumber => {
+      const nextNumber = prevNumber + 1
+      return nextNumber > 999999 ? 1 : nextNumber
+    })
+  }, [])
 
   const fetchWarehouseDetails = useCallback(async () => {
     try {
@@ -156,23 +165,12 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     fetchWarehouseDetails()
   }, [fetchWarehouseDetails])
 
-  const total = useMemo(() => {
-    return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
-  }, [formData.sizes])
 
-  const formatNumber = (value: string) => {
-    const number = value.replace(/[^\d]/g, '')
-    return number.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  }
-
-  const generateBarcode = useCallback((currentProductNumber: number) => {
-    const date = new Date()
-    const dateString = date.toISOString().slice(2, 10).replace(/-/g, '')
+  const generateBarcode = useCallback((productNumber: number) => {
     const boxString = boxNumber.toString().padStart(6, '0')
-    const productString = currentProductNumber.toString().padStart(2, '0')
-    
+    const productString = productNumber.toString().padStart(2, '0')
     return `${dateString}${boxString}${productString}`
-  }, [boxNumber])
+  }, [dateString, boxNumber])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -192,35 +190,38 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
     setFormData((prev) => {
       const newSizes = { ...prev.sizes }
-      let localProductNumber = globalProductNumber
+      let newTotalSizesCount = totalSizesCount
 
-      // First, remove barcodes for sizes that have been reduced or set to 0
-      Object.keys(newSizes).forEach((sizeKey) => {
-        if (sizeKey === size) {
-          if (quantity < (newSizes[sizeKey]?.quantity || 0)) {
-            newSizes[sizeKey].barcodes = newSizes[sizeKey].barcodes.slice(0, quantity)
-          }
+      // Remove sizes that are set to 0
+      if (quantity === 0) {
+        if (newSizes[size]) {
+          newTotalSizesCount -= newSizes[size].quantity
+          delete newSizes[size]
         }
-      })
-
-      // Then, generate new barcodes for the current size
-      if (quantity > 0) {
+      } else {
+        // Add or update sizes
         if (!newSizes[size]) {
           newSizes[size] = { quantity: 0, barcodes: [] }
         }
-        while (newSizes[size].barcodes.length < quantity) {
-          newSizes[size].barcodes.push(generateBarcode(localProductNumber))
-          localProductNumber++
-        } 
+
+        // Adjust the total count
+        newTotalSizesCount += quantity - (newSizes[size].quantity || 0)
+
+        // Generate new barcodes
+        newSizes[size].barcodes = Array.from({ length: quantity }, (_, index) => {
+          const productNumber = newTotalSizesCount - quantity + index + 1
+          return generateBarcode(productNumber)
+        })
+
         newSizes[size].quantity = quantity
-      } else {
-        delete newSizes[size]
       }
 
-      setGlobalProductNumber(localProductNumber)
+      setTotalSizesCount(newTotalSizesCount)
+
       return { ...prev, sizes: newSizes }
     })
   }
+
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
@@ -228,14 +229,36 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     setImageError('')
   }
 
+  const getUniqueFileName = async (originalName: string) => {
+    const storageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products`)
+    const fileList = await listAll(storageRef)
+    const existingFiles = fileList.items.map(item => item.name)
+
+    let uniqueName = originalName
+    let counter = 1
+
+    while (existingFiles.includes(uniqueName)) {
+      const nameParts = originalName.split('.')
+      const extension = nameParts.pop()
+      const baseName = nameParts.join('.')
+      uniqueName = `${baseName}${counter}.${extension}`
+      counter++
+    }
+
+    return uniqueName
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSubmitting) return // Prevent multiple submissions
     if (!formData.image) {
       setImageError('Please upload an image for the product.')
       return
     }
+    setIsSubmitting(true) // Set submitting state to true
     try {
-      const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${formData.image.name}`)
+      const uniqueFileName = await getUniqueFileName(formData.image.name)
+      const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${uniqueFileName}`)
       await uploadBytes(imageRef, formData.image)
       const imageUrl = await getDownloadURL(imageRef)
 
@@ -245,7 +268,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
         color: formData.color,
         gender: formData.gender,
         sizes: isBox ? {} : Object.fromEntries(
-          Object.entries(formData.sizes).filter(([_, sizeData]) => sizeData.quantity > 0)
+          Object.entries(formData.sizes).filter(([, sizeData]) => sizeData.quantity > 0)
         ),
         total: total,
         total2: formData.total2,
@@ -262,6 +285,10 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
       await addDoc(collection(db, `companies/${companyId}/warehouses/${warehouseId}/products`), productData)
 
+      incrementBoxNumber()
+      setSizeNumber(1)
+      updateDateString()
+
       toast({
         title: "Product Added",
         description: "The product has been successfully added to the inventory.",
@@ -272,10 +299,6 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
           fontWeight: "bold",
         },
       })
-
-      // Increment box number for the next product
-      setBoxNumber(prevNumber => prevNumber + 1)
-      // Note: We're not resetting globalProductNumber here, as it should continue incrementing
 
       router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)
     } catch (error) {
@@ -293,13 +316,33 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     ? ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
     : ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-blue-100">
+          <header className="bg-teal-600 text-white p-4 flex items-center">
+            <Skeleton className="h-6 w-6 mr-2" />
+            <Skeleton className="h-8 w-48 mr-2 flex-grow" />
+            <Skeleton className="h-10 w-32" />
+          </header>
+          <main className="container mx-auto p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(1)].map((_, index) => (
+                <ProductFormSkeleton key={index} />
+              ))}
+            </div>
+          </main>
+        </div>
+      )
+    }
+
   return (
     <div className='min-h-screen bg-blue-100'>
+   
     <header className="bg-teal-600 text-white p-3 flex items-center sticky top-0 z-20">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">Create Product {warehouseName}</h1>
+        <h1 className="text-xl font-bold flex-grow">New {warehouseName}</h1>
     </header>
     <main className="container mx-auto p-4">
     <Card className="w-full max-w-4xl mx-auto">
@@ -425,7 +468,9 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
           </div>
           <div className="flex justify-end space-x-2">
           <Button type="button" variant="outline" onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>Cancel</Button>
-          <Button type="submit">Add {isBox ? 'Box' : 'Product'}</Button>
+          <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Adding...' : `Add ${isBox ? 'Box' : 'Product'}`}
+            </Button>
           </div>
         </form>
       </CardContent>
