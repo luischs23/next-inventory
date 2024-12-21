@@ -14,11 +14,10 @@ import {
 } from 'app/components/ui/dropdown-menu'
 
 export default function Header() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
 
   const handleLogout = async () => {
     try {
-      await logout()
       // Redirect to login page or show a success message
     } catch (error) {
       console.error('Failed to log out', error)

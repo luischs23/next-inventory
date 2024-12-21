@@ -15,12 +15,19 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
+import { UserOptions } from 'jspdf-autotable'
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
 import { toast } from 'app/components/ui/use-toast'
 import { usePermissions } from 'app/hooks/usePermissions'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
 import { Skeleton } from 'app/components/ui/skeleton'
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
+
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: UserOptions) => jsPDF;
+  }
+}
 
 interface Product {
   id: string
@@ -225,12 +232,12 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
 
     const tableRows = sortedProducts.map((product, index) => {
       const baseRow = [
-        index + 1,
+        (index + 1).toString(),
         product.brand,
         product.reference,
         product.color,
         product.gender,
-        showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size,
+        showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size || '',
       ]
 
       if (hasPermission('update')) {
@@ -240,7 +247,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
         )
       }
 
-      return baseRow
+      return baseRow.map(cell => cell.toString())
     })
 
     doc.autoTable({

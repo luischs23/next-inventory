@@ -16,6 +16,7 @@ import { ArrowLeft, ChevronDown, ChevronUp, FileDown, Menu } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from 'app/components/ui/dropdown-menu'
 import InvoiceDetailSkeleton from 'app/components/skeletons/InvoiceDetailSkeleton'
 import { usePermissions } from 'app/hooks/usePermissions'
+import { Skeleton } from 'app/components/ui/skeleton'
 
 interface InvoiceItem {
   id: string
@@ -98,10 +99,10 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
   const [newSalePrice, setNewSalePrice] = useState('')
   const [searchResult, setSearchResult] = useState<InvoiceItem | null>(null)
   const [imageError, setImageError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [,setLoading] = useState(true)
   const { hasPermission } = usePermissions()
   
-  useEffect(() => { 
+  useEffect(() => {   
 
       fetchInvoice()
       fetchWarehouses()
@@ -491,10 +492,14 @@ export default function InvoicePage({ params }: { params: { companyId: string, s
           </div>
         </CardHeader>
         <CardContent> 
-          <p className="mb-2">Store: {storeName}</p>
-          <p className="mb-2">Customer Phone: {invoice.customerPhone}</p>
-          <p className="mb-2 text-lg font-semibold">Total Sold: ${invoice && formatPrice(invoice.totalSold)}</p>
-          <p className="mb-2 text-lg font-semibold">Total Earn: ${invoice &&formatPrice(invoice.totalEarn)}</p>
+          <div className="mb-2">Store: {storeName || <Skeleton className="h-4 w-20 inline-block" />}</div>
+          <div className="mb-2">Customer Phone: {invoice?.customerPhone || <Skeleton className="h-4 w-20 inline-block" />}</div>
+          <div className="mb-2 text-lg font-semibold">
+            Total Sold: ${invoice ? formatPrice(invoice.totalSold) : <Skeleton className="h-4 w-20 inline-block" />}
+          </div>
+          <div className="mb-2 text-lg font-semibold">
+            Total Earn: ${invoice ? formatPrice(invoice.totalEarn) : <Skeleton className="h-4 w-20 inline-block" />}
+          </div>
         </CardContent>
       </Card>
       <div className="grid gap-4">

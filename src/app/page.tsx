@@ -18,5 +18,5 @@ export default function Home() {
     }
   }, [user, loading, router])
 
-  return <div>Loading...</div>
+  return router.push('/landing')
 }

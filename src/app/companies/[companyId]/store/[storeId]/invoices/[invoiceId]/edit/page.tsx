@@ -67,7 +67,7 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
   const router = useRouter()
   const [invoice, setInvoice] = useState<(InvoiceItem | BoxItem)[]>([])
   const [totalSold, setTotalSold] = useState(0)
-  const [storeName, setStoreName] = useState<string>('')
+  const [, setStoreName] = useState<string>('')
   const [searchBarcode, setSearchBarcode] = useState('')
   const [searchedProduct, setSearchedProduct] = useState<ProductWithBarcode | null>(null)
   const [isSearching, setIsSearching] = useState(false)

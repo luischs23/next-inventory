@@ -292,7 +292,8 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
       toast({
         title: "Product Added",
         description: "The product has been successfully added to the inventory.",
-        duration: 1000,
+        duration: 500,
+        variant: "destructive",
         style: {
           background: "#4CAF50",
           color: "white",
@@ -442,8 +443,8 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
               onChange={handleImageChange} 
               required
             />
-            {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
           </div>
+            {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
           <div className='flex items-center space-x-4'>
             <div>
               <Label htmlFor="baseprice">Base Price</Label>

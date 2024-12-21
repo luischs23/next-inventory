@@ -8,13 +8,12 @@ import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firesto
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
-import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
+import { Card, CardContent } from "app/components/ui/card"
 import Link from 'next/link'
 import { useAuth } from 'app/app/context/AuthContext'
 import { Loader2 } from 'lucide-react'
 
 interface UserData {
- 
   companyId: string
   role: string
   name: string
@@ -41,19 +40,15 @@ export default function LoginPage() {
     }
 
     try {
-      // First, authenticate the user
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const firebaseUser = userCredential.user
 
-      // Then, fetch the user's data from Firestore
       let userData: UserData | null = null
 
-      // Check in the root 'users' collection first (for developers)
       const rootUserDoc = await getDoc(doc(db, 'users', firebaseUser.uid))
       if (rootUserDoc.exists()) {
         userData = rootUserDoc.data() as UserData
       } else {
-        // If not found in root, check in company-specific collections
         const companiesRef = collection(db, 'companies')
         const companiesSnapshot = await getDocs(companiesRef)
 
@@ -74,7 +69,6 @@ export default function LoginPage() {
         throw new Error('User account not found in the system')
       }
 
-      // Set the user in context with additional data
       setUser({
         ...firebaseUser,
         companyId: userData.companyId,
@@ -82,30 +76,10 @@ export default function LoginPage() {
         name: userData.name
       })
 
-      // Redirect based on role and companyId
       if (userData.role === 'developer') {
         router.push('/companies')
       } else if (userData.companyId) {
-        switch (userData.role) {
-          case 'general_manager':
-            router.push(`/companies/${userData.companyId}/home`)
-            break
-          case 'warehouse_manager':
-            router.push(`/companies/${userData.companyId}/home`)
-            break
-          case 'skater':
-          case 'warehouse_salesperson':
-            router.push(`/companies/${userData.companyId}/home`)
-            break
-          case 'pos_salesperson':
-            router.push(`/companies/${userData.companyId}/home`)
-            break
-          case 'customer':
-            router.push(`/companies/${userData.companyId}/home`)
-            break
-          default:
-            router.push(`/companies/${userData.companyId}/home`)
-        }
+        router.push(`/companies/${userData.companyId}/home`)
       } else {
         throw new Error('User not associated with any company')
       }
@@ -117,70 +91,90 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-center">Log In</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+      <Card className="w-full max-w-[400px] shadow-lg">
+        <CardContent className='flex justify-center items-center'>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-4">
+              <div className="text-2xl font-bold text-center mt-6">
+                Welcome Back
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="w-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
+
             {error && (
-              <p className="text-red-500 text-sm">{error}</p>
+              <div className="text-sm text-red-500 text-center">
+                {error}
+              </div>
             )}
+
             <Button 
               type="submit" 
-              className="w-full" 
+              className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white"
               disabled={loading}
             >
               {loading ? (
-                <>
+                <div className="flex items-center justify-center">
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logging in...
-                </>
+                  <span>Logging in...</span>
+                </div>
               ) : (
                 'Log In'
               )}
             </Button>
+
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-center">
+                <span className="text-sm text-gray-500">Dont have an account?</span>
+                <Link 
+                  href="/signup" 
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium ml-2"
+                >
+                  Sign up
+                </Link>
+              </div>
+              <div className="flex items-center justify-center">
+                <Link 
+                  href="/forgot-password" 
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium mb-6"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            </div>
           </form>
-          <div className="mt-4 text-center space-y-2">
-            <p className="text-sm">
-              Dont have an account?{' '}
-              <Link href="/signup" className="text-blue-500 hover:underline">
-                Sign up
-              </Link>
-            </p>
-            <p className="text-sm">
-              <Link href="/forgot-password" className="text-blue-500 hover:underline">
-                Forgot password?
-              </Link>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
   )
 }
+

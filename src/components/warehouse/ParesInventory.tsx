@@ -203,8 +203,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
 
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
-      const isInactive = product.total === 0
-
+      const isInactive = product.isBox ? product.total2 === 0 : product.total === 0
+  
       const matchesSearch = 
         product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.reference.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -215,14 +215,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             barcode.toLowerCase().includes(searchTerm.toLowerCase())
           )
         )
-
+  
       const matchesGender = genderFilter === 'all' || product.gender === genderFilter
-      // Updated logic for boxes and inactive products
       const matchesBoxFilter = showBox === product.isBox
-      const matchesInactiveFilter = product.isBox 
-        ? (showInactive ? isInactive : !isInactive)  // Reversed logic for boxes
-        : (showInactive ? isInactive : !isInactive)  // Original logic for pairs
-
+      const matchesInactiveFilter = showInactive ? isInactive : !isInactive
+  
       return matchesSearch && matchesGender && matchesBoxFilter && matchesInactiveFilter
     })
   }, [products, searchTerm, genderFilter, showBox, showInactive])
@@ -356,51 +353,129 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const exportToExcel = () => {
     const workbook = XLSX.utils.book_new()
     
-    const worksheetData = filteredProducts.map((product, index) => ({
-      'No.': index + 1,
-      'Brand': product.brand,
-      'Reference': product.reference,
-      'Color': product.color,
-      'Gender': product.gender,
-      'Sizes': JSON.stringify(product.sizes),
-      'Total Quantity': product.total,
-      'Base Price': product.baseprice,
-      'Sale Price': product.saleprice,
-      'Barcode': Object.values(product.sizes).flatMap(size => size.barcodes).join(', '),
-      'Created At': product.createdAt instanceof Timestamp 
-        ? product.createdAt.toDate().toISOString()
-        : typeof product.createdAt === 'number'
-          ? new Date(product.createdAt).toISOString()
-          : new Date().toISOString(),
-    }))
-
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData)
-
-    worksheet['!cols'] = [
-      { width: 5 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 10 },
-      { width: 30 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 30 }, { width: 20 }
+    // Define the size range we want to display
+    const sizeRange = Array.from({ length: 11 }, (_, i) => (35 + i).toString())
+    
+    const worksheetData = filteredProducts.map((product, index) => {
+      const baseData = {
+        'No.': index + 1,
+        'Brand': product.brand,
+        'Reference': product.reference,
+        'Color': product.color,
+        'Gender': product.gender,
+      }
+  
+      let sizeData = {}
+      let barcodeData = {}
+  
+      if (!product.isBox) {
+        // Create an object with quantities for each size
+        sizeData = sizeRange.reduce((acc, size) => {
+          const sizeKey = `T-${size}`
+          acc[`${size}`] = product.sizes[sizeKey]?.quantity || ''
+          return acc
+        }, {} as { [key: string]: number | string })
+  
+        // Create an object with barcodes for each size
+        barcodeData = sizeRange.reduce((acc, size) => {
+          const sizeKey = `T-${size}`
+          acc[`Barcodes ${size}`] = product.sizes[sizeKey]?.barcodes.join(',') || ''
+          return acc
+        }, {} as { [key: string]: string })
+      }
+  
+      const endData = {
+        'Total Quantity': product.isBox ? product.total2 : product.total,
+        'Base Price': product.baseprice,
+        'Sale Price': product.saleprice,
+        'Barcode': product.barcode || (product.isBox ? '' : Object.values(product.sizes).flatMap(size => size.barcodes).join(', ')),
+        'Created At': product.createdAt instanceof Timestamp 
+          ? product.createdAt.toDate().toISOString()
+          : typeof product.createdAt === 'number'
+            ? new Date(product.createdAt).toISOString()
+            : new Date().toISOString(),
+        'Comments': product.comments || ''
+      }
+  
+      return { ...baseData, ...sizeData, ...endData, ...barcodeData }
+    })
+  
+    // Determine if any product is a box
+    const hasBoxItems = filteredProducts.some(product => product.isBox)
+    const columns = [
+      'No.', 'Brand', 'Reference', 'Color', 'Gender',
+      ...(hasBoxItems ? [] : sizeRange.map(size => `${size}`)),
+      'Total Quantity', 'Base Price', 'Sale Price', 'Barcode', 'Created At',
+      ...(hasBoxItems ? [] : sizeRange.map(size => `Barcodes ${size}`)),
+      'Comments'
     ]
-
+  
+    // Create the worksheet with the specified column order
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData, { header: columns })
+  
+    // Add formula for Total Quantity only for non-box items
+    if (!hasBoxItems) {
+      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
+      for (let R = range.s.r + 1; R <= range.e.r; ++R) {
+        const totalQuantityCell = XLSX.utils.encode_cell({ r: R, c: columns.indexOf('Total Quantity') })
+        const formulaStart = XLSX.utils.encode_cell({ r: R, c: columns.indexOf('35') })
+        const formulaEnd = XLSX.utils.encode_cell({ r: R, c: columns.indexOf('45') })
+        worksheet[totalQuantityCell] = { f: `SUM(${formulaStart}:${formulaEnd})` }
+      }
+    }
+  
+    // Set column widths
+    const baseColumns = [
+      { width: 5 },  // No.
+      { width: 15 }, // Brand
+      { width: 15 }, // Reference
+      { width: 15 }, // Color
+      { width: 8 }, // Gender
+    ]
+    
+    const sizeColumns = hasBoxItems ? [] : sizeRange.map(() => ({ width: 5 })) // Size columns
+    
+    const endColumns = [
+      { width: 12 }, // Total Quantity
+      { width: 10 }, // Base Price
+      { width: 10 }, // Sale Price
+      { width: 15 }, // Barcode
+      { width: 20 }, // Created At
+    ]
+  
+    const barcodeColumns = hasBoxItems ? [] : sizeRange.map(() => ({ width: 15 })) // Barcode columns
+  
+    const commentsColumn = [{ width: 30 }] // Comments column
+  
+    worksheet['!cols'] = [...baseColumns, ...sizeColumns, ...endColumns, ...barcodeColumns, ...commentsColumn]
+  
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventory')
-
+  
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
     const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     
-    saveAs(data, `${warehouseName.replace(/\s+/g, '_')}_pares_inventory.xlsx`)
+    // Determine the filename based on whether we're exporting box items or regular items
+    const inventoryType = hasBoxItems ? 'cajas' : 'pares'
+    const filename = `${warehouseName.replace(/\s+/g, '_')}_${inventoryType}_inventory.xlsx`
+    
+    saveAs(data, filename)
   }
 
   const exportToPDF = () => {
     const doc = new jsPDF()
-
+  
+    // Determine if any product is a box
+    const hasBoxItems = sortedProducts.some(product => product.isBox)
+  
     doc.setFontSize(18)
     doc.text(`Inventory (${warehouseName})`, 14, 22)
-
+  
     doc.setFontSize(12)
     doc.text(`Total Products: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
-    doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
+    doc.text(`Total ${hasBoxItems ? 'Boxes' : 'Pares'}: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
     doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
     doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
-
+  
     const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Total", "Base Price", "Sale Price"]
     const tableRows = sortedProducts.map((product, index) => [
       index + 1,
@@ -408,11 +483,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       product.reference,
       product.color,
       product.gender,
-      product.total,
+      product.isBox ? product.total2 : product.total,
       formatNumber(product.baseprice),
       formatNumber(product.saleprice)
     ])
-
+  
     doc.autoTable({
       head: [tableColumn],
       body: tableRows,
@@ -422,15 +497,21 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
       headStyles: { fillColor: [41, 128, 185], textColor: 255 },
       alternateRowStyles: { fillColor: [224, 224, 224] }
     })
-
-    doc.save(`${warehouseName.replace(/\s+/g, '_')}_pares_inventory.pdf`)
+  
+    const inventoryType = hasBoxItems ? 'cajas' : 'pares'
+    const filename = `${warehouseName.replace(/\s+/g, '_')}_${inventoryType}_inventory.pdf`
+    
+    doc.save(filename)
   }
 
   const summaryInfo = useMemo(() => {
     const totalItems = filteredProducts.length
-    const totalPares = filteredProducts.reduce((sum, product) => sum + product.total, 0)
-    const totalBase = filteredProducts.reduce((sum, product) => sum + product.baseprice * product.total, 0)
-    const totalSale = filteredProducts.reduce((sum, product) => sum + product.saleprice * product.total, 0)
+    const totalPares = filteredProducts.reduce((sum, product) => 
+      sum + (product.isBox ? product.total2 : product.total), 0)
+    const totalBase = filteredProducts.reduce((sum, product) => 
+      sum + product.baseprice * (product.isBox ? product.total2 : product.total), 0)
+    const totalSale = filteredProducts.reduce((sum, product) => 
+      sum + product.saleprice * (product.isBox ? product.total2 : product.total), 0)
     return { totalItems, totalPares, totalBase, totalSale }
   }, [filteredProducts])
 
@@ -492,7 +573,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses`)}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <h1 className="text-xl font-bold flex-grow">{warehouseName}</h1>
+        <h1 className="text-xl font-bold flex-grow">{warehouseName} - {showBox ? 'Cajas' : 'Pares'}</h1>
         <Button onClick={() => setIsFilterDialogOpen(true)} variant="ghost" >
             <Filter className="h-4 w-4" />
         </Button>

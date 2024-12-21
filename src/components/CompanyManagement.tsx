@@ -22,8 +22,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "app/components/ui/alert-dialog"
-import Link from 'next/link'
-import { useAuth } from 'app/app/context/AuthContext'
 
 interface Company {
   id: string
@@ -50,7 +48,6 @@ export default function CompanyManagement() {
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null)
-  const { userRole } = useAuth()
 
   const handleCardClick = (companyId: string) => {
     router.push(`/companies/${companyId}/home`)
@@ -160,13 +157,6 @@ export default function CompanyManagement() {
         }}>
           + Add 
         </Button>
-        {userRole === 'developer' && (
-        <Link href="/companies/create-general-manager" className="btn btn-primary">
-          <Button>
-          Create GM
-          </Button>
-        </Link>
-         )}
          </div>
       </header>
 

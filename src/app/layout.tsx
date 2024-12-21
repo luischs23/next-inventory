@@ -4,7 +4,6 @@ import "./globals.css";
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from 'app/components/ThemeProvider'
 import { Toaster } from "app/components/ui/toaster"
-import { ProductProvider } from './context/ProductContext'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -28,10 +27,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <ProductProvider>
               {children}
               <Toaster />
-            </ProductProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
