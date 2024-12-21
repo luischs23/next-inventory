@@ -235,20 +235,20 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
     return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   } 
  
-  const calculateTotalProductItems = (invoices: Invoice[]) => {
-    return invoices.reduce((sum, invoice) => {
-      if (Array.isArray(invoice.items)) {
-        return sum + invoice.items.reduce((itemSum, item) => {
-          const quantity = typeof item.quantity === 'number' ? item.quantity : 0
-          return itemSum + quantity
-        }, 0)
-      }
-      return sum
-    }, 0)
-  }
+  // const calculateTotalProductItems = (invoices: Invoice[]) => {
+  //   return invoices.reduce((sum, invoice) => {
+  //     if (Array.isArray(invoice.items)) {
+  //       return sum + invoice.items.reduce((itemSum, item) => {
+  //         const quantity = typeof item.quantity === 'number' ? item.quantity : 0
+  //         return itemSum + quantity
+  //       }, 0)
+  //     }
+  //     return sum
+  //   }, 0)
+  // }
 
   const totalInvoices = filteredInvoices.length
-  const totalProductItems = calculateTotalProductItems(filteredInvoices)
+  //const totalProductItems = calculateTotalProductItems(filteredInvoices)
   const totalSold = filteredInvoices.reduce((sum, invoice) => sum + (invoice.totalSold || 0), 0)
   const totalEarn = filteredInvoices.reduce((sum, invoice) => sum + (invoice.totalEarn || 0), 0)
 

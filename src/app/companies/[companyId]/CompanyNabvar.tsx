@@ -2,9 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, Package, User, Store, Warehouse } from 'lucide-react'
+import { Home, FileText, Store, Warehouse } from 'lucide-react'
 import { cn } from "app/lib/utils"
-import { ThemeToggle } from 'app/components/ThemeToggle'
 
 interface CompanyNavbarProps {
   companyId: string;

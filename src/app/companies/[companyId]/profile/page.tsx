@@ -30,7 +30,7 @@ photo: string
 export default function ProfilePage({ params }: { params: { companyId: string } }) {
     const [user, setUser] = useState<User | null>(null)
     const [profile, setProfile] = useState<UserProfile | null>(null)
-    const [companyName, setCompanyName] = useState<string>('')
+    const [, setCompanyName] = useState<string>('')
     const [loading, setLoading] = useState(true)
     const [showUpdatePhotoDialog, setShowUpdatePhotoDialog] = useState(false)
     const [newPhotoFile, setNewPhotoFile] = useState<File | null>(null)

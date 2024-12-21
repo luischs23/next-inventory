@@ -413,7 +413,6 @@ export default function EditInvoicePage({ params }: { params: { companyId: strin
         const boxRef = doc(db, `companies/${params.companyId}/warehouses/${product.warehouseId}/products`, product.id)
         const boxDoc = await getDoc(boxRef)
         if (boxDoc.exists()) {
-          const boxData = boxDoc.data() as Product
           // Set total2 to zero
           await updateDoc(boxRef, { total2: 0 })
         } else {
