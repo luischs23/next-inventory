@@ -68,6 +68,9 @@ export default function LandingPage() {
             ))}
           </div>
           <div className="hidden lg:flex lg:flex-1 lg:justify-end">
+            <a href="/login" className="text-sm font-semibold leading-6 text-gray-900 mr-4">
+              Login
+            </a>
             <a href="#" className="text-sm font-semibold leading-6 text-gray-900">
               Get Started <span aria-hidden="true">&rarr;</span>
             </a>
@@ -116,6 +119,12 @@ export default function LandingPage() {
                     className="-mx-3 block rounded-lg px-3 py-2.5 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
                   >
                     Get Started
+                  </a>
+                  <a
+                    href="/login"
+                    className="-mx-3 block rounded-lg px-3 py-2.5 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                  >
+                    Login
                   </a>
                 </div>
               </div>

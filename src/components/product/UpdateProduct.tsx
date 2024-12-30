@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Card, CardContent} from "app/components/ui/card"
 import { Label } from "app/components/ui/label"
 import Barcode from 'react-barcode'
-import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft, PrinterIcon} from 'lucide-react'
+import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft, PrinterIcon } from 'lucide-react'
 import { useToast } from "app/components/ui/use-toast"
 import { ProductFormSkeleton } from '../skeletons/ProductFormSkeleton'
 import ProductImageUpload from '../ui/ProductImageUpload'
@@ -313,10 +313,10 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     return uniqueName
   }
 
-  const handleImageChange = async (file: File | null): Promise<void> => {
+  const handleImageChange = async (file: File | null, previewUrl: string | null): Promise<void> => {
     if (file) {
       setNewImageFile(file)
-      setPreviewImageUrl(URL.createObjectURL(file))
+      setPreviewImageUrl(previewUrl)
     } else {
       setNewImageFile(null)
       setPreviewImageUrl(null)

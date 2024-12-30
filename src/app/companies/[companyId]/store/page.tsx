@@ -17,6 +17,7 @@ import { usePermissions } from 'app/hooks/usePermissions'
 import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
 import { useToast } from "app/components/ui/use-toast"
+import { useAuth } from 'app/app/context/AuthContext'
 
 interface Store {
   id: string
@@ -52,13 +53,14 @@ export default function StoreListPage() {
     phone: '',
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const { user } = useAuth()
   const { hasPermission } = usePermissions()
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
   const [storeToDelete, setStoreToDelete] = useState<Store | null>(null)
   
   useEffect(() => {
     fetchStoresAndUsers()
-  }, [companyId])
+  }, [companyId, user])
 
   const fetchStoresAndUsers = async () => {
     if (!companyId) return
@@ -317,7 +319,7 @@ export default function StoreListPage() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Stores</h1>
-        {hasPermission('delete') && (
+        {hasPermission('create') && (
         <Button variant="secondary" onClick={() => {
           setEditingStore(null)
           setNewStore({ name: '', address: '', manager: '', phone: '' })

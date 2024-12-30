@@ -15,6 +15,8 @@ import { useToast } from "app/components/ui/use-toast"
 import { ArrowLeft } from 'lucide-react'
 import { ProductFormSkeleton } from '../skeletons/ProductFormSkeleton'
 import { Skeleton } from '../ui/skeleton'
+import imageCompression from 'browser-image-compression'
+import Image from 'next/image'
 
 type Gender = 'Dama' | 'Hombre'
 type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
@@ -78,6 +80,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
   const [warehouseName, setWarehouseName] = useState<string>('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [totalSizesCount, setTotalSizesCount] = useState(0)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchLastBarcode = async () => {
@@ -223,10 +226,27 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
   }
 
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
-    setFormData((prev) => ({ ...prev, image: file }))
-    setImageError('')
+    if (file) {
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        }
+        const compressedFile = await imageCompression(file, options)
+        setFormData((prev) => ({ ...prev, image: compressedFile }))
+        setImageError('')
+        
+        // Create a preview URL for the compressed image
+        const previewUrl = URL.createObjectURL(compressedFile)
+        setImagePreview(previewUrl)
+      } catch (error) {
+        console.error('Error compressing image:', error)
+        setImageError('Error compressing image. Please try again.')
+      }
+    }
   }
 
   const getUniqueFileName = async (originalName: string) => {
@@ -250,12 +270,12 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (isSubmitting) return // Prevent multiple submissions
+    if (isSubmitting) return
     if (!formData.image) {
       setImageError('Please upload an image for the product.')
       return
     }
-    setIsSubmitting(true) // Set submitting state to true
+    setIsSubmitting(true)
     try {
       const uniqueFileName = await getUniqueFileName(formData.image.name)
       const imageRef = ref(storage, `companies/${companyId}/warehouses/${warehouseId}/products/${uniqueFileName}`)
@@ -288,6 +308,14 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
       incrementBoxNumber()
       setSizeNumber(1)
       updateDateString()
+
+      // Revoke the object URL to free up memory
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+      }
+
+      // Reset the image preview
+      setImagePreview(null)
 
       toast({
         title: "Product Added",
@@ -444,7 +472,19 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
               required
             />
           </div>
-            {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
+          {imageError && <p className="text-red-500 text-sm mt-1">{imageError}</p>}
+          {imagePreview && (
+            <div className="mt-4">
+              <Image
+                src={imagePreview}
+                alt="Product preview"
+                width={200}
+                height={200}
+                objectFit="cover"
+                className="rounded-md"
+              />
+            </div>
+          )}
           <div className='flex items-center space-x-4'>
             <div>
               <Label htmlFor="baseprice">Base Price</Label>

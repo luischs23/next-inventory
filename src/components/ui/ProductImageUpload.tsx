@@ -2,12 +2,13 @@ import React, { useState, useRef } from 'react'
 import Image from 'next/image'
 import { Label } from "app/components/ui/label"
 import { Button } from "app/components/ui/button"
-import { Camera } from "lucide-react"
+import { Camera } from 'lucide-react'
+import imageCompression from 'browser-image-compression'
 
 interface ProductImageUploadProps {
   imageUrl: string
   altText: string
-  onImageChange: (file: File | null) => Promise<void>
+  onImageChange: (file: File | null, previewUrl: string | null) => Promise<void>
   isLoading: boolean
 }
 
@@ -18,10 +19,21 @@ export default function ProductImageUpload({ imageUrl, altText, onImageChange, i
   const handleImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null
     if (file) {
-      onImageChange(file)
-      setPreviewUrl(URL.createObjectURL(file))
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        }
+        const compressedFile = await imageCompression(file, options)
+        const objectUrl = URL.createObjectURL(compressedFile)
+        setPreviewUrl(objectUrl)
+        await onImageChange(compressedFile, objectUrl)
+      } catch (error) {
+        console.error('Error compressing image:', error)
+        // Handle error (e.g., show a toast notification)
+      }
     }
-    await onImageChange(file)
   }
 
   const handleChangeClick = (e: React.MouseEvent) => {

@@ -15,8 +15,20 @@ export function usePermissions() {
   const { user } = useAuth()
 
   const hasPermission = (action: string) => {
-    if (!user || !user.role) return false
-    return rolePermissions[user.role as keyof typeof rolePermissions]?.includes(action) || false
+    if (!user) return false
+
+    // Grant all permissions to developers
+    if (user.isDeveloper) {
+      return true
+    }
+
+    // Check permissions based on user role
+    if (user.role) {
+      const permissions = rolePermissions[user.role as keyof typeof rolePermissions]
+      return permissions ? permissions.includes(action) : false
+    }
+
+    return false
   }
 
   return { hasPermission }

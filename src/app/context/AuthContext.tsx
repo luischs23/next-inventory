@@ -11,6 +11,7 @@ interface ExtendedUser extends FirebaseUser {
   role?: string
   companyId?: string | null
   name?: string
+  isDeveloper?: boolean
 }
 
 interface AuthContextType {
@@ -30,28 +31,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+
       if (firebaseUser) {
-        // Fetch additional user data from Firestore
-        const companiesRef = collection(db, 'companies')
-        const companiesSnapshot = await getDocs(companiesRef)
+        try {
+          // First, check if the user is a developer (outside of companies)
+          const developerUserRef = doc(db, 'users', firebaseUser.uid)
+          const developerUserSnap = await getDoc(developerUserRef)
 
-        for (const companyDoc of companiesSnapshot.docs) {
-          const userDocRef = doc(db, `companies/${companyDoc.id}/users`, firebaseUser.uid)
-          const userDocSnap = await getDoc(userDocRef)
-
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data()
-            setUser({
+          if (developerUserSnap.exists()) {
+            const developerData = developerUserSnap.data()
+            const userData = {
               ...firebaseUser,
-              role: userData.role,
-              companyId: companyDoc.id,
-              name: userData.name
-            })
-            break
+              role: 'developer',
+              companyId: null,
+              name: developerData.name,
+              isDeveloper: true
+            }
+            setUser(userData)
+           
+          } else {
+            // If not a developer, search in companies
+            const companiesRef = collection(db, 'companies')
+            const companiesSnapshot = await getDocs(companiesRef)
+
+            let userFound = false
+            for (const companyDoc of companiesSnapshot.docs) {
+              const userDocRef = doc(db, `companies/${companyDoc.id}/users`, firebaseUser.uid)
+              const userDocSnap = await getDoc(userDocRef)
+
+              if (userDocSnap.exists()) {
+                const userData = userDocSnap.data()
+                const extendedUser = {
+                  ...firebaseUser,
+                  role: userData.role,
+                  companyId: companyDoc.id,
+                  name: userData.name,
+                  isDeveloper: false
+                }
+                setUser(extendedUser)
+                console.log('AuthProvider: Company user set', extendedUser)
+                userFound = true
+                break
+              }
+            }
+            if (!userFound) {
+              setUser(null)
+            }
           }
+        } catch (error) {
+          console.error('AuthProvider: Error fetching user data:', error)
+          setUser(null)
         }
       } else {
+        console.log('AuthProvider: No Firebase user, setting user to null')
         setUser(null)
       }
       setLoading(false)

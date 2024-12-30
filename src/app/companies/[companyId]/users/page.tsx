@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { db, auth } from 'app/services/firebase/firebase.config'
+import { db, auth, storage } from 'app/services/firebase/firebase.config'
+import { ref, deleteObject } from 'firebase/storage'
 import { collection, getDocs, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, Timestamp } from 'firebase/firestore'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { Button } from "app/components/ui/button"
@@ -184,16 +185,28 @@ export default function UsersPage({ params }: { params: { companyId: string } })
 
   const handleDelete = async () => {
     if (!selectedUser) return
-
+  
     try {
+      // Delete user document from Firestore
       await deleteDoc(doc(db, `companies/${params.companyId}/users`, selectedUser.id))
-
+  
+      // Delete user's profile photo from Storage if it exists
+      if (selectedUser.photo) {
+        const photoRef = ref(storage, selectedUser.photo)
+        try {
+          await deleteObject(photoRef)
+        } catch (photoError) {
+          console.error('Error deleting profile photo:', photoError)
+          // Continue with user deletion even if photo deletion fails
+        }
+      }
+  
       toast({
         title: "Success",
-        description: "User deleted successfully",
+        description: "User and associated data deleted successfully",
         style: { background: "#4CAF50", color: "white", fontWeight: "bold" },
       })
-
+  
       setShowDeleteAlertDialog(false)
       setSelectedUser(null)
       fetchUsers()
