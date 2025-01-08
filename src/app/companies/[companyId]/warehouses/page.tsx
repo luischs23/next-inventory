@@ -16,6 +16,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import Image from 'next/image'
 import { WarehouseCardSkeleton } from 'app/components/skeletons/WarehouseCardSkeleton'
 import { useToast } from "app/components/ui/use-toast"
+import imageCompression from 'browser-image-compression'
 
 interface Warehouse {
   id: string
@@ -32,6 +33,7 @@ export default function WarehousesPage() {
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
   const [newWarehouse, setNewWarehouse] = useState({ name: '', address: '', manager: '', phone: '' })
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeWarehouseId, setActiveWarehouseId] = useState<string | null>(null)
   const [, setError] = useState<string | null>(null)
@@ -74,6 +76,15 @@ export default function WarehousesPage() {
     }
   }, [isPopupOpen])
 
+  useEffect(() => {
+    // Cleanup function to revoke object URL when component unmounts
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+      }
+    }
+  }, [])
+
   const getUniqueFileName = async (originalName: string) => {
     const storageRef = ref(storage, `companies/${companyId}/warehouse-images`)
     const fileList = await listAll(storageRef)
@@ -100,6 +111,33 @@ export default function WarehousesPage() {
     return getDownloadURL(storageRef)
   }
 
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        }
+        const compressedFile = await imageCompression(file, options)
+        setImageFile(compressedFile)
+        
+        // Create a preview URL for the compressed image
+        const previewUrl = URL.createObjectURL(compressedFile)
+        setImagePreview(previewUrl)
+      } catch (error) {
+        console.error('Error compressing image:', error)
+        toast({
+          title: "Error",
+          description: "Failed to compress image. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
   const handleCreateWarehouse = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!imageFile) return
@@ -120,6 +158,10 @@ export default function WarehousesPage() {
       setIsPopupOpen(false)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+        setImagePreview(null)
+      }
       toast({
         title: "Warehouse Created",
         description: "The new warehouse has been successfully created.",
@@ -181,6 +223,10 @@ export default function WarehousesPage() {
       setEditingWarehouse(null)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+        setImagePreview(null)
+      }
       toast({
         title: "Warehouse Updated",
         description: "The warehouse has been successfully updated.",
@@ -221,6 +267,10 @@ export default function WarehousesPage() {
       setEditingWarehouse(null)
       setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+        setImagePreview(null)
+      }
       toast({
         title: "Warehouse Deleted",
         description: "The warehouse has been successfully deleted.",
@@ -295,13 +345,12 @@ export default function WarehousesPage() {
                 className="overflow-hidden"
                 onClick={() => handleCardClick(warehouse.id)}>
                 <div className="flex">
-                  <div className="w-1/3">
-                    <Image 
+                  <div className="w-1/3 relative pb-[33.33%]">
+                    <Image
                       src={warehouse.imageUrl} 
                       alt={warehouse.name} 
-                      width={100} 
-                      height={100} 
-                      className="w-full h-full object-cover"
+                      fill 
+                      className="absolute object-cover"
                     />
                   </div>
                   <CardContent className="w-2/3 p-4 relative">
@@ -377,6 +426,10 @@ export default function WarehousesPage() {
                   setEditingWarehouse(null)
                   setNewWarehouse({ name: '', address: '', manager: '', phone: '' })
                   setImageFile(null)
+                  if (imagePreview) {
+                    URL.revokeObjectURL(imagePreview)
+                    setImagePreview(null)
+                  }
                 }}>
                   <X className="h-6 w-6" />
                 </Button>
@@ -424,13 +477,20 @@ export default function WarehousesPage() {
                     id="image"
                     type="file"
                     accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setImageFile(e.target.files[0])
-                      }
-                    }}
+                    onChange={handleImageChange}
                     required={!editingWarehouse}
                   />
+                  {imagePreview && (
+                    <div className="mt-2">
+                      <Image
+                        src={imagePreview}
+                        alt="Warehouse preview"
+                        width={100}
+                        height={100}
+                        className="rounded-md"
+                      />
+                    </div>
+                  )}
                 </div>
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Processing...' : (editingWarehouse ? 'Update Warehouse' : 'Create Warehouse')}

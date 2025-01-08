@@ -10,6 +10,7 @@ import { Store, Warehouse, FileText, Users, User } from 'lucide-react'
 import { db, auth } from 'app/services/firebase/firebase.config'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'
+import { HomeSkeleton } from 'app/components/skeletons/home-skeleton'
 
 interface UserProfile {
   id: string
@@ -137,7 +138,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
   ] : []
 
   if (loading) {
-    return <div className="min-h-screen bg-blue-100 flex items-center justify-center">Loading...</div>
+    return <HomeSkeleton />
   }
 
   if (userProfile?.isDeveloper && !companyId) {

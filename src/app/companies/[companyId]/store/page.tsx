@@ -18,6 +18,7 @@ import { StoreCardSkeleton } from 'app/components/skeletons/StoreCardSkeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
 import { useToast } from "app/components/ui/use-toast"
 import { useAuth } from 'app/app/context/AuthContext'
+import imageCompression from 'browser-image-compression'
 
 interface Store {
   id: string
@@ -53,6 +54,7 @@ export default function StoreListPage() {
     phone: '',
   })
   const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const { user } = useAuth()
   const { hasPermission } = usePermissions()
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
@@ -107,9 +109,30 @@ export default function StoreListPage() {
     return manager ? `${manager.name} ${manager.surname}` : 'Not assigned'
   }
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImageFile(e.target.files[0])
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      try {
+        const options = {
+          maxSizeMB: 1,
+          maxWidthOrHeight: 1920,
+          useWebWorker: true
+        }
+        const compressedFile = await imageCompression(file, options)
+        setImageFile(compressedFile)
+        
+        // Create a preview URL for the compressed image
+        const previewUrl = URL.createObjectURL(compressedFile)
+        setImagePreview(previewUrl)
+      } catch (error) {
+        console.error('Error compressing image:', error)
+        toast({
+          title: "Error",
+          description: "Failed to compress image. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      }
     }
   }
 
@@ -159,6 +182,10 @@ export default function StoreListPage() {
       setIsPopupOpen(false)
       setNewStore({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+        setImagePreview(null)
+      }
 
       toast({
         title: "Store Created",
@@ -228,6 +255,10 @@ export default function StoreListPage() {
       setEditingStore(null)
       setNewStore({ name: '', address: '', manager: '', phone: '' })
       setImageFile(null)
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+        setImagePreview(null)
+      }
 
       toast({
         title: "Store Updated",
@@ -312,6 +343,15 @@ export default function StoreListPage() {
     setActiveStoreId(activeStoreId === storeId ? null : storeId)
   }
 
+  useEffect(() => {
+    // Cleanup function to revoke object URL when component unmounts
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview)
+      }
+    }
+  }, [imagePreview])
+
   return (
     <div className="min-h-screen bg-blue-100 ">
       <header className="bg-teal-600 text-white p-3 flex items-center">
@@ -348,13 +388,12 @@ export default function StoreListPage() {
                 onClick={() => handleCardClick(store.id)}
               >
                 <div className="flex">
-                  <div className="w-1/3">
+                  <div className="w-1/3 relative pb-[33.33%]">
                     <Image 
                       src={store.imageUrl} 
                       alt={store.name} 
-                      width={100} 
-                      height={100} 
-                      className="w-full h-full object-cover"
+                      fill
+                      className="absolute object-cover"
                     />
                   </div>
                   <CardContent className="w-2/3 p-4 relative">
@@ -422,82 +461,101 @@ export default function StoreListPage() {
       </AlertDialog>
 
       {isPopupOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-end items-start p-4">
-          <Card className="w-full max-w-md bg-white">
-            <CardContent className="p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 overflow-y-auto">
+          <Card className="w-full max-w-md bg-white max-h-[90vh] flex flex-col">
+            <CardContent className="p-4 overflow-y-auto flex-grow">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold">{editingStore ? 'Edit Store' : 'Create New Store'}</h2>
-                <Button variant="ghost" onClick={() => setIsPopupOpen(false)}>
+                <Button variant="ghost" onClick={() => {
+                  setIsPopupOpen(false)
+                  if (imagePreview) {
+                    URL.revokeObjectURL(imagePreview)
+                    setImagePreview(null)
+                  }
+                }}>
                   <X className="h-6 w-6" />
                 </Button>
               </div>
-              <form onSubmit={editingStore ? handleUpdateStore : handleCreateStore} className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    Store Name
-                  </label>
-                  <Input
-                    id="name"
-                    value={newStore.name}
-                    onChange={(e) => setNewStore({...newStore, name: e.target.value})}
-                    required
-                  />
+              <form onSubmit={editingStore ? handleUpdateStore : handleCreateStore} className="space-y-4 flex flex-col h-full">
+                <div className="space-y-4 flex-grow overflow-y-auto pr-2">
+                  <div>
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                      Store Name
+                    </label>
+                    <Input
+                      id="name"
+                      value={newStore.name}
+                      onChange={(e) => setNewStore({...newStore, name: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                      Address
+                    </label>
+                    <Input
+                      id="address"
+                      value={newStore.address}
+                      onChange={(e) => setNewStore({...newStore, address: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="manager" className="block text-sm font-medium text-gray-700">
+                      Manager
+                    </label>
+                    <Select
+                      value={newStore.manager}
+                      onValueChange={(value) => setNewStore({...newStore, manager: value})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a manager" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getAvailableManagers().map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name} {user.surname}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                      Phone
+                    </label>
+                    <Input
+                      id="phone"
+                      value={newStore.phone}
+                      onChange={(e) => setNewStore({...newStore, phone: e.target.value})}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="image" className="block text-sm font-medium text-gray-700">
+                      Store Image
+                    </label>
+                    <Input
+                      id="image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      required={!editingStore}
+                    />
+                    {imagePreview && (
+                      <div className="mt-2">
+                        <Image
+                          src={imagePreview}
+                          alt="Store preview"
+                          width={100}
+                          height={100}
+                          className="rounded-md"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                    Address
-                  </label>
-                  <Input
-                    id="address"
-                    value={newStore.address}
-                    onChange={(e) => setNewStore({...newStore, address: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="manager" className="block text-sm font-medium text-gray-700">
-                    Manager
-                  </label>
-                  <Select
-                    value={newStore.manager}
-                    onValueChange={(value) => setNewStore({...newStore, manager: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a manager" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getAvailableManagers().map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name} {user.surname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-                    Phone
-                  </label>
-                  <Input
-                    id="phone"
-                    value={newStore.phone}
-                    onChange={(e) => setNewStore({...newStore, phone: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="image" className="block text-sm font-medium text-gray-700">
-                    Store Image
-                  </label>
-                  <Input
-                    id="image"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    required={!editingStore}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
+                <Button type="submit" className="w-full mt-4" disabled={loading}>
                   {loading ? 'Processing...' : (editingStore ? 'Update Store' : 'Create Store')}
                 </Button>
               </form>

@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { ref, uploadBytes, getDownloadURL, listAll } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc} from 'firebase/firestore'
+import { addDoc, collection, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
@@ -12,14 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "a
 import { Switch } from "app/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import { useToast } from "app/components/ui/use-toast"
-import { ArrowLeft } from 'lucide-react'
 import { ProductFormSkeleton } from '../skeletons/ProductFormSkeleton'
 import { Skeleton } from '../ui/skeleton'
 import imageCompression from 'browser-image-compression'
 import Image from 'next/image'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog"
+import { ArrowLeft, PlusCircle, Edit, Trash, Check } from 'lucide-react'
 
 type Gender = 'Dama' | 'Hombre'
-type Brand = 'Nike' | 'Adidas' | 'Puma' | 'Reebok'
 
 interface SizeInput {
   quantity: number
@@ -31,7 +31,7 @@ interface SizeInputs {
 }
 
 interface ProductFormData {
-  brand: Brand
+  brand: string
   reference: string
   color: string
   gender: Gender
@@ -50,6 +50,11 @@ interface ProductFormData {
 interface ProductFormComponentProps {
   companyId: string
   warehouseId: string
+}
+
+interface CustomBrand {
+  id: string
+  name: string
 }
 
 export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ companyId, warehouseId }) => {
@@ -81,6 +86,10 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [totalSizesCount, setTotalSizesCount] = useState(0)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [customBrands, setCustomBrands] = useState<CustomBrand[]>([])
+  const [newBrand, setNewBrand] = useState('')
+  const [editingBrandId, setEditingBrandId] = useState<string | null>(null)
+  const [editedBrandName, setEditedBrandName] = useState('')
 
   useEffect(() => {
     const fetchLastBarcode = async () => {
@@ -122,6 +131,16 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
 
     return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    const fetchCustomBrands = async () => {
+      const brandsRef = collection(db, `companies/${companyId}/brands`)
+      const brandsSnapshot = await getDocs(brandsRef)
+      const brands = brandsSnapshot.docs.map(doc => ({id: doc.id, name: doc.data().name}))
+      setCustomBrands(brands)
+    }
+    fetchCustomBrands()
+  }, [companyId])
 
   const total = useMemo(() => {
     return Object.values(formData.sizes).reduce((sum, size) => sum + size.quantity, 0)
@@ -167,7 +186,6 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
   useEffect(() => {
     fetchWarehouseDetails()
   }, [fetchWarehouseDetails])
-
 
   const generateBarcode = useCallback((productNumber: number) => {
     const boxString = boxNumber.toString().padStart(6, '0')
@@ -338,6 +356,91 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
         duration: 1000,
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleAddBrand = async () => {
+    if (newBrand && !customBrands.some(brand => brand.name === newBrand)) {
+      try {
+        const docRef = await addDoc(collection(db, `companies/${companyId}/brands`), { name: newBrand })
+        setCustomBrands([...customBrands, { id: docRef.id, name: newBrand }])
+        setFormData(prev => ({ ...prev, brand: newBrand }))
+        setNewBrand('')
+        toast({
+          title: "Brand Added",
+          description: `${newBrand} has been added to the brands list.`,
+          duration: 3000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
+        })
+      } catch (error) {
+        console.error('Error adding brand:', error)
+        toast({
+          title: "Error",
+          description: "Failed to add brand. Please try again.",
+          duration: 3000,
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const handleEditBrand = async (brandId: string, newName: string) => {
+    try {
+      await updateDoc(doc(db, `companies/${companyId}/brands`, brandId), { name: newName })
+      setCustomBrands(customBrands.map(brand => 
+        brand.id === brandId ? { ...brand, name: newName } : brand
+      ))
+      setEditingBrandId(null)
+      setEditedBrandName('')
+      toast({
+        title: "Brand Updated",
+        description: `Brand has been updated to ${newName}.`,
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
+    } catch (error) {
+      console.error('Error updating brand:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update brand. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteBrand = async (brandId: string) => {
+    try {
+      await deleteDoc(doc(db, `companies/${companyId}/brands`, brandId))
+      setCustomBrands(customBrands.filter(brand => brand.id !== brandId))
+      toast({
+        title: "Brand Deleted",
+        description: "The brand has been successfully deleted.",
+        duration: 3000,
+        style: {
+          background: "#4CAF50",
+          color: "white",
+          fontWeight: "bold",
+        },
+      })
+    } catch (error) {
+      console.error('Error deleting brand:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete brand. Please try again.",
+        duration: 3000,
+        variant: "destructive",
+      })
     }
   }
 
@@ -390,19 +493,109 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
       </CardHeader>
       <CardContent className='m-2'>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="brand">Brand</Label>
-            <Select name="brand" onValueChange={(value: Brand) => setFormData((prev) => ({ ...prev, brand: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select brand" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Nike">Nike</SelectItem>
-                <SelectItem value="Adidas">Adidas</SelectItem>
-                <SelectItem value="Puma">Puma</SelectItem>
-                <SelectItem value="Reebok">Reebok</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-center space-x-2">
+            <div className="flex-grow">
+              <Label htmlFor="brand">Brand</Label>
+              <Select name="brand" onValueChange={(value: string) => setFormData((prev) => ({ ...prev, brand: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customBrands.map((brand) => (
+                    <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="mt-6">
+                      <PlusCircle className="w-4 h-4 mr-2" />
+                      Enter
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Add New Brand</AlertDialogTitle>
+                    </AlertDialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="newBrand" className="text-right">
+                          Brand Name
+                        </Label>
+                        <Input
+                          id="newBrand"
+                          value={newBrand}
+                          onChange={(e) => setNewBrand(e.target.value)}
+                          className="col-span-3"
+                        />
+                      </div>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel onClick={() => setNewBrand('')}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleAddBrand}>
+                        Add Brand
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" className="mt-6">
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Edit or Delete Brands</AlertDialogTitle>
+                    </AlertDialogHeader>
+                    <div className="max-h-[300px] overflow-y-auto">
+                      {customBrands.map((brand) => (
+                        <div key={brand.id} className="flex items-center justify-between py-2">
+                          {editingBrandId === brand.id ? (
+                            <Input
+                              value={editedBrandName}
+                              onChange={(e) => setEditedBrandName(e.target.value)}
+                              className="mr-2"
+                            />
+                          ) : (
+                            <span>{brand.name}</span>
+                          )}
+                          <div  className="flex space-x-2">
+                            {editingBrandId === brand.id ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditBrand(brand.id, editedBrandName)}
+                              >
+                                <Check className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingBrandId(brand.id)
+                                  setEditedBrandName(brand.name)
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteBrand(brand.id)}
+                            >
+                              <Trash className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </AlertDialogContent>
+                </AlertDialog>
           </div>
           <div>
             <Label htmlFor="reference">Reference</Label>

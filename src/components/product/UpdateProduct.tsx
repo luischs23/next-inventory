@@ -56,7 +56,6 @@ interface UpdateProductProps {
 const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
 const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
 
-
 export default function UpdateProduct({ companyId, warehouseId, productId }: UpdateProductProps) {
   const [product, setProduct] = useState<Product | null>(null)
   const [isBox, setIsBox] = useState(false)
@@ -79,6 +78,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
+  const [customBrands, setCustomBrands] = useState<{ id: string; name: string }[]>([])
   
   const formatNumber = (value: string): string => {
     const number = value.replace(/[^\d]/g, '')
@@ -172,6 +172,16 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     fetchStores()
     fetchLastBarcode()
   }, [companyId, warehouseId, productId])
+
+  useEffect(() => {
+    const fetchCustomBrands = async () => {
+      const brandsRef = collection(db, `companies/${companyId}/brands`)
+      const brandsSnapshot = await getDocs(brandsRef)
+      const brands = brandsSnapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }))
+      setCustomBrands(brands)
+    }
+    fetchCustomBrands()
+  }, [companyId])
 
   const handlePrintBarcode = useCallback(async (barcode: string, productInfo: string, size: string) => {
     try {
@@ -696,9 +706,18 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
       <CardContent className='m-2'>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+          <div>
               <Label htmlFor="brand">Brand</Label>
-              <Input id="brand" name="brand" value={product.brand} onChange={handleInputChange} />
+              <Select name="brand" value={product.brand} onValueChange={(value) => setProduct(prev => prev ? { ...prev, brand: value } : null)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select brand" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customBrands.map((brand) => (
+                    <SelectItem key={brand.id} value={brand.name}>{brand.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="reference">Reference</Label>
