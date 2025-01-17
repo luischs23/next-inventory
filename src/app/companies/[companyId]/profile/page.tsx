@@ -13,6 +13,7 @@ import { Button } from "app/components/ui/button"
 import { useToast } from "app/components/ui/use-toast"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle } from "app/components/ui/alert-dialog"
 import { ArrowLeft, Camera, ChevronRight, HelpCircle, Loader2, LogOut, RotateCw, Settings, Undo, UserIcon } from 'lucide-react'
+import { ProfileSkeleton } from 'app/components/skeletons/profile-skeleton'
 
 interface UserProfile {
 id: string
@@ -253,7 +254,7 @@ try {
 }
 
 if (loading) {
-    return <div>Loading...</div>
+    return <ProfileSkeleton />
 }
 
 if (!profile) {

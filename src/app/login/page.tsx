@@ -18,6 +18,7 @@ interface UserData {
   role: string
   name: string
   email: string
+  status: 'active' | 'deleted'
 }
 
 export default function LoginPage() {
@@ -67,6 +68,10 @@ export default function LoginPage() {
 
       if (!userData) {
         throw new Error('User account not found in the system')
+      }
+
+      if (userData.status === 'deleted') {
+        throw new Error('This account has been deactivated. Please contact support for assistance.')
       }
 
       setUser({
@@ -177,4 +182,3 @@ export default function LoginPage() {
     </div>
   )
 }
-

@@ -5,16 +5,18 @@ const rolePermissions = {
   developer: ['create', 'read', 'update', 'delete'],
   general_manager: ['create', 'read', 'update', 'delete'],
   warehouse_manager: ['create', 'read', 'update'],
-  skater: ['read'],
-  warehouse_salesperson: ['read'],
-  pos_salesperson: ['read'],
-  customer: ['read'],
-}
+  skater: ['skater', 'read'],
+  warehouse_salesperson: ['warehouse_salesperson', 'read'],
+  pos_salesperson: ['pos_salesperson', 'read'],
+  customer: ['customer'],
+} 
+
+type Action = 'create' | 'read' | 'update' | 'delete' | 'skater' | 'warehouse_salesperson' | 'pos_salesperson' | 'customer'
 
 export function usePermissions() {
   const { user } = useAuth()
 
-  const hasPermission = (action: string) => {
+  const hasPermission = (actions: Action | Action[] | string | string[]): boolean => {
     if (!user) return false
 
     // Grant all permissions to developers
@@ -25,7 +27,12 @@ export function usePermissions() {
     // Check permissions based on user role
     if (user.role) {
       const permissions = rolePermissions[user.role as keyof typeof rolePermissions]
-      return permissions ? permissions.includes(action) : false
+      if (permissions) {
+        if (Array.isArray(actions)) {
+          return actions.some(action => permissions.includes(action))
+        }
+        return permissions.includes(actions)
+      }
     }
 
     return false

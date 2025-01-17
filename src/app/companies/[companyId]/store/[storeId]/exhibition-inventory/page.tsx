@@ -22,6 +22,7 @@ import { usePermissions } from 'app/hooks/usePermissions'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
 import { Skeleton } from 'app/components/ui/skeleton'
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
+import FloatingScrollButton from 'src/components/ui/FloatingScrollButton'
 
 declare module 'jspdf' {
   interface jsPDF {
@@ -39,6 +40,7 @@ interface Product {
   baseprice: number
   saleprice: number
   warehouseId: string
+  barcode: string
   sizes: { [key: string]: { quantity: number, barcodes: string[] } }
   total: number
   exhibition?: {
@@ -180,8 +182,20 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
         'Reference': product.reference,
         'Color': product.color,
         'Gender': product.gender,
-        'Size': showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size,
-        'Barcode': showUnassigned ? '' : product.exhibition?.[params.storeId]?.barcode,
+        'Size': showUnassigned 
+          ? Object.entries(product.sizes)
+              .filter(([, sizeData]) => sizeData.quantity > 0)
+              .sort(([a], [b]) => {
+                const numA = parseInt(a.replace(/\D/g, ''))
+                const numB = parseInt(b.replace(/\D/g, ''))
+                return numA - numB
+              })
+              .map(([size, sizeData]) => `${sizeData.quantity}-${size.replace('T-', '')}`)
+              .join(', ')
+          : product.exhibition?.[params.storeId]?.size,
+        'Barcode': showUnassigned 
+          ? product.barcode || ''
+          : product.exhibition?.[params.storeId]?.barcode || '',
       }
 
       if (hasPermission('update')) {
@@ -217,15 +231,17 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
     doc.setFontSize(18)
     doc.text(showUnassigned ? 'Unassigned Products Report' : 'Exhibition Inventory Report', 14, 22)
 
+    let startY = 30
+    if (hasPermission('update')) {
     doc.setFontSize(12)
     doc.text(`Total Items: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
     doc.text(`Total Pares: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
-    if (hasPermission('update')) {
-      doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
-      doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+    doc.text(`Total Base: $${formatNumber(summaryInfo.totalBase)}`, 14, 48)
+    doc.text(`Total Sale: $${formatNumber(summaryInfo.totalSale)}`, 14, 56)
+    startY = 65
     }
 
-    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Size"]
+    const tableColumn = ["No.", "Brand", "Reference", "Color", "Gender", "Size", "Barcode"]
     if (hasPermission('update')) {
       tableColumn.push("Base Price", "Sale Price")
     }
@@ -237,8 +253,17 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
         product.reference,
         product.color,
         product.gender,
-        showUnassigned ? Object.keys(product.sizes).join(', ') : product.exhibition?.[params.storeId]?.size || '',
-      ]
+        showUnassigned
+            ? Object.entries(product.sizes)
+                .filter(([, sizeData]) => sizeData.quantity > 0)
+                .sort(([a], [b]) => parseInt(a.replace(/\D/g, '')) - parseInt(b.replace(/\D/g, '')))
+                .map(([size, sizeData]) => `${sizeData.quantity}-${size.replace('T-', '')}`)
+                .join(', ')
+            : product.exhibition?.[params.storeId]?.size || '',
+            showUnassigned
+            ? product.barcode || ''
+            : product.exhibition?.[params.storeId]?.barcode || ''
+        ]
 
       if (hasPermission('update')) {
         baseRow.push(
@@ -253,7 +278,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
     doc.autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 65,
+      startY:  startY,
       theme: 'grid',
       styles: { fontSize: 8 },
       headStyles: { fillColor: [41, 128, 185], textColor: 255 },
@@ -403,18 +428,16 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
             className="w-full text-black"
           />
         </div>
+        {hasPermission('update') && (
         <div className="bg-white rounded-lg p-4 m-4 shadow text-slate-900">
             <div className="grid grid-cols-2 gap-3">
               <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
               <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
-              {hasPermission('update') && (
-              <>
               <div>Total base: ${formatNumber(summaryInfo.totalBase)}</div>
-              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>
-              </>
-              )}
-          </div>
+              <div>Total sale: ${formatNumber(summaryInfo.totalSale)}</div>  
+            </div>
          </div>
+        )}
       <div>
       <div className="space-y-4 m-4">
         {sortedProducts.map((product, index) => (
@@ -455,7 +478,7 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                           }}
                         />
                       </AlertDialogTrigger>
-                      <AlertDialogContent className="sm:max-w-[425px]">
+                      <AlertDialogContent className="sm:max-w-[425px] bg-slate-400/20">
                         <div className="relative w-full h-[300px]">
                           <Image
                             src={product.imageUrl}
@@ -478,17 +501,29 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                     <p className="text-sm">{product.color} - {product.gender}</p>
                   </div>
                 </div>
-                <div className="mt-4 flex text-sm space-x-3">
-                  <div className="font-medium">
-                  {showUnassigned ? 'Sizes:' : 'Size:'}
+                <div className="mt-4 flex text-sm justify-between">
+                  <div className="flex space-x-3">
+                    <div className="font-medium">
+                      {showUnassigned ? 'Sizes:\u00A0' : 'Size:\u00A0'}
+                    </div>
+                    {showUnassigned
+                      ? Object.entries(product.sizes)
+                          .filter(([, sizeData]) => sizeData.quantity > 0)
+                          .sort(([a], [b]) => {
+                            const numA = parseInt(a.replace(/\D/g, ''))
+                            const numB = parseInt(b.replace(/\D/g, ''))
+                            return numA - numB
+                          })
+                          .map(([size, sizeData]) => `${sizeData.quantity}-${formatSize(size)}`)
+                          .join(', ')
+                      : formatSize(product.exhibition?.[params.storeId]?.size || '')}
                   </div>
-                  {showUnassigned
-                    ? Object.entries(product.sizes)
-                        .filter(([, sizeData]) => sizeData.quantity > 0)
-                        .map(([size]) => `${formatSize(size)} `)
-                        .join(', ')
-                    : formatSize(product.exhibition?.[params.storeId]?.size || '')}
-                  <span className="font-medium">Sale:</span> ${formatNumber(product.saleprice)}
+                  {hasPermission(['update', 'skater']) && (
+                  <div className="flex items-center">
+                    <span className="font-medium">Sale:</span>
+                    <span>${formatNumber(product.saleprice)}</span>
+                  </div>
+                  )}
                 </div>
                 {!showUnassigned && (
                   <div className="font-normal">
@@ -496,14 +531,16 @@ export default function InventoryExbPage({ params }: { params: { companyId: stri
                   </div>
                 )}
                 {showUnassigned && (
-                  <div >
+                  <div className='flex flex-col'>
                     <span className="font-normal text-sm">Total: {product.total}</span> 
+                    <span className="font-normal text-sm text-gray-500">Barcode: {product.barcode}</span> 
                   </div>
                 )}
               </CardContent>
             </Card>
           </div>
         ))}
+        <FloatingScrollButton/>
       </div>
     </div> 
     </main>

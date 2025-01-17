@@ -1,4 +1,4 @@
-import { auth } from '../src/services/firebase/firebaseAdmin';
+import { auth } from '../src/services/firebase/firebase-admin';
 
 const email = 'luisc.herreras@gmail.com'; // Replace with your superuser's email
 

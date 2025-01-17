@@ -11,6 +11,7 @@ import { db, auth } from 'app/services/firebase/firebase.config'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'
 import { HomeSkeleton } from 'app/components/skeletons/home-skeleton'
+import { usePermissions } from 'app/hooks/usePermissions'
 
 interface UserProfile {
   id: string
@@ -21,6 +22,13 @@ interface UserProfile {
   isDeveloper?: boolean
 }
 
+type MenuItem = {
+  name: string
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
+  href: string
+  permissions: string[]
+}
+
 export default function Home({ params }: { params: { companyId?: string } }) {
   const router = useRouter()
   const [, setUser] = useState<FirebaseUser | null>(null)
@@ -28,6 +36,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
   const [companyName, setCompanyName] = useState('')
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -129,13 +138,44 @@ export default function Home({ params }: { params: { companyId?: string } }) {
     }
   }
 
-  const menuItems = companyId ? [
-    { name: 'Stores', icon: Store, href: `/companies/${companyId}/store` },
-    { name: 'Warehouses', icon: Warehouse, href: `/companies/${companyId}/warehouses` },
-    { name: 'Invoices', icon: FileText, href: `/companies/${companyId}/invoices` },
-    { name: 'Users', icon: Users, href: `/companies/${companyId}/users` },
-    { name: 'Profile', icon: User, href: `/companies/${companyId}/profile` },
-  ] : []
+  const menuItems: MenuItem[] = companyId
+  ? [
+      {
+        name: 'Stores',
+        icon: Store,
+        href: `/companies/${companyId}/store`,
+        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+      },
+      {
+        name: 'Warehouses',
+        icon: Warehouse,
+        href: `/companies/${companyId}/warehouses`,
+        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+      },
+      {
+        name: 'Invoices',
+        icon: FileText,
+        href: `/companies/${companyId}/invoices`,
+        permissions: ['skater', 'warehouse_salesperson', 'pos_salesperson', 'create'],
+      },
+      {
+        name: 'Users',
+        icon: Users,
+        href: `/companies/${companyId}/users`,
+        permissions: ['create'],
+      },
+      {
+        name: 'Profile',
+        icon: User,
+        href: `/companies/${companyId}/profile`,
+        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+      },
+    ]
+  : []
+
+  const filteredMenuItems = menuItems.filter((item) =>
+    item.permissions.some((permission) => hasPermission(permission))
+  )
 
   if (loading) {
     return <HomeSkeleton />
@@ -192,7 +232,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
             Quick Commands
           </h2>
           <div className="grid grid-cols-3 gap-4">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <Link href={item.href} key={item.name}>
                 <Button
                   variant="outline"
@@ -209,4 +249,3 @@ export default function Home({ params }: { params: { companyId?: string } }) {
     </div>
   )
 }
-

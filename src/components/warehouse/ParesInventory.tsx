@@ -81,7 +81,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     const controlHeader = () => {
       if (typeof window !== 'undefined') {
         const currentScrollY = window.scrollY
-
         if (currentScrollY < lastScrollY) {
           // Scrolling up
           setIsHeaderVisible(true)
@@ -89,7 +88,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           // Scrolling down and past the 100px mark
           setIsHeaderVisible(false)
         }
-
         setLastScrollY(currentScrollY)
       }
     }
@@ -463,13 +461,12 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
 
   const exportToPDF = () => {
     const doc = new jsPDF()
-  
+    
     // Determine if any product is a box
     const hasBoxItems = sortedProducts.some(product => product.isBox)
   
     doc.setFontSize(18)
     doc.text(`Inventory (${warehouseName})`, 14, 22)
-  
     doc.setFontSize(12)
     doc.text(`Total Products: ${formatNumber(summaryInfo.totalItems)}`, 14, 32)
     doc.text(`Total ${hasBoxItems ? 'Boxes' : 'Pares'}: ${formatNumber(summaryInfo.totalPares)}`, 14, 40)
