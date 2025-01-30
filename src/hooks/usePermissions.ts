@@ -2,16 +2,16 @@ import { useAuth } from 'app/app/context/AuthContext'
 
 // Define permissions for each role
 const rolePermissions = {
-  developer: ['create', 'read', 'update', 'delete'],
-  general_manager: ['create', 'read', 'update', 'delete'],
-  warehouse_manager: ['create', 'read', 'update'],
+  developer: ['create', 'read', 'update', 'delete', 'ska'],
+  general_manager: ['create', 'read', 'update', 'delete', 'ska'],
+  warehouse_manager: ['create', 'read', 'update', 'ska'],
+  warehouse_salesperson: ['warehouse_salesperson', 'read', 'ska'],
+  pos_salesperson: ['pos_salesperson', 'read', 'ska'],
   skater: ['skater', 'read'],
-  warehouse_salesperson: ['warehouse_salesperson', 'read'],
-  pos_salesperson: ['pos_salesperson', 'read'],
   customer: ['customer'],
 } 
 
-type Action = 'create' | 'read' | 'update' | 'delete' | 'skater' | 'warehouse_salesperson' | 'pos_salesperson' | 'customer'
+type Action = 'create' | 'read' | 'update' | 'delete' | 'skater' | 'ska' | 'warehouse_salesperson' | 'pos_salesperson' | 'customer'
 
 export function usePermissions() {
   const { user } = useAuth()

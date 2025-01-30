@@ -359,7 +359,7 @@ export default function StoreListPage() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Stores</h1>
-        {hasPermission('create') && (
+        {hasPermission('delete') && (
         <Button variant="secondary" onClick={() => {
           setEditingStore(null)
           setNewStore({ name: '', address: '', manager: '', phone: '' })
@@ -406,7 +406,7 @@ export default function StoreListPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent className='mr-2'>
-                        {hasPermission('update') && (
+                        {hasPermission('delete') && (
                           <DropdownMenuItem onClick={() => openEditPopup(store)}>
                               <Pencil className="mr-2 h-4 w-4" />
                               <span>Update</span>
@@ -418,9 +418,11 @@ export default function StoreListPage() {
                             <span>Delete</span>
                           </DropdownMenuItem>
                          )}
+                         {hasPermission('read') && (
                           <DropdownMenuItem>
                             <Link href={`/companies/${companyId}/store/${store.id}/invoices`}>Invoices</Link>
                           </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem>
                             <Link href={`/companies/${companyId}/store/${store.id}/exhibition-inventory`}>Exb Inventory</Link>
                           </DropdownMenuItem>

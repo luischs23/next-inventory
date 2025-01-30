@@ -24,7 +24,6 @@ import { DeletedUsersView } from 'src/components/DeletedUsersView'
 interface User {
   id: string
   name: string
-  surname: string
   email: string
   phone: string
   cc: string
@@ -34,16 +33,16 @@ interface User {
   companyId: string
   uid: string
   photo: string
-  status: 'active' | 'deleted'
+  status: "active" | "deleted"
 }
 
 const roles = [
-  { id: 'general_manager', name: 'General Manager' },
-  { id: 'warehouse_manager', name: 'Warehouse Manager' },
-  { id: 'warehouse_salesperson', name: 'Warehouse Salesperson' },
-  { id: 'pos_salesperson', name: 'Point of Sale Salesperson' },
-  { id: 'skater', name: 'Skater' },
-  { id: 'customer', name: 'Customer' }
+  { id: "general_manager", name: "General Manager" },
+  { id: "warehouse_manager", name: "Warehouse Manager" },
+  { id: "warehouse_salesperson", name: "Warehouse Salesperson" },
+  { id: "pos_salesperson", name: "Point of Sale Salesperson" },
+  { id: "skater", name: "Skater" },
+  { id: "customer", name: "Customer" },
 ]
 
 export default function UsersPage({ params }: { params: { companyId: string } }) {
@@ -56,10 +55,20 @@ export default function UsersPage({ params }: { params: { companyId: string } })
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [activeUserId, setActiveUserId] = useState<string | null>(null)
-  const initialFormData = { name: '', surname: '', email: '', phone: '', cc: '', location: '', password: '', role: '', photo: ''}
+  const initialFormData = {
+    name: "",
+    email: "",
+    phone: "",
+    cc: "",
+    location: "",
+    password: "",
+    role: "",
+    photo: "",
+  }
   const [formData, setFormData] = useState(initialFormData)
   const [showDeletedUsers, setShowDeletedUsers] = useState(false)
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(roles.map(role => role.id))
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(roles.map((role) => role.id))
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
@@ -70,18 +79,19 @@ export default function UsersPage({ params }: { params: { companyId: string } })
   const fetchUsers = async () => {
     try {
       const usersRef = collection(db, `companies/${params.companyId}/users`)
-      const q = query(usersRef, 
-        where('status', '==', showDeletedUsers ? 'deleted' : 'active'),
-        where('role', 'in', selectedRoles)
+      const q = query(
+        usersRef,
+        where("status", "==", showDeletedUsers ? "deleted" : "active"),
+        where("role", "in", selectedRoles),
       )
       const snapshot = await getDocs(q)
-      const usersList = snapshot.docs.map(doc => ({
+      const usersList = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
       })) as User[]
       setUsers(usersList)
     } catch (error) {
-      console.error('Error fetching users:', error)
+      console.error("Error fetching users:", error)
       toast({
         title: "Error",
         description: "Failed to fetch users",
@@ -93,32 +103,37 @@ export default function UsersPage({ params }: { params: { companyId: string } })
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    const { name, value, type } = e.target
+    if (type === "number") {
+      const numValue = value === "" ? "" : Number(value)
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numValue,
+      }))
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+      }))
+    }
   }
 
   const handleRoleChange = (value: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      role: value
+      role: value,
     }))
   }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.role) return
+    setIsSubmitting(true)
     try {
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      )
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
 
       const userData = {
         name: formData.name,
-        surname: formData.surname,
         email: formData.email,
         phone: formData.phone,
         cc: formData.cc,
@@ -127,8 +142,8 @@ export default function UsersPage({ params }: { params: { companyId: string } })
         companyId: params.companyId,
         createdAt: serverTimestamp(),
         uid: userCredential.user.uid,
-        photo: '',
-        status: 'active'
+        photo: "",
+        status: "active",
       }
 
       await addDoc(collection(db, `companies/${params.companyId}/users`), userData)
@@ -143,12 +158,14 @@ export default function UsersPage({ params }: { params: { companyId: string } })
       setShowCreateAlertDialog(false)
       fetchUsers()
     } catch (error) {
-      console.error('Error creating user:', error)
+      console.error("Error creating user:", error)
       toast({
         title: "Error",
         description: "Failed to create user",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -159,7 +176,6 @@ export default function UsersPage({ params }: { params: { companyId: string } })
     try {
       await updateDoc(doc(db, `companies/${params.companyId}/users`, selectedUser.id), {
         name: formData.name,
-        surname: formData.surname,
         phone: formData.phone,
         cc: formData.cc,
         location: formData.location,
@@ -176,7 +192,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
       setSelectedUser(null)
       fetchUsers()
     } catch (error) {
-      console.error('Error updating user:', error)
+      console.error("Error updating user:", error)
       toast({
         title: "Error",
         description: "Failed to update user",
@@ -190,7 +206,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
 
     try {
       await updateDoc(doc(db, `companies/${params.companyId}/users`, selectedUser.id), {
-        status: 'deleted'
+        status: "deleted",
       })
 
       toast({
@@ -203,7 +219,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
       setSelectedUser(null)
       fetchUsers()
     } catch (error) {
-      console.error('Error moving user to trash:', error)
+      console.error("Error moving user to trash:", error)
       toast({
         title: "Error",
         description: "Failed to move user to trash",
@@ -222,7 +238,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
         try {
           await deleteObject(photoRef)
         } catch (photoError) {
-          console.error('Error deleting profile photo:', photoError)
+          console.error("Error deleting profile photo:", photoError)
         }
       }
 
@@ -236,7 +252,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
 
       fetchUsers()
     } catch (error) {
-      console.error('Error deleting user permanently:', error)
+      console.error("Error deleting user permanently:", error)
       toast({
         title: "Error",
         description: "Failed to delete user permanently",
@@ -249,14 +265,13 @@ export default function UsersPage({ params }: { params: { companyId: string } })
     setSelectedUser(user)
     setFormData({
       name: user.name,
-      surname: user.surname,
       email: user.email,
       phone: user.phone,
       cc: user.cc,
       location: user.location,
-      password: '',
+      password: "",
       role: user.role,
-      photo: user.photo
+      photo: user.photo,
     })
     setShowUpdateAlertDialog(true)
   }
@@ -271,22 +286,18 @@ export default function UsersPage({ params }: { params: { companyId: string } })
   }
 
   const handleRoleFilter = (roleId: string) => {
-    setSelectedRoles(prev => 
-      prev.includes(roleId) 
-        ? prev.filter(id => id !== roleId)
-        : [...prev, roleId]
-    )
+    setSelectedRoles((prev) => (prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]))
   }
 
-  const groupedUsers = roles.map(role => ({
+  const groupedUsers = roles.map((role) => ({
     ...role,
-    users: users.filter(user => user.role === role.id)
+    users: users.filter((user) => user.role === role.id),
   }))
 
   const handleRestoreUser = async (userId: string) => {
     try {
       await updateDoc(doc(db, `companies/${params.companyId}/users`, userId), {
-        status: 'active'
+        status: "active",
       })
 
       toast({
@@ -297,7 +308,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
 
       fetchUsers()
     } catch (error) {
-      console.error('Error restoring user:', error)
+      console.error("Error restoring user:", error)
       toast({
         title: "Error",
         description: "Failed to restore user",
@@ -305,7 +316,6 @@ export default function UsersPage({ params }: { params: { companyId: string } })
       })
     }
   }
-
 
   if (loading) {
     return <UserSkeleton />
@@ -331,16 +341,12 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             </AlertDialogHeader>
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
-                <Switch
-                  id="show-deleted"
-                  checked={showDeletedUsers}
-                  onCheckedChange={setShowDeletedUsers}
-                />
+                <Switch id="show-deleted" checked={showDeletedUsers} onCheckedChange={setShowDeletedUsers} />
                 <Label htmlFor="show-deleted">Show Deleted Users</Label>
               </div>
               <div>
                 <h3 className="mb-2 font-semibold">Filter by Role:</h3>
-                {roles.map(role => (
+                {roles.map((role) => (
                   <div key={role.id} className="flex items-center space-x-2 mb-2">
                     <Checkbox
                       id={role.id}
@@ -373,23 +379,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="surname">Surname</Label>
-                  <Input
-                    id="surname"
-                    name="surname"
-                    value={formData.surname}
-                    onChange={handleInputChange}
-                    required
-                  />
+                  <Input id="name" name="name" value={formData.name} onChange={handleInputChange} required />
                 </div>
                 <div>
                   <Label htmlFor="email">Email</Label>
@@ -407,9 +397,11 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                   <Input
                     id="phone"
                     name="phone"
+                    type="number"
                     value={formData.phone}
                     onChange={handleInputChange}
                     required
+                    max="999999999999999"
                   />
                 </div>
                 <div>
@@ -417,9 +409,11 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                   <Input
                     id="cc"
                     name="cc"
+                    type="number"
                     value={formData.cc}
                     onChange={handleInputChange}
                     required
+                    max="9999999999999"
                   />
                 </div>
                 <div>
@@ -457,7 +451,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {roles.map(role => (
+                      {roles.map((role) => (
                         <SelectItem key={role.id} value={role.id}>
                           {role.name}
                         </SelectItem>
@@ -466,85 +460,88 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                   </Select>
                 </div>
               </div>
-              <Button type="submit" className="w-full">Create User</Button>
+              <Button type="submit" className="w-full" disabled={!formData.role || isSubmitting}>
+                {isSubmitting ? "Creating..." : "Create User"}
+              </Button>
             </form>
           </AlertDialogContent>
         </AlertDialog>
       </header>
       <main className="container mx-auto p-4 mb-14">
         {showDeletedUsers ? (
-          <DeletedUsersView 
-            users={users}
-            onRestore={handleRestoreUser}
-            onDelete={handlePermanentDelete}
-          />
+          <DeletedUsersView users={users} onRestore={handleRestoreUser} onDelete={handlePermanentDelete} />
         ) : (
-          groupedUsers.map((group) => (
-            group.users.length > 0 && (
-              <div key={group.id} className="mb-8">
-                <h2 className="text-xl font-semibold mb-4 text-teal-600">{group.name}</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {group.users.map(user => (
-                    <Card key={user.id}
-                      className="overflow-hidden cursor-pointer"
-                      onClick={() => handleCardClick(user.id)}>
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 rounded-full overflow-hidden bg-primary/10">
-                              {user.photo ? (
-                                <Image
-                                  src={user.photo || "/placeholder.svg"}
-                                  alt={`${user.name} ${user.surname}`}
-                                  width={48}
-                                  height={48}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center">
-                                  <UserIcon className="w-6 h-6 text-primary" />
-                                </div>
-                              )}
+          groupedUsers.map(
+            (group) =>
+              group.users.length > 0 && (
+                <div key={group.id} className="mb-8">
+                  <h2 className="text-xl font-semibold mb-4 text-teal-600">{group.name}</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {group.users.map((user) => (
+                      <Card
+                        key={user.id}
+                        className="overflow-hidden cursor-pointer"
+                        onClick={() => handleCardClick(user.id)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="w-12 h-12 rounded-full overflow-hidden bg-primary/10">
+                                {user.photo ? (
+                                  <Image
+                                    src={user.photo || "/placeholder.svg"}
+                                    alt={`${user.name}`}
+                                    width={48}
+                                    height={48}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <UserIcon className="w-6 h-6 text-primary" />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <h3 className="font-semibold">
+                                  {user.name}
+                                </h3>
+                                <p className="text-sm text-gray-500">{user.email}</p>
+                                <p className="text-sm text-primary">{group.name}</p>
+                              </div>
                             </div>
-                            <div>
-                              <h3 className="font-semibold">{user.name} {user.surname}</h3>
-                              <p className="text-sm text-gray-500">{user.email}</p>
-                              <p className="text-sm text-primary">{group.name}</p>
-                            </div>
+                            {activeUserId === user.id && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => openUpdateAlertDialog(user)}>
+                                    <Pencil className="w-4 h-4 mr-2" />
+                                    Update
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedUser(user)
+                                      setShowDeleteAlertDialog(true)
+                                    }}
+                                    className="text-red-600"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
                           </div>
-                          {activeUserId === user.id && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openUpdateAlertDialog(user)}>
-                                  <Pencil className="w-4 h-4 mr-2" />
-                                  Update
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => {
-                                    setSelectedUser(user)
-                                    setShowDeleteAlertDialog(true)
-                                  }}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )
-          ))
+              ),
+          )
         )}
       </main>
       <AlertDialog open={showUpdateAlertDialog} onOpenChange={setShowUpdateAlertDialog}>
@@ -556,43 +553,15 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             <div className="grid grid-cols-1 gap-4">
               <div>
                 <Label htmlFor="update-name">Name</Label>
-                <Input
-                  id="update-name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="update-surname">Surname</Label>
-                <Input
-                  id="update-surname"
-                  name="surname"
-                  value={formData.surname}
-                  onChange={handleInputChange}
-                  required
-                />
+                <Input id="update-name" name="name" value={formData.name} onChange={handleInputChange} required />
               </div>
               <div>
                 <Label htmlFor="update-phone">Phone</Label>
-                <Input
-                  id="update-phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  required
-                />
+                <Input id="update-phone" name="phone" value={formData.phone} onChange={handleInputChange} required />
               </div>
               <div>
                 <Label htmlFor="update-cc">C.C.</Label>
-                <Input
-                  id="update-cc"
-                  name="cc"
-                  value={formData.cc}
-                  onChange={handleInputChange}
-                  required
-                />
+                <Input id="update-cc" name="cc" value={formData.cc} onChange={handleInputChange} required />
               </div>
               <div>
                 <Label htmlFor="update-location">Location</Label>
@@ -611,7 +580,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                     <SelectValue placeholder="Select role" />
                   </SelectTrigger>
                   <SelectContent>
-                    {roles.map(role => (
+                    {roles.map((role) => (
                       <SelectItem key={role.id} value={role.id}>
                         {role.name}
                       </SelectItem>
@@ -620,7 +589,9 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                 </Select>
               </div>
             </div>
-            <Button type="submit" className="w-full">Update User</Button>
+            <Button type="submit" className="w-full">
+              Update User
+            </Button>
           </form>
         </AlertDialogContent>
       </AlertDialog>
@@ -632,8 +603,12 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the user
               {selectedUser && (
-                <span className="font-semibold"> {selectedUser.name} {selectedUser.surname}</span>
-              )}.
+                <span className="font-semibold">
+                  {" "}
+                  {selectedUser.name}
+                </span>
+              )}
+              .
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

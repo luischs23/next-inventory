@@ -77,7 +77,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [selectedCard, setSelectedCard] = useState<string | null>(null)
 
-  useEffect(() => {
+  useEffect(() => { 
     const controlHeader = () => {
       if (typeof window !== 'undefined') {
         const currentScrollY = window.scrollY
@@ -520,6 +520,19 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     setSelectedImage(imageUrl)
   }
 
+  const shareViaWhatsApp = (product: Product) => {
+    const text = `Check out this product:
+      Brand: ${product.brand}
+      Reference: ${product.reference}
+      Color: ${product.color}
+      Gender: ${product.gender}
+      Price: $${product.saleprice}
+      ${product.imageUrl}`
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`
+    window.open(whatsappUrl, "_blank")
+  }
+
   const handleDownloadImage = async (imageUrl: string) => {
     try {
       const response = await fetch(imageUrl)
@@ -774,6 +787,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                         <DropdownMenuItem onClick={() => handleUpdate(product)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           <span>Update</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => shareViaWhatsApp(product)}>
+                          <span className="mr-2">WhatsApp Share</span>
                         </DropdownMenuItem>
                       {hasPermission('delete') && (
                         <DropdownMenuItem onClick={() => setProductToDelete(product)}>

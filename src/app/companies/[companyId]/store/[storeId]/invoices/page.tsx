@@ -24,39 +24,39 @@ interface Invoice {
   createdAt: Timestamp
   totalSold: number
   customerPhone: string
-  status: 'open' | 'closed'
+  status: "open" | "closed"
   invoiceId: string
+  items?: { barcode: string; quantity: number; price: number }[]
 }
 
-interface Store { 
+interface Store {
   name: string
 }
 
-export default function InvoiceListPage({ params }: { params: { companyId: string, storeId: string } }) {
+export default function InvoiceListPage({ params }: { params: { companyId: string; storeId: string } }) {
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [storeName, setStoreName] = useState<string>('')
+  const [storeName, setStoreName] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null)
   const [isNewInvoiceDialogOpen, setIsNewInvoiceDialogOpen] = useState(false)
   const [isEditInvoiceDialogOpen, setIsEditInvoiceDialogOpen] = useState(false)
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null)
-  const [newCustomerName, setNewCustomerName] = useState('')
-  const [newCustomerPhone, setNewCustomerPhone] = useState('')
+  const [newCustomerName, setNewCustomerName] = useState("")
+  const [newCustomerPhone, setNewCustomerPhone] = useState("")
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([])
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
-  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false) 
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
   const { hasPermission } = usePermissions()
-
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>(undefined)
   const [selectedDay, setSelectedDay] = useState<number | undefined>(undefined)
-
   const [availableYears, setAvailableYears] = useState<number[]>([])
   const [availableMonths, setAvailableMonths] = useState<number[]>([])
   const [availableDays, setAvailableDays] = useState<number[]>([])
+  const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
     fetchStoreAndInvoices()
@@ -64,17 +64,20 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
 
   useEffect(() => {
     if (invoices.length > 0) {
-      const years = Array.from(new Set(invoices.map(invoice => invoice.createdAt.toDate().getFullYear())))
+      const years = Array.from(new Set(invoices.map((invoice) => invoice.createdAt.toDate().getFullYear())))
       setAvailableYears(years.sort((a, b) => b - a))
     }
   }, [invoices])
 
   useEffect(() => {
     if (selectedYear) {
-      const months = Array.from(new Set(invoices
-        .filter(invoice => invoice.createdAt.toDate().getFullYear() === selectedYear)
-        .map(invoice => invoice.createdAt.toDate().getMonth())
-      ))
+      const months = Array.from(
+        new Set(
+          invoices
+            .filter((invoice) => invoice.createdAt.toDate().getFullYear() === selectedYear)
+            .map((invoice) => invoice.createdAt.toDate().getMonth()),
+        ),
+      )
       setAvailableMonths(months.sort((a, b) => a - b))
       setSelectedMonth(undefined)
       setSelectedDay(undefined)
@@ -87,13 +90,16 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
 
   useEffect(() => {
     if (selectedYear && selectedMonth !== undefined) {
-      const days = Array.from(new Set(invoices
-        .filter(invoice => {
-          const date = invoice.createdAt.toDate()
-          return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
-        })
-        .map(invoice => invoice.createdAt.toDate().getDate())
-      ))
+      const days = Array.from(
+        new Set(
+          invoices
+            .filter((invoice) => {
+              const date = invoice.createdAt.toDate()
+              return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth
+            })
+            .map((invoice) => invoice.createdAt.toDate().getDate()),
+        ),
+      )
       setAvailableDays(days.sort((a, b) => a - b))
       setSelectedDay(undefined)
     } else {
@@ -104,7 +110,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
 
   useEffect(() => {
     filterInvoices()
-  }, [selectedYear, selectedMonth, selectedDay, invoices])
+  }, [selectedYear, selectedMonth, selectedDay, invoices, searchTerm])
 
   const fetchStoreAndInvoices = async () => {
     setLoading(true)
@@ -119,18 +125,21 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
       }
 
       const invoicesRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`)
-      const q = query(invoicesRef, orderBy('createdAt', 'desc'))
+      const q = query(invoicesRef, orderBy("createdAt", "desc"))
       const querySnapshot = await getDocs(q)
-      const invoiceList = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt as Timestamp
-      } as Invoice))
+      const invoiceList = querySnapshot.docs.map(
+        (doc) =>
+          ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt as Timestamp,
+          }) as Invoice,
+      )
       setInvoices(invoiceList)
       setFilteredInvoices(invoiceList)
     } catch (err) {
-      console.error('Error fetching store and invoices:', err)
-      setError('Failed to fetch store and invoices. Please try again later.')
+      console.error("Error fetching store and invoices:", err)
+      setError("Failed to fetch store and invoices. Please try again later.")
     } finally {
       setLoading(false)
     }
@@ -139,23 +148,28 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const filterInvoices = () => {
     let filtered = invoices
     if (selectedYear) {
-      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getFullYear() === selectedYear)
+      filtered = filtered.filter((invoice) => invoice.createdAt.toDate().getFullYear() === selectedYear)
     }
     if (selectedMonth !== undefined) {
-      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getMonth() === selectedMonth)
+      filtered = filtered.filter((invoice) => invoice.createdAt.toDate().getMonth() === selectedMonth)
     }
     if (selectedDay) {
-      filtered = filtered.filter(invoice => invoice.createdAt.toDate().getDate() === selectedDay)
+      filtered = filtered.filter((invoice) => invoice.createdAt.toDate().getDate() === selectedDay)
+    }
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (invoice) =>
+          invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (invoice.invoiceId && invoice.invoiceId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (invoice.items &&
+            invoice.items.some((item) => item.barcode.toLowerCase().includes(searchTerm.toLowerCase()))),
+      )
     }
     setFilteredInvoices(filtered)
   }
 
   const sortedInvoices = useMemo(() => {
-    return [...filteredInvoices].sort((a, b) => {
-      if (a.status === 'open' && b.status !== 'open') return -1
-      if (a.status !== 'open' && b.status === 'open') return 1
-      return parseInt(b.invoiceId) - parseInt(a.invoiceId)
-    })
+    return filteredInvoices
   }, [filteredInvoices])
 
   const formatDate = (timestamp: Timestamp) => {
@@ -164,15 +178,15 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   }
 
   const formatPrice = (price: number): string => {
-    return price.toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+    return price.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
   }
 
   const handleDelete = async () => {
     if (invoiceToDelete) {
       try {
         await deleteDoc(doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, invoiceToDelete.id))
-        setInvoices(invoices.filter(invoice => invoice.id !== invoiceToDelete.id))
-        setFilteredInvoices(filteredInvoices.filter(invoice => invoice.id !== invoiceToDelete.id))
+        setInvoices(invoices.filter((invoice) => invoice.id !== invoiceToDelete.id))
+        setFilteredInvoices(filteredInvoices.filter((invoice) => invoice.id !== invoiceToDelete.id))
         toast({
           title: "Success",
           description: `Invoice for ${invoiceToDelete.customerName} has been deleted successfully.`,
@@ -181,16 +195,15 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           style: { background: "#4CAF50", color: "white", fontWeight: "bold" },
         })
       } catch (error) {
-        console.error('Error deleting invoice:', error)
+        console.error("Error deleting invoice:", error)
         toast({
           title: "Error",
           description: `Failed to delete the invoice for ${invoiceToDelete.customerName}.`,
           variant: "destructive",
-          
         })
       } finally {
         setInvoiceToDelete(null)
-      }  
+      }
     }
   }
 
@@ -199,13 +212,16 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
 
     setIsCreatingInvoice(true)
     try {
-      const newInvoiceRef = await addDoc(collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`), {
-        customerName: newCustomerName,
-        customerPhone: newCustomerPhone,
-        createdAt: serverTimestamp(),
-        totalSold: 0,
-        status: 'open'
-      })
+      const newInvoiceRef = await addDoc(
+        collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`),
+        {
+          customerName: newCustomerName,
+          customerPhone: newCustomerPhone,
+          createdAt: serverTimestamp(),
+          totalSold: 0,
+          status: "open",
+        },
+      )
 
       const newInvoice: Invoice = {
         id: newInvoiceRef.id,
@@ -213,15 +229,15 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         customerPhone: newCustomerPhone,
         createdAt: Timestamp.now(),
         totalSold: 0,
-        status: 'open',
-        invoiceId: ''
+        status: "open",
+        invoiceId: "",
       }
 
       setInvoices([newInvoice, ...invoices])
       setFilteredInvoices([newInvoice, ...filteredInvoices])
       setIsNewInvoiceDialogOpen(false)
-      setNewCustomerName('')
-      setNewCustomerPhone('')
+      setNewCustomerName("")
+      setNewCustomerPhone("")
 
       toast({
         title: "Success",
@@ -235,7 +251,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         },
       })
     } catch (error) {
-      console.error('Error creating new invoice:', error)
+      console.error("Error creating new invoice:", error)
       toast({
         title: "Error",
         description: "Failed to create new invoice. Please try again.",
@@ -255,12 +271,14 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         })
 
         const updatedInvoice = { ...editingInvoice, customerName: newCustomerName, customerPhone: newCustomerPhone }
-        setInvoices(invoices.map(invoice => invoice.id === editingInvoice.id ? updatedInvoice : invoice))
-        setFilteredInvoices(filteredInvoices.map(invoice => invoice.id === editingInvoice.id ? updatedInvoice : invoice))
+        setInvoices(invoices.map((invoice) => (invoice.id === editingInvoice.id ? updatedInvoice : invoice)))
+        setFilteredInvoices(
+          filteredInvoices.map((invoice) => (invoice.id === editingInvoice.id ? updatedInvoice : invoice)),
+        )
         setIsEditInvoiceDialogOpen(false)
         setEditingInvoice(null)
-        setNewCustomerName('')
-        setNewCustomerPhone('')
+        setNewCustomerName("")
+        setNewCustomerPhone("")
 
         toast({
           title: "Success",
@@ -268,7 +286,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           variant: "default",
         })
       } catch (error) {
-        console.error('Error updating invoice:', error)
+        console.error("Error updating invoice:", error)
         toast({
           title: "Error",
           description: "Failed to update invoice. Please try again.",
@@ -282,6 +300,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
     setSelectedYear(undefined)
     setSelectedMonth(undefined)
     setSelectedDay(undefined)
+    setSearchTerm("")
     setFilteredInvoices(invoices)
     setIsFilterDialogOpen(false)
   }
@@ -336,24 +355,27 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>Filter Invoices</AlertDialogTitle>
-              <AlertDialogDescription>
-                Select a date range to filter invoices.
-              </AlertDialogDescription>
+              <AlertDialogDescription>Select a date range to filter invoices.</AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-4">
-              <Select value={selectedYear?.toString()} onValueChange={(value) => setSelectedYear(value ? parseInt(value) : undefined)}>
+              <Select
+                value={selectedYear?.toString()}
+                onValueChange={(value) => setSelectedYear(value ? Number.parseInt(value) : undefined)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Year" />
                 </SelectTrigger>
                 <SelectContent>
                   {availableYears.map((year) => (
-                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select 
-                value={selectedMonth?.toString()} 
-                onValueChange={(value) => setSelectedMonth(value ? parseInt(value) : undefined)}
+              <Select
+                value={selectedMonth?.toString()}
+                onValueChange={(value) => setSelectedMonth(value ? Number.parseInt(value) : undefined)}
                 disabled={!selectedYear}
               >
                 <SelectTrigger>
@@ -362,14 +384,14 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                 <SelectContent>
                   {availableMonths.map((month) => (
                     <SelectItem key={month} value={month.toString()}>
-                      {new Date(2000, month).toLocaleString('default', { month: 'long' })}
+                      {new Date(2000, month).toLocaleString("default", { month: "long" })}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <Select 
-                value={selectedDay?.toString()} 
-                onValueChange={(value) => setSelectedDay(value ? parseInt(value) : undefined)}
+              <Select
+                value={selectedDay?.toString()}
+                onValueChange={(value) => setSelectedDay(value ? Number.parseInt(value) : undefined)}
                 disabled={!selectedYear || selectedMonth === undefined}
               >
                 <SelectTrigger>
@@ -377,93 +399,175 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                 </SelectTrigger>
                 <SelectContent>
                   {availableDays.map((day) => (
-                    <SelectItem key={day} value={day.toString()}>{day}</SelectItem>
+                    <SelectItem key={day} value={day.toString()}>
+                      {day}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <AlertDialogFooter className="flex justify-between items-end">
-              <AlertDialogCancel className='bg-black text-white'>Close</AlertDialogCancel>
-              <Button onClick={handleClearFilters} variant="outline">Clear Filters</Button>
+              <AlertDialogCancel className="bg-black text-white">Close</AlertDialogCancel>
+              <Button onClick={handleClearFilters} variant="outline">
+                Clear Filters
+              </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        {hasPermission('create') && (
-          
+        {hasPermission("create") && (
           <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="text-white">
-              <Menu className="h-6 w-6" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setIsNewInvoiceDialogOpen(true)}>
-              <PlusIcon className="h-4 w-4 mr-2" />
-              New Invoice
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-       
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="text-white">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsNewInvoiceDialogOpen(true)}>
+                <PlusIcon className="h-4 w-4 mr-2" />
+                New Invoice
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
       </header>
       <main className="container mx-auto p-4 pb-20">
+        <div className="mb-4">
+          <Input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name, barcode, invoice ID"
+            className="w-full"
+          />
+        </div>
+        <div className="mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {sortedInvoices
+              .filter((invoice) => invoice.status === "open")
+              .map((invoice) => (
+                <div key={invoice.id} className="relative">
+                  <Card className="p-2" onClick={() => handleCardClick(invoice.id)}>
+                    <CardHeader className="relative">
+                      {activeCardId === invoice.id && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-6 w-6 p-0 absolute top-1 right-1">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            {invoice.status === "closed" && (
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}
+                                >
+                                  View Details
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
+                            {invoice.status === "open" && (
+                              <DropdownMenuItem asChild>
+                                <Link
+                                  href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}/edit`}
+                                >
+                                  Add products
+                                </Link>
+                              </DropdownMenuItem>
+                            )}
+                            {hasPermission("create") && (
+                              <DropdownMenuItem onClick={() => openEditDialog(invoice)}>Edit Card</DropdownMenuItem>
+                            )}
+                            {hasPermission("delete") && (
+                              <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>Delete</DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
+                      <p className="text-sm ">{invoice.customerPhone}</p>
+                    </CardHeader>
+                    <CardContent className="flex justify-between items-center">
+                      <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                      {hasPermission("ska") && (
+                        <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
+                      )}
+                    </CardContent>
+                    <CardContent className="flex justify-between items-center">
+                      <p
+                        className={`text-sm font-medium ${invoice.status === "open" ? "text-yellow-600" : "text-green-600"}`}
+                      >
+                        Status: {invoice.status === "open" ? "Open" : "Closed"}
+                      </p>
+                      <p className="text-sm text-gray-500">{invoice.invoiceId}</p>
+                    </CardContent>
+                  </Card>
+                </div>
+              ))}
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {sortedInvoices.map((invoice) => (
-            <div key={invoice.id} className="relative">
-              
-              <Card 
-                className={`border-2 shadow-md p-2 ${invoice.status === 'open' ? 'border-yellow-500' : 'border-green-500'}`}
-                onClick={() => handleCardClick(invoice.id)}>
-                <CardHeader className="relative">
-                {activeCardId === invoice.id && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-6 w-6 p-0 absolute top-1 right-1">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent>
-                    {invoice.status === 'closed' && (
-                      <DropdownMenuItem asChild>
-                        <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}>
-                          View Details
-                        </Link>
-                      </DropdownMenuItem>
-                    )}                      
-                      {invoice.status === 'open' && (
-                        <DropdownMenuItem asChild>
-                          <Link href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}/edit`}>
-                            Add products
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onClick={() => openEditDialog(invoice)}>
-                        Edit Card
-                      </DropdownMenuItem>
-                      {hasPermission('delete') && (
-                        <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>
-                          Delete
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                  <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
-                  <p className="text-sm ">{invoice.customerPhone}</p>
-                </CardHeader>
-                <CardContent className='flex justify-between items-center'>
-                  <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
-                  <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
-                </CardContent>
-                <CardContent className='flex justify-between items-center'>
-                  <p className={`text-sm font-medium ${invoice.status === 'open' ? 'text-yellow-600' : 'text-green-600'}`}>
-                    Status: {invoice.status === 'open' ? 'Open' : 'Closed'}
-                  </p>
-                  <p className="text-sm text-gray-500">{invoice.invoiceId}</p>
-                </CardContent>
-              </Card>
-            </div>
-          ))}
+          {sortedInvoices
+            .filter((invoice) => invoice.status !== "open")
+            .map((invoice, index) => (
+              <div key={invoice.id} className="relative flex items-start">
+                <div className="text-sm font-semibold mr-2 mt-2 text-black">{index + 1}</div>
+                <Card className="p-2 flex-grow" onClick={() => handleCardClick(invoice.id)}>
+                  <CardHeader className="relative">
+                    {activeCardId === invoice.id && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-6 w-6 p-0 absolute top-1 right-1">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          {invoice.status === "closed" && (
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}`}
+                              >
+                                View Details
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {invoice.status === "open" && (
+                            <DropdownMenuItem asChild>
+                              <Link
+                                href={`/companies/${params.companyId}/store/${params.storeId}/invoices/${invoice.id}/edit`}
+                              >
+                                Add products
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {hasPermission("create") && (
+                            <DropdownMenuItem onClick={() => openEditDialog(invoice)}>Edit Card</DropdownMenuItem>
+                          )}
+                          {hasPermission("delete") && (
+                            <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>Delete</DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
+                    <p className="text-sm ">{invoice.customerPhone}</p>
+                  </CardHeader>
+                  <CardContent className="flex justify-between items-center">
+                    <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                    {hasPermission("ska") && (
+                      <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
+                    )}
+                  </CardContent>
+                  <CardContent className="flex justify-between items-center">
+                    <p
+                      className={`text-sm font-medium ${invoice.status === "open" ? "text-yellow-600" : "text-green-600"}`}
+                    >
+                      Status: {invoice.status === "open" ? "Open" : "Closed"}
+                    </p>
+                    <p className="text-sm text-gray-500">{invoice.invoiceId}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            ))}
         </div>
       </main>
 
@@ -490,9 +594,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Create New Invoice</AlertDialogTitle>
-            <AlertDialogDescription>
-              Enter customer details to create a new invoice.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Enter customer details to create a new invoice.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
@@ -521,7 +623,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button onClick={handleCreateNewInvoice} disabled={isCreatingInvoice}>
-              {isCreatingInvoice ? 'Creating...' : 'Create Invoice'}
+              {isCreatingInvoice ? "Creating..." : "Create Invoice"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -531,9 +633,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Edit Invoice</AlertDialogTitle>
-            <AlertDialogDescription>
-              Update customer details for this invoice.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Update customer details for this invoice.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">

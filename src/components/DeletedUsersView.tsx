@@ -7,7 +7,6 @@ import Image from 'next/image'
 interface DeletedUser {
   id: string
   name: string
-  surname: string
   email: string
   photo: string
   role: string
@@ -31,7 +30,7 @@ export function DeletedUsersView({ users, onRestore, onDelete }: DeletedUsersVie
                   {user.photo ? (
                     <Image
                       src={user.photo || "/placeholder.svg"}
-                      alt={`${user.name} ${user.surname}`}
+                      alt={`${user.name}`}
                       width={48}
                       height={48}
                       className="w-full h-full object-cover"
@@ -43,7 +42,7 @@ export function DeletedUsersView({ users, onRestore, onDelete }: DeletedUsersVie
                   )}
                 </div>
                 <div>
-                  <h3 className="font-semibold">{user.name} {user.surname}</h3>
+                  <h3 className="font-semibold">{user.name}</h3>
                   <p className="text-sm text-gray-500">{user.email}</p>
                   <p className="text-sm text-primary">{user.role}</p>
                 </div>
