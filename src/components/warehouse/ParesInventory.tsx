@@ -786,7 +786,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => handleUpdate(product)}>
                           <Pencil className="mr-2 h-4 w-4" />
-                          <span>Update</span>
+                          <span>Updated</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => shareViaWhatsApp(product)}>
                           <span className="mr-2">WhatsApp Share</span>
