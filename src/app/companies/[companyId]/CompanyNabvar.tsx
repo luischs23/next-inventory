@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, FileText, Store, Warehouse } from 'lucide-react'
 import { cn } from "app/lib/utils"
+import { usePermissions } from "app/hooks/usePermissions"
 
 interface CompanyNavbarProps {
   companyId: string;
@@ -11,12 +12,15 @@ interface CompanyNavbarProps {
 
 const CompanyNavbar: React.FC<CompanyNavbarProps> = ({ companyId }) => {
   const pathname = usePathname()
-
+  const { hasPermission } = usePermissions()
+  
   const navItems = [
     { name: "Home", icon: Home, href: `/companies/${companyId}/home`, label: 'Home' },
     { name: "Stores", icon: Store, href: `/companies/${companyId}/store`, label: 'Stores' },
     { name: "Warehouses", icon: Warehouse, href: `/companies/${companyId}/warehouses`, label: 'Warehouses' },
-    { name: "Invoices", icon: FileText, href: `/companies/${companyId}/invoices`, label: 'Invoices' },
+    ...(hasPermission("create")
+      ? [{ name: "Invoices", icon: FileText, href: `/companies/${companyId}/invoices`, label: "Invoices" }]
+      : []),
   ]
 
   return (
