@@ -179,13 +179,12 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(invoice => 
-        invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.items.some(item => 
-          item.barcode.includes(searchTerm) ||
-          item.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.reference.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+      filtered = filtered.filter(
+        (invoice) =>
+          invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (invoice.invoiceId && invoice.invoiceId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (invoice.items &&
+            invoice.items.some((item) => item.barcode.toLowerCase().includes(searchTerm.toLowerCase()))),
       )
     }
 
@@ -393,11 +392,10 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name, barcode, brand, or reference"
+            placeholder="Search by name, barcode, invoiceID"
             className="w-full"
           />
         </div>
-
         <div className="bg-white rounded-lg p-4 mb-2 shadow text-slate-900">
           <div className="grid grid-cols-3 gap-4">
             <div>
@@ -434,13 +432,14 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
                               Edit Invoice
                             </Link>
                           </DropdownMenuItem>
-                            )}  
+                          )}{invoice.status === 'closed' && (
                           <DropdownMenuItem>
                             <Link href={`/companies/${invoice.companyId}/store/${invoice.storeId}/invoices/${invoice.id}`} className="flex items-center">
                               <Pencil className="mr-2 h-4 w-4" />
                               Update
                             </Link>
                           </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}

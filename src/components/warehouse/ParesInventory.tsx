@@ -670,6 +670,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         <Button onClick={() => setIsFilterDialogOpen(true)} variant="ghost">
           <Filter className="h-4 w-4" />
         </Button>
+        {hasPermission("ska") && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="text-white">
@@ -677,12 +678,14 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+          {hasPermission("create") && (
             <DropdownMenuItem
               onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}
             >
               <PlusIcon className="h-4 w-4 mr-2" />
               New Product
             </DropdownMenuItem>
+          )} 
             <DropdownMenuItem
               onClick={() => {
                 setIsTemplateManagerOpen(true)
@@ -691,16 +694,20 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               <PlusIcon className="h-4 w-4 mr-2" />
               Manage Templates
             </DropdownMenuItem>
+       
             <DropdownMenuItem onClick={exportToPDF}>
               <FileDown className="h-4 w-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
+          {hasPermission("create") && (
             <DropdownMenuItem onClick={exportToExcel}>
               <FileDown className="h-4 w-4 mr-2" />
               Export Excel
             </DropdownMenuItem>
+          )}
           </DropdownMenuContent>
         </DropdownMenu>
+        )}
         <AlertDialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -821,7 +828,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                       <p className="text-sm">
                         {product.color} - {product.gender}
                       </p>
+                      {hasPermission("ska") && (
                       <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
+                      )}
                     </div>
                   </div>
                   <div className="hidden md:block md:w-1/6">
@@ -833,8 +842,12 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     <p className="text-sm">{product.gender}</p>
                   </div>
                   <div className="md:w-1/6 hidden md:block">
+                  {hasPermission("create") && (
                     <p className="text-sm">Base: ${formatNumber(product.baseprice)}</p>
+                  )}
+                  {hasPermission("ska") && (
                     <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
+                  )}
                   </div>
                   <div className="md:w-1/6 mt-2 md:mt-0 flex justify-between items-center">
                     <span className="font-medium text-sm">
@@ -858,7 +871,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                   </div>
                 </CardContent>
                 <div className="absolute top-2 right-2 flex items-center">
-                  {selectedCard === product.id && hasPermission("update") && (
+                  {selectedCard === product.id && 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -867,19 +880,21 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                      {hasPermission("create") && (
                         <DropdownMenuItem onClick={() => handleUpdate(product)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           <span>Updated</span>
                         </DropdownMenuItem>
-                        {hasPermission("delete") && (
+                        )}{hasPermission("delete") && (
                           <DropdownMenuItem onClick={() => setProductToDelete(product)}>
                             <Trash2 className="mr-2 h-4 w-4" />
                             <span>Delete</span>
                           </DropdownMenuItem>
-                        )}
+                        )}{hasPermission(["read","customer"]) && (
                         <DropdownMenuItem onClick={() => shareViaWhatsApp(product)}>
                           <span className="mr-2">Share via WhatsApp</span>
                         </DropdownMenuItem>
+                        )}{hasPermission("create") && (<>
                         {warehouses.map((warehouse) => (
                           <DropdownMenuItem
                             key={warehouse.id}
@@ -892,10 +907,11 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                           >
                             Transfer to {warehouse.name}
                           </DropdownMenuItem>
-                        ))}
+                        ))}</>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  )}
+                  } 
                 </div>
                 {(product.isBox ? product.total2 : product.total) === 0 && (
                   <div className="mt-2 text-sm text-red-500 md:absolute md:bottom-2 md:left-2">
