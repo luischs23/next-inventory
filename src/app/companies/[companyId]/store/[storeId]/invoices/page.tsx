@@ -438,7 +438,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by name, barcode, invoice ID"
             className="w-full"
-          />
+          /> 
         </div>
         <div className="mb-2">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

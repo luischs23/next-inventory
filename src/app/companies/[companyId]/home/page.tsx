@@ -144,19 +144,19 @@ export default function Home({ params }: { params: { companyId?: string } }) {
         name: 'Stores',
         icon: Store,
         href: `/companies/${companyId}/store`,
-        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+        permissions: ['read', 'customer'],
       },
       {
         name: 'Warehouses',
         icon: Warehouse,
         href: `/companies/${companyId}/warehouses`,
-        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+        permissions: ['read', 'customer'],
       },
       {
         name: 'Invoices',
         icon: FileText,
         href: `/companies/${companyId}/invoices`,
-        permissions: ['skater', 'warehouse_salesperson', 'pos_salesperson', 'create'],
+        permissions: ['create'],
       },
       {
         name: 'Users',
@@ -168,7 +168,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
         name: 'Profile',
         icon: User,
         href: `/companies/${companyId}/profile`,
-        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+        permissions: ['read', 'customer'],
       },
     ]
   : []

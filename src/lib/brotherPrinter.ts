@@ -11,4 +11,3 @@ export async function printLabel(data: PrintLabelData, isBox: boolean): Promise<
   console.log('Print request received:', { data, isBox });
   return 'Print request logged (actual printing occurs on Windows backend)';
 }
-
