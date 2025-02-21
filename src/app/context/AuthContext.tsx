@@ -31,68 +31,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-
-      if (firebaseUser) {
-        try {
-          // First, check if the user is a developer (outside of companies)
-          const developerUserRef = doc(db, 'users', firebaseUser.uid)
-          const developerUserSnap = await getDoc(developerUserRef)
-
-          if (developerUserSnap.exists()) {
-            const developerData = developerUserSnap.data()
-            const userData = {
-              ...firebaseUser,
-              role: 'developer',
-              companyId: null,
-              name: developerData.name,
-              isDeveloper: true
-            }
-            setUser(userData)
-           
-          } else {
-            // If not a developer, search in companies
-            const companiesRef = collection(db, 'companies')
-            const companiesSnapshot = await getDocs(companiesRef)
-
-            let userFound = false
-            for (const companyDoc of companiesSnapshot.docs) {
-              const userDocRef = doc(db, `companies/${companyDoc.id}/users`, firebaseUser.uid)
-              const userDocSnap = await getDoc(userDocRef)
-
-              if (userDocSnap.exists()) {
-                const userData = userDocSnap.data()
-                const extendedUser = {
-                  ...firebaseUser,
-                  role: userData.role,
-                  companyId: companyDoc.id,
-                  name: userData.name,
-                  isDeveloper: false
-                }
-                setUser(extendedUser)
-                console.log('AuthProvider: Company user set', extendedUser)
-                userFound = true
-                break
-              }
-            }
-            if (!userFound) {
-              setUser(null)
+      if (!firebaseUser) {
+        console.log("No Firebase user, manteniendo estado actual.");
+        setLoading(false);
+        return;
+      }
+  
+      try {
+        const developerUserRef = doc(db, "users", firebaseUser.uid);
+        const developerUserSnap = await getDoc(developerUserRef);
+  
+        if (developerUserSnap.exists()) {
+          setUser({
+            ...firebaseUser,
+            role: "developer",
+            companyId: null,
+            name: developerUserSnap.data().name,
+            isDeveloper: true,
+          });
+        } else {
+          const companiesRef = collection(db, "companies");
+          const companiesSnapshot = await getDocs(companiesRef);
+  
+          let userFound = false;
+          for (const companyDoc of companiesSnapshot.docs) {
+            const userDocRef = doc(db, `companies/${companyDoc.id}/users`, firebaseUser.uid);
+            const userDocSnap = await getDoc(userDocRef);
+  
+            if (userDocSnap.exists()) {
+              setUser({
+                ...firebaseUser,
+                role: userDocSnap.data().role,
+                companyId: companyDoc.id,
+                name: userDocSnap.data().name,
+                isDeveloper: false,
+              });
+              userFound = true;
+              break;
             }
           }
-        } catch (error) {
-          console.error('AuthProvider: Error fetching user data:', error)
-          setUser(null)
+  
+          if (!userFound) {
+            console.log("Usuario no encontrado en empresas, manteniendo sesión.");
+          }
         }
-      } else {
-        console.log('AuthProvider: No Firebase user, setting user to null')
-        setUser(null)
+      } catch (error) {
+        console.error("Error obteniendo datos del usuario:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false)
-    })
-
-    return () => unsubscribe()
-  }, [])
+    });
+  
+    return () => unsubscribe();
+  }, []);
+  
 
   const contextValue: AuthContextType = {
     user,

@@ -18,6 +18,7 @@ import { ProductFormSkeleton } from '../skeletons/ProductFormSkeleton'
 import ProductImageUpload from '../ui/ProductImageUpload'
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog'
 import { Skeleton } from '../ui/skeleton'
+import { saveAs } from "file-saver" 
 
 interface SizeInput {
   quantity: number
@@ -35,7 +36,7 @@ interface Product {
   reference: string 
   color: string
   comments: string
-  gender: 'Dama' | 'Hombre'
+  gender: 'Dama' | 'Hombre' | 'Niño'
   sizes: { [key: string]: SizeInput }
   imageUrl: string
   total: number
@@ -53,8 +54,17 @@ interface UpdateProductProps {
     warehouseId: string
   }
 
-const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
-const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
+interface BarcodeData {
+    barcode: string
+    brand: string
+    reference: string
+    color: string
+    size: string
+ }
+
+ const damaSizes = ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
+ const hombreSizes = ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
+ const niñoSizes = ['T-28', 'T-29', 'T-30', 'T-31', 'T-32', 'T-33', 'T-34', 'T-35']
 
 export default function UpdateProduct({ companyId, warehouseId, productId }: UpdateProductProps) {
   const [product, setProduct] = useState<Product | null>(null)
@@ -183,81 +193,142 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
     fetchCustomBrands()
   }, [companyId])
 
-  const handlePrintBarcode = useCallback(async (barcode: string, productInfo: string, size: string) => {
-    try {
-      const labelData = {
-        text1: productInfo,
-        text2: size,
-        barcode: barcode
-      };
-
-      const response = await fetch('/api/printer-test', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(labelData),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to print barcode');
+  const handlePrintBarcode = useCallback(
+    async (barcode: string, brand: string, reference: string, color: string, size: string) => {
+      try {
+        const labelData = [{ barcode, brand, reference, color, size }] // Encapsular en un array
+  
+        const response = await fetch("/api/generate-label-excel", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ barcodes: labelData }), // Enviar como un array con la clave 'barcodes'
+        })
+  
+        if (!response.ok) {
+          throw new Error("Failed to generate Excel file")
+        }
+  
+        const blob = await response.blob()
+        saveAs(blob, "barcodes.csv")
+  
+        toast({
+          title: "Excel Generated",
+          description: "The barcode data has been saved in an Excel file.",
+          duration: 1000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
+        })
+      } catch (error) {
+        console.error("Error generating Excel:", error)
+        toast({
+          title: "Error",
+          description: "Failed to generate Excel. Please try again.",
+          duration: 1000,
+          variant: "destructive",
+        })
       }
+    },
+    [toast]
+  )  
 
-      const result = await response.json();
+  const handlePrintMultipleBarcodes = useCallback(async (barcodeData: BarcodeData[]) => {
+    try {
+      const response = await fetch("/api/generate-label-excel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ barcodes: barcodeData }),
+      })
+  
+      if (!response.ok) {
+        throw new Error("Failed to generate CSV file")
+      }
+  
+      const blob = await response.blob()
+      saveAs(blob, "barcodes.csv")
+  
       toast({
-        title: "Barcode Printed",
-        description: result.message,
+        title: "CSV Generated",
+        description: "The barcode data has been saved in a CSV file.",
         duration: 1000,
         style: {
           background: "#4CAF50",
           color: "white",
           fontWeight: "bold",
         },
-      });
+      })
     } catch (error) {
-      console.error('Error printing barcode:', error);
+      console.error("Error generating CSV:", error)
       toast({
         title: "Error",
-        description: "Failed to print barcode. Please try again.",
+        description: "Failed to generate CSV. Please try again.",
         duration: 1000,
         variant: "destructive",
-      });
+      })
     }
-  }, [toast]);
-
-  const handlePrintAllBarcodes = useCallback(async (size: string) => {
-    if (product) {
-      const barcodes = product.sizes[size].barcodes;
-      const productInfo = `${product.brand} ${product.reference} ${product.color}`;
-      const sizeWithoutPrefix = size.replace('T-', '');
-
-      for (const barcode of barcodes) {
-        await handlePrintBarcode(barcode, productInfo, sizeWithoutPrefix);
+  }, [toast]) 
+  
+  
+  const handlePrintAllBarcodes = useCallback(
+    async (size: string) => {
+      if (product) {
+        const { brand, reference, color } = product
+        const sizeWithoutPrefix = size.replace("T-", "")
+        const barcodes = product.sizes[size].barcodes
+  
+        // Construimos un array con toda la información
+        const barcodeData = barcodes.map(barcode => ({
+          barcode,
+          brand,
+          reference,
+          color,
+          size: sizeWithoutPrefix
+        }))
+  
+        await handlePrintMultipleBarcodes(barcodeData)
+  
+        toast({
+          title: "All Barcodes Printed",
+          description: `All barcodes for size ${size} have been sent to the printer.`,
+          duration: 1000,
+          style: {
+            background: "#4CAF50",
+            color: "white",
+            fontWeight: "bold",
+          },
+        })
       }
-
-      toast({
-        title: "All Barcodes Printed",
-        description: `All barcodes for size ${size} have been sent to the printer.`,
-        duration: 1000,
-        style: {
-          background: "#4CAF50",
-          color: "white",
-          fontWeight: "bold",
-        },
-      });
-    }
-  }, [product, handlePrintBarcode, toast]);
-
+    },
+    [product, handlePrintMultipleBarcodes, toast]
+  )
+  
   const handlePrintAllSizes = useCallback(async () => {
     if (product) {
-      const productInfo = `${product.brand} ${product.reference} ${product.color}`;
+      const { brand, reference, color } = product
+      const barcodeData: BarcodeData[] = []
+  
+      // Recorremos todas las tallas y barcodes
       for (const [size, sizeData] of Object.entries(product.sizes)) {
-        const sizeWithoutPrefix = size.replace('T-', '');
-        for (const barcode of sizeData.barcodes) {
-          await handlePrintBarcode(barcode, productInfo, sizeWithoutPrefix);
-        }
+        const sizeWithoutPrefix = size.replace("T-", "")
+        sizeData.barcodes.forEach(barcode => {
+          barcodeData.push({
+            barcode,
+            brand,
+            reference,
+            color,
+            size: sizeWithoutPrefix
+          })
+        })
       }
-
+  
+      await handlePrintMultipleBarcodes(barcodeData)
+  
       toast({
         title: "All Sizes Printed",
         description: "All barcodes for all sizes have been sent to the printer.",
@@ -267,14 +338,22 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           color: "white",
           fontWeight: "bold",
         },
-      });
+      })
     }
-  }, [product, handlePrintBarcode, toast]);
+  }, [product, handlePrintMultipleBarcodes, toast])  
 
   const availableSizes = useMemo(() => {
     if (!product) return []
-    const allSizes = product.gender === 'Dama' ? damaSizes : hombreSizes
-    return allSizes.filter(size => !product.sizes[size] || product.sizes[size].barcodes.length === 0)
+    switch (product.gender) {
+      case 'Dama':
+        return damaSizes.filter(size => !product.sizes[size] || product.sizes[size].barcodes.length === 0)
+      case 'Hombre':
+        return hombreSizes.filter(size => !product.sizes[size] || product.sizes[size].barcodes.length === 0)
+      case 'Niño':
+        return niñoSizes.filter(size => !product.sizes[size] || product.sizes[size].barcodes.length === 0)
+      default:
+        return []
+    }
   }, [product])
 
   const sortedSizes = useMemo(() => {
@@ -385,28 +464,22 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
 
   const handleAddSize = async () => {
     if (newSize && newQuantity > 0 && product) {
-      const newBarcodes: string[] = [];
-  
-      // Find the last used barcode across all sizes
-      const lastUsedBarcode = Object.values(product.sizes)
-        .flatMap(size => size.barcodes)
-        .sort((a, b) => b.localeCompare(a))[0] || product.barcode;
-  
-      // Extract the box number and product number from the last used barcode
-      let currentBoxNumber = parseInt(lastUsedBarcode.slice(6, 12));
-      let currentProductNumber = parseInt(lastUsedBarcode.slice(12));
+      const newBarcodes: string[] = []
+      const lastUsedBarcode = Object.values(product.sizes).flatMap(size => size.barcodes).sort((a, b) => b.localeCompare(a))[0] || product.barcode
+      let currentBoxNumber = parseInt(lastUsedBarcode.slice(6, 12))
+      let currentProductNumber = parseInt(lastUsedBarcode.slice(12))
   
       for (let i = 0; i < newQuantity; i++) {
-        currentProductNumber++;
+        currentProductNumber++
         if (currentProductNumber > 99) {
-          currentBoxNumber++;
-          currentProductNumber = 1;
+          currentBoxNumber++
+          currentProductNumber = 1
         }
-        const date = new Date();
-        const dateString = date.toISOString().slice(2, 10).replace(/-/g, '');
-        const boxString = currentBoxNumber.toString().padStart(6, '0');
-        const productString = currentProductNumber.toString().padStart(2, '0');
-        newBarcodes.push(`${dateString}${boxString}${productString}`);
+        const date = new Date()
+        const dateString = date.toISOString().slice(2, 10).replace(/-/g, '')
+        const boxString = currentBoxNumber.toString().padStart(6, '0')
+        const productString = currentProductNumber.toString().padStart(2, '0')
+        newBarcodes.push(`${dateString}${boxString}${productString}`)
       }
   
       const updatedProduct = {
@@ -416,16 +489,15 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
           [newSize]: { quantity: newQuantity, barcodes: newBarcodes }
         },
         total: product.total + newQuantity
-      };
+      }
   
       try {
-        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct);
-  
-        setProduct(updatedProduct);
-        setProductBoxNumber(currentBoxNumber);
-        setLastProductNumber(currentProductNumber);
-        setNewSize('');
-        setNewQuantity(0);
+        await updateDoc(doc(db, `companies/${companyId}/warehouses/${warehouseId}/products`, product.id), updatedProduct)
+        setProduct(updatedProduct)
+        setProductBoxNumber(currentBoxNumber)
+        setLastProductNumber(currentProductNumber)
+        setNewSize('')
+        setNewQuantity(0)
   
         toast({
           title: "Size Added",
@@ -436,18 +508,18 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
             color: "white",
             fontWeight: "bold",
           },
-        });
+        })
       } catch (error) {
-        console.error('Error adding size:', error);
+        console.error('Error adding size:', error)
         toast({
           title: "Error",
           description: "Failed to add size. Please try again.",
           duration: 1000,
           variant: "destructive",
-        });
+        })
       }
     }
-  };
+  }
 
   const handleDeleteBarcode = (size: string, barcodeToDelete: string) => {
     if (product) {
@@ -773,7 +845,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
                                   <Button 
                                     variant="outline" 
                                     size="sm" 
-                                    onClick={() => handlePrintBarcode(barcode, `${product.brand} ${product.reference} ${product.color}`, size.replace('T-', ''))}
+                                    onClick={() => handlePrintBarcode(barcode, product.brand, product.reference, product.color, size.replace('T-', ''))}
                                   >
                                     <PrinterIcon className="w-4 h-4" />
                                   </Button>

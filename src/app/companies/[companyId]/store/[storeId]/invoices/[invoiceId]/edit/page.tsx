@@ -868,10 +868,12 @@ export default function EditInvoicePage({
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Invoice {formatCustomerName(invoiceCustomerName)}</h1>
+        {hasPermission("ska") && (
         <Button onClick={handleSaveInvoice}>
           <Save className="h-4 w-4 mr-2" />
           Save
         </Button>
+        )}
       </header>
       <main className="container mx-auto p-4 mb-16">
       {hasPermission("create") && (
@@ -945,7 +947,9 @@ export default function EditInvoicePage({
                   </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {hasPermission("update") && <Button onClick={() => handleReturn(item)}>Return</Button>}
+                    {hasPermission("create") && (
+                    <Button onClick={() => handleReturn(item)}>Return</Button>)}
+                    {hasPermission("ska") && (<>
                     <Input
                       value={salePrices[item.invoiceId] ?? formatPrice(item.salePrice)}
                       onChange={(e) => handleSalePriceChange(item.invoiceId, e.target.value)}
@@ -958,6 +962,7 @@ export default function EditInvoicePage({
                     <Button onClick={() => handleSold(item)} disabled={!enabledItems[item.invoiceId]}>
                       Sold
                     </Button>
+                    </>)}
                   </div>
                 </div>
               ))}
