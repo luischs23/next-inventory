@@ -85,17 +85,18 @@ export default function StoreListPage() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser)
-      if (firebaseUser) {
-        fetchUserData(firebaseUser.uid)
-      } else {
-        setLoading(false)
-        router.push("/login")
+      if (!firebaseUser) {
+        console.log("Usuario no autenticado, pero esperando verificación.");
+        setTimeout(() => setLoading(false), 500); // 🔥 Agrega un pequeño delay para evitar bucles
+        return;
       }
-    })
-
-    return () => unsubscribe()
-  }, [router])
+  
+      setUser(firebaseUser);
+      fetchUserData(firebaseUser.uid);
+    });
+  
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (userProfile) {

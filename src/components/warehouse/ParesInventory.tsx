@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from 'app/app/context/AuthContext'
 import { db, storage } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, doc, deleteDoc, Timestamp, FieldValue, getDoc, query, setDoc, serverTimestamp} from 'firebase/firestore'
 import { ref, deleteObject, uploadBytes, getDownloadURL } from 'firebase/storage'
@@ -72,7 +71,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   const [warehouseName, setWarehouseName] = useState<string>("")
   const [showBox, setshowBox] = useState(false)
   const router = useRouter()
-  const { user } = useAuth()
   const [showInactive, setShowInactive] = useState(false)
   const [warehouses, setWarehouses] = useState<{ id: string; name: string }[]>([])
   const [, setIsHeaderVisible] = useState(true)
@@ -115,12 +113,8 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }, [lastScrollY])
 
   useEffect(() => {
-    if (user && (user.role === "skater" || user.role === "warehouse_salesperson" || hasPermission("read"))) {
-      fetchProducts()
-    } else {
-      router.push("/login")
-    }
-  }, [user, router])
+    fetchProducts();
+  }, []);  
 
   const sortSizes = (sizes: { [key: string]: SizeInput }): [string, SizeInput][] => {
     return Object.entries(sizes).sort((a, b) => {
