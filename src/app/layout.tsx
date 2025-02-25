@@ -8,7 +8,7 @@ import { ThemeProvider } from 'app/components/ThemeProvider';
 import { Toaster } from "app/components/ui/toaster";
 import { useUserActivity } from "app/hooks/useUserActivity"
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 function RootLayoutContent({ children }: { children: React.ReactNode }) {
   useUserActivity()
