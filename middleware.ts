@@ -3,18 +3,6 @@ import type { NextRequest } from "next/server"
 import { getDoc, doc } from "firebase/firestore"
 import { db } from "app/services/firebase/firebase.config"
 import { getAuth } from "firebase-admin/auth"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-
-// Initialize Firebase Admin if it hasn't been initialized yet
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
 
 const adminAuth = getAuth()
 
