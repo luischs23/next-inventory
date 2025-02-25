@@ -94,36 +94,47 @@ const fetchCompanyName = async () => {
 }
 
 const fetchUserProfile = async (uid: string) => {
-    try {
+  try {
+    // 1️⃣ Buscar en `companies/${params.companyId}/users`
     const userQuery = query(
-        collection(db, `companies/${params.companyId}/users`),
-        where('uid', '==', uid)
-    )
-    
-    const userSnapshot = await getDocs(userQuery)
-    
+      collection(db, `companies/${params.companyId}/users`),
+      where('uid', '==', uid)
+    );
+
+    const userSnapshot = await getDocs(userQuery);
+
     if (!userSnapshot.empty) {
-        const userData = userSnapshot.docs[0].data() as UserProfile
-        setProfile({ ...userData, id: userSnapshot.docs[0].id })
+      const userData = userSnapshot.docs[0].data() as UserProfile;
+      setProfile({ ...userData, id: userSnapshot.docs[0].id });
+      return; // ⬅️ Si encuentra al usuario aquí, detenemos la ejecución
+    }
+
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      const userData = userSnap.data() as UserProfile;
+      setProfile({ ...userData, id: userSnap.id });
     } else {
-        console.error('User document not found')
-        toast({
-        title: "Error",
-        description: "User profile not found",
-        variant: "destructive",
-        })
+      console.error('Usuario no encontrado en ninguna colección.');
+      toast({
+        title: 'Error',
+        description: 'User profile not found in any collection',
+        variant: 'destructive',
+      });
     }
-    } catch (error) {
-    console.error('Error fetching user profile:', error)
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
     toast({
-        title: "Error",
-        description: "Failed to fetch user profile",
-        variant: "destructive",
-    })
-    } finally {
-    setLoading(false)
-    }
-}
+      title: 'Error',
+      description: 'Failed to fetch user profile',
+      variant: 'destructive',
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
 
 const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

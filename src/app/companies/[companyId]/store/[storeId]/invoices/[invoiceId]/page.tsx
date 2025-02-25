@@ -508,10 +508,12 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
             <div className="mb-2 text-lg font-semibold">
               Total Sold: ${invoice ? formatPrice(invoice.totalSold) : <Skeleton className="h-4 w-20" />}
             </div>
+            </>)}
+            {hasPermission("create") && (
             <div className="mb-2 text-lg font-semibold">
               Total Earn: ${invoice ? formatPrice(invoice.totalEarn) : <Skeleton className="h-4 w-20" />}
             </div>
-            </>)}
+            )}
           </CardContent>
         </Card>
         <div className="grid gap-4">
@@ -609,7 +611,7 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
                           ) : (
                             <p>WH: {warehouses[item.warehouseId || ""]}</p>
                           )}
-                          {hasPermission("ska") && (
+                          {hasPermission("create") && (
                           <p>| Earn unit: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}</p>
                           )}
                           <p>

@@ -1,24 +1,39 @@
-import type { Metadata } from "next";
-import { Inter } from 'next/font/google'
+"use client"; 
+
+import { Inter } from 'next/font/google';
+import { useEffect } from "react";
 import "./globals.css";
-import { AuthProvider } from './context/AuthContext'
-import { ThemeProvider } from 'app/components/ThemeProvider'
-import { Toaster } from "app/components/ui/toaster"
+import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from 'app/components/ThemeProvider';
+import { Toaster } from "app/components/ui/toaster";
+import { useUserActivity } from "app/hooks/useUserActivity"
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ["latin"], display: "swap" });
 
-export const metadata: Metadata = {
-  title: 'Inventory Management System',
-  description: 'A simple inventory management system',
+function RootLayoutContent({ children }: { children: React.ReactNode }) {
+  useUserActivity()
+
+  return <>{children}</>
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/service-worker.js")
+        .then(() => console.log("Service Worker registrado!"))
+        .catch((err) => console.error("Error registrando Service Worker:", err));
+    }
+  }, []);
+
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Enlazando el manifest.json */}
+        <link rel="manifest" href="/manifest.json" />
+      </head>
       <body className={inter.className}>
         <ThemeProvider
           attribute="class"
@@ -27,7 +42,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            {children}
+            <RootLayoutContent>{children}</RootLayoutContent>
             <Toaster />
           </AuthProvider>
         </ThemeProvider>
