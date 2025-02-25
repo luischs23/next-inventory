@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
 import { Skeleton } from 'app/components/ui/skeleton'
+import { withPermission } from "app/components/withPermission"
 
 interface InvoiceItem {
   productId: string
@@ -55,7 +56,7 @@ interface Store {
   name: string
 }
 
-export default function InvoicesPage({ params }: { params: { companyId: string} }) {
+function InvoicesPage({ params }: { params: { companyId: string } }) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -483,3 +484,5 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
     </div>
   )
 }
+
+export default withPermission<{ params: { companyId: string } }>(InvoicesPage, ["create"])

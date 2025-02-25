@@ -216,9 +216,11 @@ export default function Home({ params }: { params: { companyId?: string } }) {
               width={40}
               height={40}
               className="rounded-md object-cover"
+              onClick={() => router.push(`/companies/${companyId}/profile`)}
             />
           ) : (
-            <div className="w-10 h-10 bg-gray-300 rounded-md flex items-center justify-center">
+            <div className="w-10 h-10 bg-gray-300 rounded-md flex items-center justify-center"
+                 onClick={() => router.push(`/companies/${companyId}/profile`)}>
               <User className="w-6 h-6 text-gray-600" />
             </div>
           )}

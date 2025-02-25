@@ -6,8 +6,15 @@ import "./globals.css";
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from 'app/components/ThemeProvider';
 import { Toaster } from "app/components/ui/toaster";
+import { useUserActivity } from "app/hooks/useUserActivity"
 
 const inter = Inter({ subsets: ['latin'] });
+
+function RootLayoutContent({ children }: { children: React.ReactNode }) {
+  useUserActivity()
+
+  return <>{children}</>
+}
 
 export default function RootLayout({
   children,
@@ -35,7 +42,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            {children}
+            <RootLayoutContent>{children}</RootLayoutContent>
             <Toaster />
           </AuthProvider>
         </ThemeProvider>

@@ -6,7 +6,8 @@ interface BarcodeData {
   brand: string
   reference: string
   color: string
-  size: string
+  size?: string
+  total?: number
 }
 
 export async function POST(req: NextRequest) {
@@ -18,11 +19,18 @@ export async function POST(req: NextRequest) {
     const sheet = workbook.addWorksheet("Barcodes")
 
     // Definir encabezados
-    sheet.addRow(["Barcode", "Brand", "Reference", "Color", "Size"])
+    sheet.addRow(["Barcode", "Brand", "Reference", "Color", "Size","Total Init"])
 
     // Agregar datos
-    barcodes.forEach(({ barcode, brand, reference, color, size }) => {
-      sheet.addRow([barcode, brand, reference, color, size])
+    barcodes.forEach(({ barcode, brand, reference, color, size, total }) => {
+      sheet.addRow([
+        barcode.toUpperCase(),
+        brand.toUpperCase(),
+        reference.toUpperCase(),
+        color.toUpperCase(),
+        size ? size.toUpperCase() : "N/A",
+        total !== undefined ? total.toString().toUpperCase() : "N/A",
+      ])
     })
 
     // Convertir a CSV

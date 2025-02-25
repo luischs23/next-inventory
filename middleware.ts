@@ -1,64 +1,69 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import { getDoc, doc } from "firebase/firestore"
+import { db } from "app/services/firebase/firebase.config"
+import { getAuth } from "firebase-admin/auth"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-export const config = {
-  matcher: ['/api/:path*', '/changes', '/store/:path*', '/warehouses/:path*'],
-  runtime: 'experimental-edge', // This enables Edge Runtime
-}
-
-export async function middleware(request: NextRequest) {
-  const requestHeaders = new Headers(request.headers)
-  
-  // Add custom headers
-  requestHeaders.set('x-hello-from-middleware', 'hello')
-
-  // Basic auth for API routes
-  if (request.nextUrl.pathname.startsWith('/api/')) {
-    const authHeader = request.headers.get('authorization')
-    if (authHeader !== `Bearer ${process.env.API_SECRET_KEY}`) {
-      return new NextResponse(
-        JSON.stringify({ success: false, message: 'authentication failed' }),
-        { status: 401, headers: { 'content-type': 'application/json' } }
-      )
-    }
-  }
-
-  // Rate limiting for store pages
-  if (request.nextUrl.pathname.startsWith('/companies/')) {
-    const ip = request.ip ?? '127.0.0.1'
-    const rateLimit = await getRateLimit(ip)
-    if (!rateLimit.success) {
-      return new NextResponse(
-        JSON.stringify({ success: false, message: 'rate limit exceeded' }),
-        { status: 429, headers: { 'content-type': 'application/json' } }
-      )
-    }
-    requestHeaders.set('x-rate-limit-remaining', rateLimit.remaining.toString())
-  }
-
-  // Redirect legacy URLs
-  if (request.nextUrl.pathname === '/old-page') {
-    return NextResponse.redirect(new URL('/new-page', request.url))
-  }
-
-  // Rewrite for A/B testing
-  if (request.nextUrl.pathname === '/features') {
-    const bucket = Math.random() < 0.5 ? 'a' : 'b';
-    requestHeaders.set('x-bucket', bucket)
-    if (bucket === 'b') {
-      return NextResponse.rewrite(new URL('/features-b', request.url))
-    }
-  }
-
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
+// Initialize Firebase Admin if it hasn't been initialized yet
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
   })
 }
 
-// Mock function for rate limiting
-async function getRateLimit(ip: string): Promise<{ success: boolean, remaining: number }> {
-  // In a real application, this would check against a database or cache
-  return { success: true, remaining: 100 }
+const adminAuth = getAuth()
+
+async function getUserRole(userId: string): Promise<string | null> {
+  try {
+    const userDocRef = doc(db, "users", userId)
+    const userDocSnap = await getDoc(userDocRef)
+
+    if (userDocSnap.exists()) {
+      const userData = userDocSnap.data()
+      return userData?.role || null
+    } else {
+      return null
+    }
+  } catch (error) {
+    console.error("Error getting user role:", error)
+    return null
+  }
+}
+
+// ... (keep the rest of the middleware code)
+
+export async function middleware(req: NextRequest) {
+  const token = req.cookies.get("token")?.value
+
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", req.url))
+  }
+
+  try {
+    const decodedToken = await adminAuth.verifyIdToken(token)
+    const userId = decodedToken.uid
+    const userRole = await getUserRole(userId)
+
+    if (!userRole) {
+      return NextResponse.redirect(new URL("/login", req.url))
+    }
+
+    if (req.nextUrl.pathname.startsWith("/admin") && userRole !== "admin") {
+      return NextResponse.redirect(new URL("/", req.url))
+    }
+
+    return NextResponse.next()
+  } catch (error) {
+    console.error("Error verifying token:", error)
+    return NextResponse.redirect(new URL("/login", req.url))
+  }
+}
+
+export const config = {
+  matcher: ["/admin/:path*", "/profile/:path*"],
 }
