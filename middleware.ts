@@ -4,6 +4,8 @@ import { getDoc, doc } from "firebase/firestore"
 import { db } from "app/services/firebase/firebase.config"
 import { getAuth } from "firebase-admin/auth"
 
+// Initialize Firebase Admin if it hasn't been initialized y
+
 const adminAuth = getAuth()
 
 async function getUserRole(userId: string): Promise<string | null> {
