@@ -22,6 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "app/components/ui/alert-dialog"
+import { withPermission } from "app/components/withPermission"
+import { usePermissions } from "app/hooks/usePermissions"
 
 interface Company {
   id: string
@@ -32,7 +34,7 @@ interface Company {
   imageUrl: string
 }
 
-export default function CompanyManagement() {
+function CompanyManagement() {
   const router = useRouter()
   const [companies, setCompanies] = useState<Company[]>([])
   const [newCompany, setNewCompany] = useState<Omit<Company, 'id' | 'imageUrl'>>({
@@ -48,6 +50,7 @@ export default function CompanyManagement() {
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null)
+  const { hasPermission } = usePermissions()
 
   const handleCardClick = (companyId: string) => {
     router.push(`/companies/${companyId}/home`)
@@ -150,6 +153,7 @@ export default function CompanyManagement() {
         </Button>
         <h1 className="text-xl font-bold flex-grow">Companies</h1>
         <div className='space-x-2'>
+        {hasPermission("companies") && (
         <Button variant="secondary" onClick={() => {
           setEditingCompany(null)
           setNewCompany({ name: '', email: '', phone: '', address: '' })
@@ -157,6 +161,7 @@ export default function CompanyManagement() {
         }}>
           + Add 
         </Button>
+        )}
          </div>
       </header>
 
@@ -180,6 +185,7 @@ export default function CompanyManagement() {
               </div>
               <CardContent className="w-2/3 p-4 relative">
                 <div className="absolute top-2 right-2 flex" onClick={(e) => e.stopPropagation()}>
+                {hasPermission("companies") && (<>
                   <Button 
                     variant="ghost" 
                     className="h-8 w-8 p-0 mr-1" 
@@ -197,6 +203,7 @@ export default function CompanyManagement() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                  </>)}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button 
@@ -321,3 +328,5 @@ export default function CompanyManagement() {
     </div>
   )
 }
+
+export default withPermission(CompanyManagement, ["companies"])

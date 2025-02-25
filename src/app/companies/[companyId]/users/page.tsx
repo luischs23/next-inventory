@@ -20,6 +20,9 @@ import { UserSkeleton } from 'app/components/skeletons/UserSkeleton'
 import { Switch } from "app/components/ui/switch"
 import { Checkbox } from "app/components/ui/checkbox"
 import { DeletedUsersView } from 'src/components/DeletedUsersView'
+import { withPermission } from "app/components/withPermission"
+import { usePermissions } from 'app/hooks/usePermissions'
+
 
 interface User {
   id: string
@@ -45,7 +48,7 @@ const roles = [
   { id: "customer", name: "Customer" },
 ]
 
-export default function UsersPage({ params }: { params: { companyId: string } }) {
+function UsersPage({ params }: { params: { companyId: string } }) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateAlertDialog, setShowCreateAlertDialog] = useState(false)
@@ -71,6 +74,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     fetchUsers()
@@ -364,6 +368,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        {hasPermission("delete") && (
         <AlertDialog open={showCreateAlertDialog} onOpenChange={setShowCreateAlertDialog}>
           <AlertDialogTrigger asChild>
             <Button variant="secondary" onClick={handleOpenCreateDialog}>
@@ -466,6 +471,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             </form>
           </AlertDialogContent>
         </AlertDialog>
+        )}
       </header>
       <main className="container mx-auto p-4 mb-14">
         {showDeletedUsers ? (
@@ -521,6 +527,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                                     <Pencil className="w-4 h-4 mr-2" />
                                     Update
                                   </DropdownMenuItem>
+                                  {hasPermission("delete") && (
                                   <DropdownMenuItem
                                     onClick={() => {
                                       setSelectedUser(user)
@@ -531,6 +538,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                                     <Trash2 className="w-4 h-4 mr-2" />
                                     Delete
                                   </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             )}
@@ -573,6 +581,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                   required
                 />
               </div>
+              {hasPermission("delete") && (
               <div>
                 <Label htmlFor="update-role">Role</Label>
                 <Select value={formData.role} onValueChange={handleRoleChange}>
@@ -588,7 +597,8 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+              )}
+              </div>
             <Button type="submit" className="w-full">
               Update User
             </Button>
@@ -622,3 +632,5 @@ export default function UsersPage({ params }: { params: { companyId: string } })
     </div>
   )
 }
+
+export default withPermission<{ params: { companyId: string } }>(UsersPage, ["create"])

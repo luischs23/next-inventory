@@ -57,11 +57,11 @@ export default function ProductImageUpload({ imageUrl, altText, onImageChange, i
             onClick={handleChangeClick}
             variant="secondary"
             size="sm"
-            className="text-white bg-opacity-70 hover:bg-opacity-100"
+            className="text-gray-600 bg-opacity-70 hover:bg-opacity-100"
             type="button"
             disabled={isLoading}
           >
-            <Camera className="w-4 h-4 mr-2" />
+            <Camera className="w-4 h-4 mr-2 text-gray-600" />
             {isLoading ? 'Uploading...' : 'Change'}
           </Button>
         </div>

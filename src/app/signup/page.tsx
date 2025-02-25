@@ -10,14 +10,17 @@ import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import Link from 'next/link'
+import { withPermission } from "app/components/withPermission"
+import { usePermissions } from "app/hooks/usePermissions"
 
-export default function SignUpPage() {
+function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
+  const { hasPermission } = usePermissions()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,6 +81,7 @@ export default function SignUpPage() {
                 required
               />
             </div>
+            {hasPermission("companies") && (<>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -100,8 +104,10 @@ export default function SignUpPage() {
                 required
               />
             </div>
+            
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <Button type="submit" className="w-full">Create Developer Account</Button>
+            </>)}
           </form>
           <p className="mt-4 text-center text-sm">
             Already have an account?{' '}
@@ -114,3 +120,5 @@ export default function SignUpPage() {
     </div>
   )
 }
+
+export default withPermission(SignUpPage, ["companies"])
