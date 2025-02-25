@@ -99,9 +99,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (user) {
-      const userRef = user.isDeveloper
-        ? doc(db, "users", user.uid)
-        : doc(db, `companies/${user.companyId}/users`, user.uid);
+      let userRef;
+  
+      if (user.isDeveloper) {
+        userRef = doc(db, "users", user.uid);
+      } else if (user.companyId) {
+        userRef = doc(db, `companies/${user.companyId}/users`, user.uid);
+      } else {
+        console.error("❌ No se encontró referencia de usuario en Firestore");
+        return;
+      }
   
       // 🔍 Verifica cada minuto si el usuario ha estado inactivo
       const interval = setInterval(async () => {
@@ -112,14 +119,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const lastActivity = data.lastActivity.toDate();
             const inactiveTime = Date.now() - lastActivity.getTime();
             if (inactiveTime > 30 * 60 * 1000) { // 30 minutos de inactividad
-              console.warn("Sesión cerrada por inactividad");
+              console.warn("⏳ Sesión cerrada por inactividad");
               logout();
             }
           }
         }
       }, 60 * 1000); // 🔄 Verifica cada minuto
   
-      // También escucha cambios en tiempo real
+      // 🔍 También escucha cambios en tiempo real en Firestore
       const unsubscribe = onSnapshot(userRef, (docSnapshot) => {
         if (docSnapshot.exists()) {
           const data = docSnapshot.data();
@@ -127,7 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const lastActivity = data.lastActivity.toDate();
             const inactiveTime = Date.now() - lastActivity.getTime();
             if (inactiveTime > 30 * 60 * 1000) {
-              console.warn("Sesión cerrada por inactividad");
+              console.warn("🔄 Sesión cerrada por inactividad");
               logout();
             }
           }
@@ -140,7 +147,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
   }, [user, logout]);
-  
 
   const contextValue: AuthContextType = {
     user,
