@@ -106,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else if (user.companyId) {
         userRef = doc(db, `companies/${user.companyId}/users`, user.uid);
       } else {
-        console.error("❌ No se encontró referencia de usuario en Firestore");
+        console.error("No se encontró referencia de usuario en Firestore");
         return;
       }
   
