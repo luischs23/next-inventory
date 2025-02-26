@@ -150,7 +150,7 @@ export function TemplateManager({ isOpen, onClose, companyId, warehouseId, onTem
                 </div>
               ) : (
                 <div
-                  className="text-sm bg-gray-100 p-2 rounded w-full"
+                  className="text-sm bg-gray-100 p-2 rounded w-full dark:bg-gray-700"
                   dangerouslySetInnerHTML={{ __html: renderTemplateContent(template.content) }}
                 />
               )}

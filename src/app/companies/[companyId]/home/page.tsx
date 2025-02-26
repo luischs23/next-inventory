@@ -183,7 +183,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
 
   if (userProfile?.isDeveloper && !companyId) {
     return (
-      <div className="min-h-screen bg-blue-100 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-100 flex items-center justify-center ">
         <Card className="w-full max-w-md p-6 bg-white rounded-3xl shadow-xl">
           <h2 className="text-xl font-bold mb-6 text-center text-gray-800">
             Select a Company
@@ -200,14 +200,14 @@ export default function Home({ params }: { params: { companyId?: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-700">
       {/* Header */}
       <header className="w-full p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">{companyName}</h1>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-300">{companyName}</h1>
         <div className="flex items-center">
           <div className="flex flex-col items-end mr-2">
-            <span className="text-gray-700 font-semibold">Welcome,</span>
-            <span className="text-gray-600">{userProfile ? `${userProfile.name} ${userProfile.surname}` : 'User'}</span>
+            <span className="text-gray-700 font-semibold dark:text-gray-300">Welcome,</span>
+            <span className="text-gray-600 dark:text-gray-300">{userProfile ? `${userProfile.name} ${userProfile.surname}` : 'User'}</span>
           </div>
           {userProfile?.photo ? (
             <Image
@@ -230,7 +230,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
       {/* Main content */}
       <main className="flex-grow flex items-center justify-center px-4">
         <Card className="w-full max-w-md p-6 bg-white rounded-3xl shadow-xl">
-          <h2 className="text-xl font-bold mb-6 text-left text-gray-800">
+          <h2 className="text-xl font-bold mb-6 text-left text-gray-800 dark:text-gray-300">
             Quick Commands
           </h2>
           <div className="grid grid-cols-3 gap-4">
@@ -238,7 +238,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
               <Link href={item.href} key={item.name}>
                 <Button
                   variant="outline"
-                  className="w-full h-24 flex flex-col items-center justify-center text-gray-700 hover:bg-blue-50"
+                  className="w-full h-24 flex flex-col items-center justify-center text-gray-700 hover:bg-blue-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <item.icon className="w-8 h-8 mb-2" />
                   <span className="text-xs">{item.name}</span>

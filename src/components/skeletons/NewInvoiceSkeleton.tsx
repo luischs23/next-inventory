@@ -8,7 +8,7 @@ import { ArrowLeft, Search, Save } from 'lucide-react'
 
 export default function NewInvoiceSkeleton() {
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-4 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" disabled>
           <ArrowLeft className="h-6 w-6" />

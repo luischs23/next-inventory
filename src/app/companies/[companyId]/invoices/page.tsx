@@ -269,7 +269,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-100">
+      <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
         <header className="bg-teal-600 text-white p-4 flex items-center">
           <Skeleton className="h-6 w-6 mr-2" />
           <Skeleton className="h-8 w-48 mr-2 flex-grow" />
@@ -287,7 +287,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100 pb-16">
+    <div className="min-h-screen bg-blue-100 pb-16 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-4 flex items-center sticky top-0 z-50">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -350,7 +350,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
             </div>
             <AlertDialogFooter className="flex justify-between items-end">
               <AlertDialogCancel className='bg-black text-white'>Close</AlertDialogCancel>
-              <Button onClick={handleClearFilters} variant="outline">Clear Filters</Button>
+              <Button className="dark:border-gray-200" onClick={handleClearFilters} variant="outline">Clear Filters</Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -397,7 +397,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
             className="w-full"
           />
         </div>
-        <div className="bg-white rounded-lg p-4 mb-2 shadow text-slate-900">
+        <div className="bg-white rounded-lg p-4 mb-2 shadow text-slate-900 dark:bg-gray-700 dark:text-gray-200">
           <div className="grid grid-cols-3 gap-4">
             <div>
               <h3 className="text-sm font-semibold">Total Items</h3>
@@ -453,7 +453,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
                         <h3 className="font-semibold">{invoice.customerName}</h3>
                       </div>
                       <div className="text-sm">
-                        <p className="text-gray-700">Phone: {invoice.customerPhone}</p>                                        
+                        <p className="text-gray-700 dark:text-gray-200">Phone: {invoice.customerPhone}</p>                                        
                       </div>
                         <div className='flex flex-col items-end mt-1'>
                           <div className='flex justify-end'>
@@ -462,7 +462,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
                           </div>
                       </div>
                       <div className='flex justify-between items-center'>
-                        <p className="text-gray-500 text-sm">Store: {invoice.storeName}</p>
+                        <p className="text-gray-500 text-sm dark:text-gray-200">Store: {invoice.storeName}</p>
                         <div className='flex justify-end'>
                             <p className="text-sm font-semibold mr-2">Earn:</p>
                             <p className="text-sm">${formatPrice(invoice.totalEarn)}</p>
@@ -472,7 +472,7 @@ function InvoicesPage({ params }: { params: { companyId: string } }) {
                           <p className={`text-sm font-medium ${invoice.status === 'open' ? 'text-yellow-600' : 'text-green-600'}`}>
                             Status: {invoice.status}
                           </p>
-                          <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-200">{formatDate(invoice.createdAt)}</p>
                         </div>  
                     </div>
                   </CardContent>

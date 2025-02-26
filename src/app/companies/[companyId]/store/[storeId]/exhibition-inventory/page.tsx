@@ -373,7 +373,7 @@
   
     if (loading) {
       return (
-        <div className="min-h-screen bg-blue-100">
+        <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
           <header className="bg-teal-600 text-white p-4 flex items-center">
             <Skeleton className="h-6 w-6 mr-2" />
             <Skeleton className="h-8 w-48 mr-2 flex-grow" />
@@ -391,7 +391,7 @@
     }
   
     return (
-      <div className="min-h-screen bg-blue-100 pt-14 pb-16">
+      <div className="min-h-screen bg-blue-100 pt-14 pb-16 dark:bg-gray-800">
         <header className="bg-teal-600 text-white p-3 flex items-center fixed top-0 left-0 right-0 z-30">
           <Button variant="ghost" onClick={() => router.back()} className="text-white p-0 mr-2">
             <ArrowLeft className="h-6 w-6" />
@@ -468,17 +468,17 @@
           </DropdownMenu>
         </header>
         <main className="container mx-auto relative z-0">
-          <div className=" m-2 mr-4 ml-4 mt-4 text-black">
+          <div className=" m-2 mr-4 ml-4 mt-4 text-black ">
             <Input
               type="text"
               placeholder="Search by brand, reference, color, or barcode"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="w-full text-black"
+              className="w-full text-black dark:text-gray-200"
             />
           </div>
           {hasPermission("create") && (
-            <div className="bg-white rounded-lg p-4 m-4 shadow text-slate-900">
+            <div className="bg-white rounded-lg p-4 m-4 shadow text-slate-900 dark:bg-gray-700 dark:text-gray-200">
               <div className="grid grid-cols-2 gap-3">
                 <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
                 <div>Total pares: {formatNumber(summaryInfo.totalPares)}</div>
@@ -491,7 +491,7 @@
             <div className="space-y-4 m-4">
               {sortedProducts.map((product, index) => (
                 <div key={product.id} className="flex items-start">
-                  <div className="text-sm font-semibold mr-1 mt-2 text-black">{index + 1}</div>
+                  <div className="text-sm font-semibold mr-1 mt-2 text-black dark:text-gray-200">{index + 1}</div>
                   <Card className="flex-grow relative">
                     <CardContent className="p-4">
                       <div className="absolute top-2 right-2">
@@ -558,7 +558,7 @@
                         </div>
                         <div className="flex-grow">
                           <h3 className="font-semibold">{product.brand}</h3>
-                          <p className="text-sm text-gray-500">{product.reference}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-200">{product.reference}</p>
                           <p className="text-sm">
                             {product.color} - {product.gender}
                           </p>
@@ -618,7 +618,7 @@
                 <div
                   key={template.id}
                   className={`p-2 rounded cursor-pointer ${
-                    selectedTemplateIndex === index ? "bg-blue-100" : "hover:bg-gray-100"
+                    selectedTemplateIndex === index ? "bg-blue-100 dark:bg-gray-700" : "hover:bg-gray-100"
                   }`}
                   onClick={() => setSelectedTemplateIndex(index)}
                 >

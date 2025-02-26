@@ -326,7 +326,7 @@ function UsersPage({ params }: { params: { companyId: string } }) {
   }
 
   return (
-    <div className="container mx-auto bg-white">
+    <div className="container mx-auto bg-white dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -511,7 +511,7 @@ function UsersPage({ params }: { params: { companyId: string } }) {
                                 <h3 className="font-semibold">
                                   {user.name}
                                 </h3>
-                                <p className="text-sm text-gray-500">{user.email}</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-300">{user.email}</p>
                                 <p className="text-sm text-primary">{group.name}</p>
                               </div>
                             </div>

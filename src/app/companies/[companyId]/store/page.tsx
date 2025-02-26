@@ -467,7 +467,7 @@ export default function StoreListPage() {
   }, [imagePreview])
 
   return (
-    <div className="min-h-screen bg-blue-100 ">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-800 ">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -499,7 +499,7 @@ export default function StoreListPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {stores.map((store) => (
-              <Card key={store.id} className="overflow-hidden cursor-pointer" onClick={() => handleCardClick(store.id)}>
+              <Card key={store.id} className="overflow-hidden cursor-pointer " onClick={() => handleCardClick(store.id)}>
                 <div className="flex">
                   <div className="w-1/3 relative pb-[33.33%]">
                     <Image
@@ -546,9 +546,9 @@ export default function StoreListPage() {
                       </div>
                     )}
                     <h2 className="font-bold mb-2">{store.name}</h2>
-                    <p className="text-sm text-gray-600">{store.address}</p>
-                    <p className="text-sm text-gray-600">Manager: {getManagerFullName(store.manager)}</p>
-                    <p className="text-sm text-gray-600">Phone: {store.phone}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-200">{store.address}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-200">Manager: {getManagerFullName(store.manager)}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-200">Phone: {store.phone}</p>
                   </CardContent>
                 </div>
               </Card>
@@ -570,7 +570,7 @@ export default function StoreListPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => storeToDelete && handleDeleteStore(storeToDelete)} className="bg-red-600">
+            <AlertDialogAction onClick={() => storeToDelete && handleDeleteStore(storeToDelete)} className="bg-red-600 dark:text-gray-200">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -598,11 +598,11 @@ export default function StoreListPage() {
               </div>
               <form
                 onSubmit={editingStore ? handleUpdateStore : handleCreateStore}
-                className="space-y-4 flex flex-col h-full"
+                className="space-y-4 flex flex-col h-full dark:bg-gray-800"
               >
                 <div className="space-y-4 flex-grow overflow-y-auto pr-2">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Store Name
                     </label>
                     <Input
@@ -613,7 +613,7 @@ export default function StoreListPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Address
                     </label>
                     <Input
@@ -624,17 +624,17 @@ export default function StoreListPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="manager" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="manager" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Manager
                     </label>
                     <Select
                       value={newStore.manager}
                       onValueChange={(value) => setNewStore({ ...newStore, manager: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="dark:border-gray-400">
                         <SelectValue placeholder="Select a manager" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent >
                         {getAvailableManagers().map((user) => (
                           <SelectItem key={user.id} value={user.id}>
                             {user.name} {user.surname}
@@ -644,7 +644,7 @@ export default function StoreListPage() {
                     </Select>
                   </div>
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Phone
                     </label>
                     <Input
@@ -655,7 +655,7 @@ export default function StoreListPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="image" className="block text-sm font-medium text-gray-700">
+                    <label htmlFor="image" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
                       Store Image
                     </label>
                     <Input

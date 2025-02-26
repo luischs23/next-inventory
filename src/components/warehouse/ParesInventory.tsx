@@ -631,7 +631,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-100">
+      <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
         <header className="bg-teal-600 text-white p-4 flex items-center">
           <Skeleton className="h-6 w-6 mr-2" />
           <Skeleton className="h-8 w-48 mr-2 flex-grow" />
@@ -649,7 +649,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   }
   //Inv-{showBox ? 'Cajas' : 'Pares'}
   return (
-    <div className="min-h-screen bg-blue-100 flex flex-col pt-14">
+    <div className="min-h-screen bg-blue-100 flex flex-col pt-14 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center fixed top-0 left-0 right-0 z-30">
         <Button
           variant="ghost"
@@ -712,13 +712,13 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               <div className="flex items-center space-x-3 mb-4">
                 <div>
                   <Switch id="show-box" checked={showBox} onCheckedChange={setshowBox} />
-                  <label htmlFor="show-box" className="text-sm font-medium text-black ml-2">
+                  <label htmlFor="show-box" className="text-sm font-medium text-black ml-2 dark:text-gray-200">
                     {showBox ? "Cajas" : "Pares"}
                   </label>
                 </div>
                 <div>
                   <Switch id="show-inactive" checked={showInactive} onCheckedChange={setShowInactive} />
-                  <label htmlFor="show-inactive" className="text-sm font-medium text-black ml-2">
+                  <label htmlFor="show-inactive" className="text-sm font-medium text-black ml-2 dark:text-gray-200">
                     {showInactive ? "Inactive" : "Active"}
                   </label>
                 </div>
@@ -761,7 +761,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           placeholder="Search by brand, reference, color or barcode"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-grow  text-black"
+          className="flex-grow text-black dark:text-white"
         />
       </div>
       <main className="container mx-auto p-4 flex-grow">
@@ -818,7 +818,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     </div>
                     <div className="flex-1 md:hidden">
                       <h3 className="font-semibold">{product.brand}</h3>
-                      <p className="text-sm text-gray-500">{product.reference}</p>
+                      <span className="text-sm text-gray-500 dark:text-gray-200">{product.reference}</span>
                       <p className="text-sm">
                         {product.color} - {product.gender}
                       </p>
@@ -847,13 +847,13 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     <span className="font-medium text-sm">
                       {product.isBox ? "BoxTotal:" : "Sizes Total:"} {product.isBox ? product.total2 : product.total}
                     </span>
-                    <span className="text-sm text-gray-500">{product.barcode}</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-200">{product.barcode}</span>
                   </div>
                   <div className="md:w-2/6">
                     <div className="grid grid-cols-5 gap-1 mt-1">
                       {Object.keys(product.sizes).length > 0 ? (
                         sortSizes(product.sizes).map(([size, { quantity }]) => (
-                          <div key={size} className="text-sm bg-gray-100 p-1 rounded">
+                          <div key={size} className="text-sm bg-gray-100 p-1 rounded dark:bg-gray-700">
                             <span className="font-normal">{size.replace("T-", "")}</span>
                             <span className="font-semibold">: {quantity}</span>
                           </div>
@@ -933,7 +933,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-600">
+            <AlertDialogAction onClick={handleDelete} className="bg-red-600 dark:text-gray-200">
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -998,12 +998,12 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               <div
                 key={template.id}
                 className={`p-2 rounded cursor-pointer ${
-                  selectedTemplateIndex === index ? "bg-blue-100" : "hover:bg-gray-100"
+                  selectedTemplateIndex === index ? "bg-blue-100 dark:bg-gray-700" : "hover:bg-gray-100"
                 }`}
                 onClick={() => setSelectedTemplateIndex(index)}
               >
                 <h3 className="font-semibold">{template.name}</h3>
-                <p className="text-sm text-gray-500">{template.content}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-300">{template.content}</p>
               </div>
             ))}
           </div>

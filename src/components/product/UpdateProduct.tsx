@@ -833,7 +833,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-100">
+      <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
         <header className="bg-teal-600 text-white p-4 flex items-center">
           <Skeleton className="h-6 w-6 mr-2" />
           <Skeleton className="h-8 w-48 mr-2 flex-grow" />
@@ -857,7 +857,7 @@ export default function UpdateProduct({ companyId, warehouseId, productId }: Upd
   const isUpdateEnabled = !updateEnabled || (updateEnabled && product.total === product.total2)
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
