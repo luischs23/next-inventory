@@ -11,7 +11,7 @@ import { db, auth } from 'app/services/firebase/firebase.config'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'
 import { HomeSkeleton } from 'app/components/skeletons/home-skeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { withPermission } from "app/components/withPermission";
 
 interface UserProfile {
   id: string
@@ -29,14 +29,18 @@ type MenuItem = {
   permissions: string[]
 }
 
-export default function Home({ params }: { params: { companyId?: string } }) {
+interface HomeProps {
+  hasPermission: (action: string) => boolean;
+  params: { companyId?: string };
+}
+
+function Home({ hasPermission, params }: HomeProps) {
   const router = useRouter()
   const [, setUser] = useState<FirebaseUser | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState('')
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -173,9 +177,11 @@ export default function Home({ params }: { params: { companyId?: string } }) {
     ]
   : []
 
-  const filteredMenuItems = menuItems.filter((item) =>
-    item.permissions.some((permission) => hasPermission(permission))
-  )
+  const filteredMenuItems = hasPermission
+  ? menuItems.filter((item) =>
+      item.permissions.some((permission) => hasPermission(permission))
+    )
+  : [];
 
   if (loading) {
     return <HomeSkeleton />
@@ -251,3 +257,5 @@ export default function Home({ params }: { params: { companyId?: string } }) {
     </div>
   )
 }
+
+export default withPermission(Home, ["read", "customer"]);

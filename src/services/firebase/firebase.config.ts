@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getAuth, browserLocalPersistence, setPersistence } from 'firebase/auth';
+import { getAuth} from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,22 +13,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-
-// Activar persistencia offline con `initializeFirestore`
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache(),
-});
-
+const db = getFirestore(app);
 const storage = getStorage(app);
 const auth = getAuth(app);
-
-// Habilitar persistencia en Firebase Auth para mantener la sesión offline
-setPersistence(auth, browserLocalPersistence)
-  .then(() => {
-    console.log("Persistencia de sesión activada.");
-  })
-  .catch((error) => {
-    console.error("Error activando la persistencia de sesión:", error);
-  });
 
 export { db, storage, auth };

@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import {
-  AlertDialog,
+  AlertDialog, 
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
@@ -23,7 +23,6 @@ import {
   AlertDialogTitle,
 } from "app/components/ui/alert-dialog"
 import { withPermission } from "app/components/withPermission"
-import { usePermissions } from "app/hooks/usePermissions"
 
 interface Company {
   id: string
@@ -34,7 +33,11 @@ interface Company {
   imageUrl: string
 }
 
-function CompanyManagement() {
+interface CompanyManagementProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function CompanyManagement({ hasPermission }: CompanyManagementProps) {
   const router = useRouter()
   const [companies, setCompanies] = useState<Company[]>([])
   const [newCompany, setNewCompany] = useState<Omit<Company, 'id' | 'imageUrl'>>({
@@ -50,7 +53,6 @@ function CompanyManagement() {
   const [error, setError] = useState<string | null>(null)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [companyToDelete, setCompanyToDelete] = useState<string | null>(null)
-  const { hasPermission } = usePermissions()
 
   const handleCardClick = (companyId: string) => {
     router.push(`/companies/${companyId}/home`)
@@ -153,7 +155,7 @@ function CompanyManagement() {
         </Button>
         <h1 className="text-xl font-bold flex-grow">Companies</h1>
         <div className='space-x-2'>
-        {hasPermission("companies") && (
+        {hasPermission && hasPermission("companies") && (
         <Button variant="secondary" onClick={() => {
           setEditingCompany(null)
           setNewCompany({ name: '', email: '', phone: '', address: '' })
@@ -185,7 +187,7 @@ function CompanyManagement() {
               </div>
               <CardContent className="w-2/3 p-4 relative">
                 <div className="absolute top-2 right-2 flex" onClick={(e) => e.stopPropagation()}>
-                {hasPermission("companies") && (<>
+                {hasPermission && hasPermission("companies") && (<>
                   <Button 
                     variant="ghost" 
                     className="h-8 w-8 p-0 mr-1" 

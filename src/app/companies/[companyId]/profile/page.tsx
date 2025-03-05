@@ -311,7 +311,7 @@ return (
             <Camera className="h-4 w-4" />
           </Button>
         </div>
-             <h2 className="mt-4 text-xl font-semibold text-black dark:text-white">{`${profile.name} ${profile.surname}`}</h2>
+             <h2 className="mt-4 text-xl font-semibold text-black dark:text-white">{`${profile.name}`}</h2>
         </div>
           {/* Menu Items */}
       <div className="px-4 space-y-3">

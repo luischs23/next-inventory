@@ -1,32 +1,16 @@
 "use client"; 
 
 import { Inter } from 'next/font/google';
-import { useEffect } from "react";
 import "./globals.css";
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from 'app/components/ThemeProvider';
 import { Toaster } from "app/components/ui/toaster";
-import { useUserActivity } from "app/hooks/useUserActivity"
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
-
-function RootLayoutContent({ children }: { children: React.ReactNode }) {
-  useUserActivity()
-
-  return <>{children}</>
-}
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-
-  useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/service-worker.js")
-        .then(() => console.log("Service Worker registrado!"))
-        .catch((err) => console.error("Error registrando Service Worker:", err));
-    }
-  }, []);
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -42,7 +26,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AuthProvider>
-            <RootLayoutContent>{children}</RootLayoutContent>
+           {children}
             <Toaster />
           </AuthProvider>
         </ThemeProvider>
