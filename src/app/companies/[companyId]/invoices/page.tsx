@@ -15,6 +15,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
 import { Skeleton } from 'app/components/ui/skeleton'
+import { withPermission } from "app/components/withPermission"
 
 interface InvoiceItem {
   productId: string
@@ -55,7 +56,7 @@ interface Store {
   name: string
 }
 
-export default function InvoicesPage({ params }: { params: { companyId: string} }) {
+function InvoicesPage({ params }: { params: { companyId: string } }) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [invoices, setInvoices] = useState<Invoice[]>([])
@@ -179,13 +180,12 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
 
     // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(invoice => 
-        invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.items.some(item => 
-          item.barcode.includes(searchTerm) ||
-          item.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.reference.toLowerCase().includes(searchTerm.toLowerCase())
-        )
+      filtered = filtered.filter(
+        (invoice) =>
+          invoice.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (invoice.invoiceId && invoice.invoiceId.toLowerCase().includes(searchTerm.toLowerCase())) ||
+          (invoice.items &&
+            invoice.items.some((item) => item.barcode.toLowerCase().includes(searchTerm.toLowerCase()))),
       )
     }
 
@@ -269,7 +269,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-100">
+      <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
         <header className="bg-teal-600 text-white p-4 flex items-center">
           <Skeleton className="h-6 w-6 mr-2" />
           <Skeleton className="h-8 w-48 mr-2 flex-grow" />
@@ -287,7 +287,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
   }
 
   return (
-    <div className="min-h-screen bg-blue-100 pb-16">
+    <div className="min-h-screen bg-blue-100 pb-16 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-4 flex items-center sticky top-0 z-50">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -350,7 +350,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
             </div>
             <AlertDialogFooter className="flex justify-between items-end">
               <AlertDialogCancel className='bg-black text-white'>Close</AlertDialogCancel>
-              <Button onClick={handleClearFilters} variant="outline">Clear Filters</Button>
+              <Button className="dark:border-gray-200" onClick={handleClearFilters} variant="outline">Clear Filters</Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -393,12 +393,11 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name, barcode, brand, or reference"
+            placeholder="Search by name, barcode, invoiceID"
             className="w-full"
           />
         </div>
-
-        <div className="bg-white rounded-lg p-4 mb-2 shadow text-slate-900">
+        <div className="bg-white rounded-lg p-4 mb-2 shadow text-slate-900 dark:bg-gray-700 dark:text-gray-200">
           <div className="grid grid-cols-3 gap-4">
             <div>
               <h3 className="text-sm font-semibold">Total Items</h3>
@@ -434,13 +433,14 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
                               Edit Invoice
                             </Link>
                           </DropdownMenuItem>
-                            )}  
+                          )}{invoice.status === 'closed' && (
                           <DropdownMenuItem>
                             <Link href={`/companies/${invoice.companyId}/store/${invoice.storeId}/invoices/${invoice.id}`} className="flex items-center">
                               <Pencil className="mr-2 h-4 w-4" />
                               Update
                             </Link>
                           </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
@@ -453,7 +453,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
                         <h3 className="font-semibold">{invoice.customerName}</h3>
                       </div>
                       <div className="text-sm">
-                        <p className="text-gray-700">Phone: {invoice.customerPhone}</p>                                        
+                        <p className="text-gray-700 dark:text-gray-200">Phone: {invoice.customerPhone}</p>                                        
                       </div>
                         <div className='flex flex-col items-end mt-1'>
                           <div className='flex justify-end'>
@@ -462,7 +462,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
                           </div>
                       </div>
                       <div className='flex justify-between items-center'>
-                        <p className="text-gray-500 text-sm">Store: {invoice.storeName}</p>
+                        <p className="text-gray-500 text-sm dark:text-gray-200">Store: {invoice.storeName}</p>
                         <div className='flex justify-end'>
                             <p className="text-sm font-semibold mr-2">Earn:</p>
                             <p className="text-sm">${formatPrice(invoice.totalEarn)}</p>
@@ -472,7 +472,7 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
                           <p className={`text-sm font-medium ${invoice.status === 'open' ? 'text-yellow-600' : 'text-green-600'}`}>
                             Status: {invoice.status}
                           </p>
-                          <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-200">{formatDate(invoice.createdAt)}</p>
                         </div>  
                     </div>
                   </CardContent>
@@ -484,3 +484,5 @@ export default function InvoicesPage({ params }: { params: { companyId: string} 
     </div>
   )
 }
+
+export default withPermission<{ params: { companyId: string } }>(InvoicesPage, ["create"])

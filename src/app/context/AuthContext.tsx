@@ -1,94 +1,81 @@
-'use client'
+"use client"
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'
-import { auth } from 'app/services/firebase/firebase.config'
-import { doc, getDoc, collection, getDocs} from 'firebase/firestore'
-import { db } from 'app/services/firebase/firebase.config'
+import type React from "react"
+import { createContext, useContext, useEffect, useState } from "react"
+import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
+import { auth } from "app/services/firebase/firebase.config"
+import { getUserData } from "app/services/firebase/auth-service"
 
-interface ExtendedUser extends FirebaseUser {
+// Extend FirebaseUser without overriding its properties
+type ExtendedUser = FirebaseUser & {
   id?: string
   role?: string
   companyId?: string | null
   name?: string
   isDeveloper?: boolean
+  token?: string
+  status?: "active" | "deleted"
 }
 
 interface AuthContextType {
   user: ExtendedUser | null
   loading: boolean
   setUser: (user: ExtendedUser | null) => void
-} 
+  isEmailVerified: boolean
+}
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
   loading: true,
-  setUser: () => {}
+  setUser: () => {},
+  isEmailVerified: false,
 })
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<ExtendedUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isEmailVerified, setIsEmailVerified] = useState(false)
 
   useEffect(() => {
-    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("🔄 onAuthStateChanged detectó un cambio:", firebaseUser)
 
-      if (firebaseUser) {
-        try {
-          // First, check if the user is a developer (outside of companies)
-          const developerUserRef = doc(db, 'users', firebaseUser.uid)
-          const developerUserSnap = await getDoc(developerUserRef)
-
-          if (developerUserSnap.exists()) {
-            const developerData = developerUserSnap.data()
-            const userData = {
-              ...firebaseUser,
-              role: 'developer',
-              companyId: null,
-              name: developerData.name,
-              isDeveloper: true
-            }
-            setUser(userData)
-           
-          } else {
-            // If not a developer, search in companies
-            const companiesRef = collection(db, 'companies')
-            const companiesSnapshot = await getDocs(companiesRef)
-
-            let userFound = false
-            for (const companyDoc of companiesSnapshot.docs) {
-              const userDocRef = doc(db, `companies/${companyDoc.id}/users`, firebaseUser.uid)
-              const userDocSnap = await getDoc(userDocRef)
-
-              if (userDocSnap.exists()) {
-                const userData = userDocSnap.data()
-                const extendedUser = {
-                  ...firebaseUser,
-                  role: userData.role,
-                  companyId: companyDoc.id,
-                  name: userData.name,
-                  isDeveloper: false
-                }
-                setUser(extendedUser)
-                console.log('AuthProvider: Company user set', extendedUser)
-                userFound = true
-                break
-              }
-            }
-            if (!userFound) {
-              setUser(null)
-            }
-          }
-        } catch (error) {
-          console.error('AuthProvider: Error fetching user data:', error)
-          setUser(null)
-        }
-      } else {
-        console.log('AuthProvider: No Firebase user, setting user to null')
+      if (!firebaseUser) {
+        console.log("❌ No hay usuario autenticado.")
         setUser(null)
+        setIsEmailVerified(false)
+        setLoading(false)
+        return
       }
-      setLoading(false)
+
+      try {
+        // Get token regardless of email verification status
+        const token = await firebaseUser.getIdToken()
+        console.log("✅ Token obtenido:", token)
+
+        // Get user data from Firestore or minimal data from Firebase Auth
+        const userData = await getUserData(firebaseUser)
+
+        const newUser: ExtendedUser = {
+          ...firebaseUser,
+          token,
+          id: userData?.id,
+          role: userData?.role,
+          companyId: userData?.companyId,
+          name: userData?.name,
+          isDeveloper: userData?.isDeveloper,
+          status: userData?.status,
+        }
+
+        console.log("✅ Usuario final en AuthContext:", newUser)
+        setUser(newUser)
+        // Ensure we always set a boolean value
+        setIsEmailVerified(newUser.emailVerified ?? false)
+      } catch (error) {
+        console.error("❌ Error obteniendo datos del usuario:", error)
+      } finally {
+        setLoading(false)
+      }
     })
 
     return () => unsubscribe()
@@ -97,14 +84,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const contextValue: AuthContextType = {
     user,
     loading,
-    setUser
+    setUser,
+    isEmailVerified,
   }
 
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
 }
 
 export const useAuth = () => useContext(AuthContext)

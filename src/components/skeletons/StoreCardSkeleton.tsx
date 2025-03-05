@@ -3,7 +3,7 @@ import { Skeleton } from "app/components/ui/skeleton"
 
 export function StoreCardSkeleton() {
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden ">
       <div className="flex">
         <div className="w-1/3">
           <Skeleton className="h-full w-full" />

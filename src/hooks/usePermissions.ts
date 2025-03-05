@@ -1,42 +1,29 @@
-import { useAuth } from 'app/app/context/AuthContext'
+import { useState, useEffect } from 'react';
 
-// Define permissions for each role
-const rolePermissions = {
-  developer: ['create', 'read', 'update', 'delete', 'ska'],
-  general_manager: ['create', 'read', 'update', 'delete', 'ska'],
-  warehouse_manager: ['create', 'read', 'update', 'ska'],
-  warehouse_salesperson: ['warehouse_salesperson', 'read', 'ska'],
-  pos_salesperson: ['pos_salesperson', 'read', 'ska'],
-  skater: ['skater', 'read'],
-  customer: ['customer'],
-} 
+export function usePermissions(actions: string | string[]) {
+  const [hasPermission, setHasPermission] = useState(false);
 
-type Action = 'create' | 'read' | 'update' | 'delete' | 'skater' | 'ska' | 'warehouse_salesperson' | 'pos_salesperson' | 'customer'
+  useEffect(() => {
+    const checkPermissions = async () => {
+      try {
+        const res = await fetch('/api/permissions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Para incluir cookies en la petición
+          body: JSON.stringify({ actions }),
+        });
 
-export function usePermissions() {
-  const { user } = useAuth()
-
-  const hasPermission = (actions: Action | Action[] | string | string[]): boolean => {
-    if (!user) return false
-
-    // Grant all permissions to developers
-    if (user.isDeveloper) {
-      return true
-    }
-
-    // Check permissions based on user role
-    if (user.role) {
-      const permissions = rolePermissions[user.role as keyof typeof rolePermissions]
-      if (permissions) {
-        if (Array.isArray(actions)) {
-          return actions.some(action => permissions.includes(action))
-        }
-        return permissions.includes(actions)
+        const data = await res.json();
+        setHasPermission(data.hasPermission);
+      } catch (error) {
+        console.error('Error checking permissions:', error);
       }
-    }
+    };
 
-    return false
-  }
+    checkPermissions();
+  }, [actions]);
 
-  return { hasPermission }
+  return { hasPermission };
 }

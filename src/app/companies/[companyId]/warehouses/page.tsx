@@ -315,7 +315,7 @@ export default function WarehousesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100 ">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -389,7 +389,7 @@ export default function WarehousesPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteWarehouse(warehouse)} className="bg-red-600">
+                            <AlertDialogAction onClick={() => handleDeleteWarehouse(warehouse)} className="bg-red-600 dark:text-gray-200">
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -402,9 +402,9 @@ export default function WarehousesPage() {
                   </DropdownMenu>
                     </div>
                     <h2 className="font-bold mb-2">{warehouse.name}</h2>
-                    <p className="text-sm text-gray-600">{warehouse.address}</p>
-                    <p className="text-sm text-gray-600">Manager: {warehouse.manager}</p>
-                    <p className="text-sm text-gray-600">Phone: {warehouse.phone}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-200">{warehouse.address}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-200">Manager: {warehouse.manager}</p>
+                    <p className="text-sm text-gray-600 dark:text-slate-200">Phone: {warehouse.phone}</p>
                     
                   </CardContent>
                 </div>

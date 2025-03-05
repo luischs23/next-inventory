@@ -11,7 +11,7 @@ import { db, auth } from 'app/services/firebase/firebase.config'
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore'
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth'
 import { HomeSkeleton } from 'app/components/skeletons/home-skeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { withPermission } from "app/components/withPermission";
 
 interface UserProfile {
   id: string
@@ -29,14 +29,18 @@ type MenuItem = {
   permissions: string[]
 }
 
-export default function Home({ params }: { params: { companyId?: string } }) {
+interface HomeProps {
+  hasPermission: (action: string) => boolean;
+  params: { companyId?: string };
+}
+
+function Home({ hasPermission, params }: HomeProps) {
   const router = useRouter()
   const [, setUser] = useState<FirebaseUser | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState('')
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -144,19 +148,19 @@ export default function Home({ params }: { params: { companyId?: string } }) {
         name: 'Stores',
         icon: Store,
         href: `/companies/${companyId}/store`,
-        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+        permissions: ['read', 'customer'],
       },
       {
         name: 'Warehouses',
         icon: Warehouse,
         href: `/companies/${companyId}/warehouses`,
-        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+        permissions: ['read', 'customer'],
       },
       {
         name: 'Invoices',
         icon: FileText,
         href: `/companies/${companyId}/invoices`,
-        permissions: ['skater', 'warehouse_salesperson', 'pos_salesperson', 'create'],
+        permissions: ['create'],
       },
       {
         name: 'Users',
@@ -168,14 +172,16 @@ export default function Home({ params }: { params: { companyId?: string } }) {
         name: 'Profile',
         icon: User,
         href: `/companies/${companyId}/profile`,
-        permissions: ['skater', 'warehouse_salesperson', 'customer', 'pos_salesperson', 'create'],
+        permissions: ['read', 'customer'],
       },
     ]
   : []
 
-  const filteredMenuItems = menuItems.filter((item) =>
-    item.permissions.some((permission) => hasPermission(permission))
-  )
+  const filteredMenuItems = hasPermission
+  ? menuItems.filter((item) =>
+      item.permissions.some((permission) => hasPermission(permission))
+    )
+  : [];
 
   if (loading) {
     return <HomeSkeleton />
@@ -183,7 +189,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
 
   if (userProfile?.isDeveloper && !companyId) {
     return (
-      <div className="min-h-screen bg-blue-100 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-100 flex items-center justify-center ">
         <Card className="w-full max-w-md p-6 bg-white rounded-3xl shadow-xl">
           <h2 className="text-xl font-bold mb-6 text-center text-gray-800">
             Select a Company
@@ -200,14 +206,14 @@ export default function Home({ params }: { params: { companyId?: string } }) {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-700">
       {/* Header */}
       <header className="w-full p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">{companyName}</h1>
+        <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-300">{companyName}</h1>
         <div className="flex items-center">
           <div className="flex flex-col items-end mr-2">
-            <span className="text-gray-700 font-semibold">Welcome,</span>
-            <span className="text-gray-600">{userProfile ? `${userProfile.name} ${userProfile.surname}` : 'User'}</span>
+            <span className="text-gray-700 font-semibold dark:text-gray-300">Welcome,</span>
+            <span className="text-gray-600 dark:text-gray-300">{userProfile ? `${userProfile.name} ${userProfile.surname}` : 'User'}</span>
           </div>
           {userProfile?.photo ? (
             <Image
@@ -216,9 +222,11 @@ export default function Home({ params }: { params: { companyId?: string } }) {
               width={40}
               height={40}
               className="rounded-md object-cover"
+              onClick={() => router.push(`/companies/${companyId}/profile`)}
             />
           ) : (
-            <div className="w-10 h-10 bg-gray-300 rounded-md flex items-center justify-center">
+            <div className="w-10 h-10 bg-gray-300 rounded-md flex items-center justify-center"
+                 onClick={() => router.push(`/companies/${companyId}/profile`)}>
               <User className="w-6 h-6 text-gray-600" />
             </div>
           )}
@@ -228,7 +236,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
       {/* Main content */}
       <main className="flex-grow flex items-center justify-center px-4">
         <Card className="w-full max-w-md p-6 bg-white rounded-3xl shadow-xl">
-          <h2 className="text-xl font-bold mb-6 text-left text-gray-800">
+          <h2 className="text-xl font-bold mb-6 text-left text-gray-800 dark:text-gray-300">
             Quick Commands
           </h2>
           <div className="grid grid-cols-3 gap-4">
@@ -236,7 +244,7 @@ export default function Home({ params }: { params: { companyId?: string } }) {
               <Link href={item.href} key={item.name}>
                 <Button
                   variant="outline"
-                  className="w-full h-24 flex flex-col items-center justify-center text-gray-700 hover:bg-blue-50"
+                  className="w-full h-24 flex flex-col items-center justify-center text-gray-700 hover:bg-blue-50 dark:text-gray-300 dark:hover:bg-gray-700"
                 >
                   <item.icon className="w-8 h-8 mb-2" />
                   <span className="text-xs">{item.name}</span>
@@ -249,3 +257,5 @@ export default function Home({ params }: { params: { companyId?: string } }) {
     </div>
   )
 }
+
+export default withPermission(Home, ["read", "customer"]);
