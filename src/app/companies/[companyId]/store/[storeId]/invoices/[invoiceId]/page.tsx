@@ -15,8 +15,8 @@ import { toast } from 'app/components/ui/use-toast'
 import { ArrowLeft, ChevronDown, ChevronUp, FileDown, Menu } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from 'app/components/ui/dropdown-menu'
 import InvoiceDetailSkeleton from 'app/components/skeletons/InvoiceDetailSkeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
 import { Skeleton } from 'app/components/ui/skeleton'
+import { withPermission } from "app/components/withPermission"
 
 interface InvoiceItem {
   id: string
@@ -86,7 +86,12 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
   )
 }
 
-export default function InvoicePage({ params }: { params: { companyId: string; storeId: string; invoiceId: string } }) {
+interface InvoicePageProps {
+  hasPermission: (action: string) => boolean;
+  params: { companyId: string; storeId: string, invoiceId: string };
+}
+
+function InvoicePage({ hasPermission, params }: InvoicePageProps) {    
   const router = useRouter()
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [storeName, setStoreName] = useState<string>("")
@@ -98,7 +103,6 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
   const [searchResult, setSearchResult] = useState<InvoiceItem | null>(null)
   const [imageError, setImageError] = useState("")
   const [, setLoading] = useState(true)
-  const { hasPermission } = usePermissions()
 
   useEffect(() => {
     fetchInvoice()
@@ -475,7 +479,7 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -499,23 +503,25 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
         <Card className="mb-2">
           <CardHeader>
             <CardTitle className="text-2xl font-bold">Invoice for {invoice?.customerName}</CardTitle>
-            <div className="text-sm text-gray-500">Date: {invoice && formatDate(invoice.createdAt)}</div>
+            <div className="text-sm text-gray-500 dark:text-gray-200">Date: {invoice && formatDate(invoice.createdAt)}</div>
           </CardHeader>
           <CardContent> 
             <div className="mb-2">Store: {storeName || <Skeleton className="h-4 w-20" />}</div>
             <div className="mb-2">Customer Phone: {invoice?.customerPhone || <Skeleton className="h-4 w-20" />}</div>
-            {hasPermission("ska") && (<>
+            {hasPermission && hasPermission("ska") && (<>
             <div className="mb-2 text-lg font-semibold">
               Total Sold: ${invoice ? formatPrice(invoice.totalSold) : <Skeleton className="h-4 w-20" />}
             </div>
+            </>)}
+            {hasPermission && hasPermission("create") && (
             <div className="mb-2 text-lg font-semibold">
               Total Earn: ${invoice ? formatPrice(invoice.totalEarn) : <Skeleton className="h-4 w-20" />}
             </div>
-            </>)}
+            )}
           </CardContent>
         </Card>
         <div className="grid gap-4">
-          {hasPermission("create") && (
+          {hasPermission && hasPermission("create") && (
             <CollapsibleSection title="Cambios">
               <div>
                 <Label htmlFor="returnBarcode">Return</Label>
@@ -583,13 +589,13 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
         <Card>
           <CardHeader className="flex flex-row justify-between items-center">
             <CardTitle>Invoice Items</CardTitle>
-            <span className="text-sm text-gray-500">({invoice.items.length} items)</span>
+            <span className="text-sm text-gray-500 dark:text-gray-200">({invoice.items.length} items)</span>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {invoice.items.map((item, index) => (
                 <div key={index} className="flex items-start">
-                  <span className="text-sm font-semibold text-gray-500 mr-2 mt-1">{index + 1}</span>
+                  <span className="text-sm font-semibold text-gray-500 mr-2 mt-1 dark:text-gray-200">{index + 1}</span>
                   <Card className={`w-full ${item.returned ? "opacity-50 bg-gray-100" : ""}`}>
                     <CardContent className="p-2 flex items-center justify-between">
                       <div className="flex-1">
@@ -599,17 +605,17 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
                         <p>Color: {item.color}</p>
                         {item.isBox ? <p>Box: {item.quantity}</p> : <p>Size: {item.size}</p>}
                         <p>Barcode: {item.barcode}</p>
-                        {hasPermission("ska") && (
+                        {hasPermission && hasPermission("ska") && (
                         <p>Sale Price: ${formatPrice(item.salePrice)}</p>
                         )}
-                        <p className="text-sm text-gray-500">Added At: {formatDate(item.addedAt)}</p>
-                        <div className="flex space-x-2 text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 dark:text-gray-300">Added At: {formatDate(item.addedAt)}</p>
+                        <div className="flex space-x-2 text-sm text-gray-500 dark:text-gray-300">
                           {item.exhibitionStore ? (
                             <p>Exb: {stores[item.exhibitionStore]}</p>
                           ) : (
                             <p>WH: {warehouses[item.warehouseId || ""]}</p>
                           )}
-                          {hasPermission("ska") && (
+                          {hasPermission && hasPermission("create") && (
                           <p>| Earn unit: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}</p>
                           )}
                           <p>
@@ -639,3 +645,5 @@ export default function InvoicePage({ params }: { params: { companyId: string; s
     </div>
   )
 }
+
+export default withPermission(InvoicePage, ["ska"]);
