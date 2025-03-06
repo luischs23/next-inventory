@@ -16,7 +16,7 @@ import { Skeleton } from "app/components/ui/skeleton"
 import { ArrowLeft, Calendar, MoreVertical, Menu, PlusIcon } from 'lucide-react'
 import { toast } from "app/components/ui/use-toast"
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { withPermission } from "app/components/withPermission"
 
 interface Invoice {
   id: string
@@ -33,7 +33,12 @@ interface Store {
   name: string
 }
 
-export default function InvoiceListPage({ params }: { params: { companyId: string; storeId: string } }) {
+interface InvoiceListPageProps {
+  hasPermission: (action: string) => boolean;
+  params: { companyId: string; storeId: string };
+}
+
+function InvoiceListPage({ hasPermission, params }: InvoiceListPageProps) {  
   const router = useRouter()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [storeName, setStoreName] = useState<string>("")
@@ -49,7 +54,6 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
-  const { hasPermission } = usePermissions()
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>(undefined)
   const [selectedDay, setSelectedDay] = useState<number | undefined>(undefined)
@@ -414,7 +418,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        {hasPermission("create") && (
+        {hasPermission && hasPermission("create") && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="text-white">
@@ -474,10 +478,10 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                                 </Link>
                               </DropdownMenuItem>
                             )}
-                            {hasPermission("create") && (
+                            {hasPermission && hasPermission("create") && (
                               <DropdownMenuItem onClick={() => openEditDialog(invoice)}>Edit Card</DropdownMenuItem>
                             )}
-                            {hasPermission("delete") && (
+                            {hasPermission && hasPermission("delete") && (
                               <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>Delete</DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -488,7 +492,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                     </CardHeader>
                     <CardContent className="flex justify-between items-center">
                       <p className="text-sm text-gray-500 dark:text-gray-200">{formatDate(invoice.createdAt)}</p>
-                      {hasPermission("ska") && (
+                      {hasPermission && hasPermission("ska") && (
                         <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
                       )}
                     </CardContent>
@@ -539,10 +543,10 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                               </Link>
                             </DropdownMenuItem>
                           )}
-                          {hasPermission("create") && (
+                          {hasPermission && hasPermission("create") && (
                             <DropdownMenuItem onClick={() => openEditDialog(invoice)}>Edit Card</DropdownMenuItem>
                           )}
-                          {hasPermission("delete") && (
+                          {hasPermission && hasPermission("delete") && (
                             <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>Delete</DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
@@ -553,7 +557,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                   </CardHeader>
                   <CardContent className="flex justify-between items-center">
                     <p className="text-sm text-gray-500 dark:text-gray-200">{formatDate(invoice.createdAt)}</p>
-                    {hasPermission("ska") && (
+                    {hasPermission && hasPermission("ska") && (
                       <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
                     )}
                   </CardContent>
@@ -668,3 +672,5 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
     </div>
   )
 }
+
+export default withPermission(InvoiceListPage, ["ska"]);

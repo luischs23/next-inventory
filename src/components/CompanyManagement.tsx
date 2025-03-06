@@ -12,16 +12,7 @@ import { Card, CardContent } from 'app/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import Image from 'next/image'
-import {
-  AlertDialog, 
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "app/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,} from "app/components/ui/alert-dialog"
 import { withPermission } from "app/components/withPermission"
 
 interface Company {

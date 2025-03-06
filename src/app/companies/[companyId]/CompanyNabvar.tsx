@@ -46,4 +46,4 @@ const CompanyNavbar: React.FC<CompanyNavbarProps> = ({ companyId, hasPermission 
   );
 };
 
-export default withPermission(CompanyNavbar, ["read", "customer"]);
+export default withPermission(CompanyNavbar, ["read", "customer", "create"]);

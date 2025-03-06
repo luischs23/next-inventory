@@ -9,7 +9,6 @@ import { Button } from "app/components/ui/button"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
-import { usePermissions } from 'app/hooks/usePermissions'
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
@@ -17,6 +16,7 @@ import Image from 'next/image'
 import { WarehouseCardSkeleton } from 'app/components/skeletons/WarehouseCardSkeleton'
 import { useToast } from "app/components/ui/use-toast"
 import imageCompression from 'browser-image-compression'
+import { withPermission } from "app/components/withPermission"
 
 interface Warehouse {
   id: string
@@ -27,7 +27,11 @@ interface Warehouse {
   imageUrl: string
 }
 
-export default function WarehousesPage() {
+interface WarehousesPageProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function WarehousesPage({ hasPermission}: WarehousesPageProps) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([])
   const [isPopupOpen, setIsPopupOpen] = useState(false)
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null)
@@ -41,7 +45,6 @@ export default function WarehousesPage() {
   const params = useParams()
   const companyId = params.companyId as string
   const popupRef = useRef<HTMLDivElement>(null)
-  const { hasPermission } = usePermissions()
   const { toast } = useToast()
   
   useEffect(() => {
@@ -321,7 +324,7 @@ export default function WarehousesPage() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Warehouses</h1>
-        {hasPermission('delete') && (
+        {hasPermission && hasPermission('delete') && (
         <Button variant="secondary" onClick={() => setIsPopupOpen(true)}>
           + Add Warehouse
         </Button>
@@ -365,14 +368,14 @@ export default function WarehousesPage() {
                       </DropdownMenuTrigger>
                            )}
                           <DropdownMenuContent className='mr-2'>
-                          {hasPermission('update') && (
+                          {hasPermission && hasPermission('update') && (
                             <DropdownMenuItem onClick={() => openEditPopup(warehouse)}>
                               <Pencil className="h-4 w-4 mr-2" />Update
                             </DropdownMenuItem>
                           )}
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                        {hasPermission('delete') && (
+                        {hasPermission && hasPermission('delete') && (
                           <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                             <Trash2 className="h-4 w-4 mr-2" />Delete
                           </DropdownMenuItem>
@@ -504,3 +507,5 @@ export default function WarehousesPage() {
     </div>
   )
 }
+
+export default withPermission(WarehousesPage, ["read","customer"]);

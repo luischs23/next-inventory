@@ -18,11 +18,11 @@
   import { UserOptions } from 'jspdf-autotable'
   import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from 'app/components/ui/alert-dialog'
   import { toast } from 'app/components/ui/use-toast'
-  import { usePermissions } from 'app/hooks/usePermissions'
   import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'app/components/ui/select'
   import { Skeleton } from 'app/components/ui/skeleton'
   import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
   import FloatingScrollButton from 'src/components/ui/FloatingScrollButton'
+  import { withPermission } from "app/components/withPermission"
 
   declare module 'jspdf' {
     interface jsPDF {
@@ -57,7 +57,12 @@
     content: string
   } 
 
-  export default function InventoryExbPage({ params }: { params: { companyId: string; storeId: string } }) {
+  interface InventoryExbPageProps {
+    hasPermission: (action: string) => boolean;
+    params: { companyId: string; storeId: string };
+  }
+
+  function InventoryExbPage({ hasPermission, params }: InventoryExbPageProps) {
     const router = useRouter()
     const [products, setProducts] = useState<Product[]>([])
     const [storeName, setStoreName] = useState<string>("")
@@ -68,7 +73,6 @@
     const [showUnassigned, setShowUnassigned] = useState(false)
     const [, setIsHeaderVisible] = useState(true)
     const [lastScrollTop, setLastScrollTop] = useState(0)
-    const { hasPermission } = usePermissions()
     const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
     const [templates, setTemplates] = useState<Template[]>([])
     const [isTemplateSelectOpen, setIsTemplateSelectOpen] = useState(false)
@@ -411,7 +415,7 @@
                 <AlertDialogDescription>Adjust your inventory filters here.</AlertDialogDescription>
               </AlertDialogHeader>
               <div className="space-y-4">
-                {hasPermission("read") && (
+                {hasPermission && hasPermission("read") && (
                   <div className="flex items-center space-x-2">
                     <Switch checked={showUnassigned} onCheckedChange={setShowUnassigned} />
                     <span>{showUnassigned ? "Unassigned" : "Assigned"}</span>
@@ -477,7 +481,7 @@
               className="w-full text-black dark:text-gray-200"
             />
           </div>
-          {hasPermission("create") && (
+          {hasPermission && hasPermission("create") && (
             <div className="bg-white rounded-lg p-4 m-4 shadow text-slate-900 dark:bg-gray-700 dark:text-gray-200">
               <div className="grid grid-cols-2 gap-3">
                 <div>Items: {formatNumber(summaryInfo.totalItems)}</div>
@@ -503,7 +507,7 @@
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {hasPermission("create") && (
+                            {hasPermission && hasPermission("create") && (
                               <DropdownMenuItem
                                 onClick={() =>
                                   router.push(
@@ -579,7 +583,7 @@
                                 .join(", ")
                             : formatSize(product.exhibition?.[params.storeId]?.size || "")}
                         </div>
-                        {hasPermission(["ska"]) && (
+                        {hasPermission && hasPermission("ska") && (
                           <div className="flex items-center">
                             <span className="font-medium">Sale:</span>
                             <span>${formatNumber(product.saleprice)}</span>
@@ -657,4 +661,6 @@
       </div>
     )
   }
+
+  export default withPermission(InventoryExbPage, ["read","customer"]);
   

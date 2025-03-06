@@ -17,47 +17,53 @@ export function withPermission<P extends object>(
     const { user, loading } = useAuth();
     const router = useRouter();
     const [hasPermission, setHasPermission] = useState<(action: string) => boolean>(() => () => false);
+    const [isAuthorized, setIsAuthorized] = useState(false);
 
     useEffect(() => {
-      if (!loading) {
-        if (!user) {
-          router.push("/login");
-        } else {
-          // Obtener permisos del usuario
-          const userPermissions = user?.role ? getPermissions(user.role) : [];
-          const isAuthorized = (action: string) => userPermissions.includes(action);
-          setHasPermission(() => isAuthorized);
-
-          if (!requiredPermissions.some(isAuthorized)) {
+      if (!loading && user) {
+        fetch('/api/permissions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            token: user.token,
+            permissions: requiredPermissions,
+          }),
+        })
+          .then(res => {
+            if (!res.ok) {
+              throw new Error(`Error ${res.status}: ${res.statusText}`);
+            }
+            return res.json();
+          })
+          .then(data => {
+            if (data.authorized) {
+              // Usar los permisos reales del usuario devueltos por el backend
+              const userPermissions = data.permissions || [];
+              setHasPermission(() => (action: string) => userPermissions.includes(action));
+              setIsAuthorized(true);
+            } else {
+              router.push("/unauthorized");
+            }
+          })
+          .catch(error => {
+            console.error('Error verificando permisos:', error);
             router.push("/unauthorized");
-          }
-        }
+          });
+      } else if (!loading && !user) {
+        router.push("/login");
       }
-    }, [user, loading, router, requiredPermissions]);
+    }, [user, loading, router]);
 
-    if (loading) {
+    if (loading || !user) {
       return <div>Loading...</div>;
     }
 
-    if (!user || !requiredPermissions.some((perm) => hasPermission(perm))) {
+    if (!isAuthorized) {
       return null;
     }
 
     return <WrappedComponent {...props} hasPermission={hasPermission} />;
   };
-}
-
-// Mapeo de permisos en el frontend
-const rolePermissions: Record<string, string[]> = {
-  developer: ["create", "read", "update", "delete", "ska", "companies"],
-  general_manager: ["create", "read", "update", "delete", "ska"],
-  warehouse_manager: ["create", "read", "update", "ska"],
-  warehouse_salesperson: ["warehouse_salesperson", "read", "ska"],
-  pos_salesperson: ["pos_salesperson", "read", "ska"],
-  skater: ["skater", "read"],
-  customer: ["customer"],
-};
-
-function getPermissions(role: string): string[] {
-  return rolePermissions[role] || [];
 }

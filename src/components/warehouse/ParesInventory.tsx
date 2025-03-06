@@ -12,7 +12,6 @@ import { Card, CardContent } from "app/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "app/components/ui/alert-dialog"
 import { Pencil, MoreHorizontal, FileDown, Trash2, PlusIcon, ArrowLeft, Filter, SortDesc, Menu, Loader2, Download} from 'lucide-react'
-import { usePermissions } from '../../hooks/usePermissions'
 import Image from 'next/image'
 import { toast } from "app/components/ui/use-toast"
 import * as XLSX from 'xlsx'
@@ -24,6 +23,7 @@ import { Skeleton } from '../ui/skeleton'
 import { InvoiceSkeleton } from '../skeletons/InvoiceSkeleton'
 import FloatingScrollButton from '../ui/FloatingScrollButton'
 import { TemplateManager } from "app/components/TemplateManager"
+import { withPermission } from "app/components/withPermission";
 
 interface SizeInput {
   quantity: number
@@ -61,7 +61,13 @@ interface ParesInventoryProps {
   warehouseId: string
 }
 
-export default function ParesInventoryComponent({ companyId, warehouseId }: ParesInventoryProps) {
+// Props completas que incluye hasPermission (para el componente interno)
+interface ParesInventoryComponentProps extends ParesInventoryProps {
+  hasPermission: (action: string) => boolean;
+}
+
+// Componente base
+const ParesInventoryBase: React.FC<ParesInventoryComponentProps> = ({ companyId, warehouseId, hasPermission }) => {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
@@ -81,7 +87,6 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
   } | null>(null)
   const [isTransferring, setIsTransferring] = useState(false)
   const [, setSelectedImage] = useState<string | null>(null)
-  const { hasPermission } = usePermissions()
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [selectedCard, setSelectedCard] = useState<string | null>(null)
   const [isTemplateManagerOpen, setIsTemplateManagerOpen] = useState(false)
@@ -664,7 +669,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         <Button onClick={() => setIsFilterDialogOpen(true)} variant="ghost">
           <Filter className="h-4 w-4" />
         </Button>
-        {hasPermission("ska") && (
+        {hasPermission && hasPermission("ska") && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="text-white">
@@ -672,7 +677,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-          {hasPermission("create") && (
+          {hasPermission && hasPermission("create") && (
             <DropdownMenuItem
               onClick={() => router.push(`/companies/${companyId}/warehouses/${warehouseId}/form-product`)}
             >
@@ -693,7 +698,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
               <FileDown className="h-4 w-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
-          {hasPermission("create") && (
+          {hasPermission && hasPermission("create") && (
             <DropdownMenuItem onClick={exportToExcel}>
               <FileDown className="h-4 w-4 mr-2" />
               Export Excel
@@ -765,7 +770,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
         />
       </div>
       <main className="container mx-auto p-4 flex-grow">
-        {hasPermission("update") && (
+        {hasPermission && hasPermission("update") && (
           <Card className="mb-4">
             <CardContent className="p-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -822,7 +827,7 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                       <p className="text-sm">
                         {product.color} - {product.gender}
                       </p>
-                      {hasPermission("ska") && (
+                      {hasPermission && hasPermission("ska") && (
                       <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
                       )}
                     </div>
@@ -836,10 +841,10 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                     <p className="text-sm">{product.gender}</p>
                   </div>
                   <div className="md:w-1/6 hidden md:block">
-                  {hasPermission("create") && (
+                  {hasPermission && hasPermission("create") && (
                     <p className="text-sm">Base: ${formatNumber(product.baseprice)}</p>
                   )}
-                  {hasPermission("ska") && (
+                  {hasPermission && hasPermission("ska") && (
                     <p className="text-sm">Sale: ${formatNumber(product.saleprice)}</p>
                   )}
                   </div>
@@ -874,21 +879,21 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                      {hasPermission("create") && (
+                      {hasPermission && hasPermission("create") && (
                         <DropdownMenuItem onClick={() => handleUpdate(product)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           <span>Updated</span>
                         </DropdownMenuItem>
-                        )}{hasPermission("delete") && (
+                        )}{hasPermission && hasPermission("delete") && (
                           <DropdownMenuItem onClick={() => setProductToDelete(product)}>
                             <Trash2 className="mr-2 h-4 w-4" />
                             <span>Delete</span>
                           </DropdownMenuItem>
-                        )}{hasPermission(["read","customer"]) && (
+                        )}{hasPermission && hasPermission("cus") && (
                         <DropdownMenuItem onClick={() => shareViaWhatsApp(product)}>
                           <span className="mr-2">Share via WhatsApp</span>
                         </DropdownMenuItem>
-                        )}{hasPermission("create") && (<>
+                        )}{hasPermission && hasPermission("create") && (<>
                         {warehouses.map((warehouse) => (
                           <DropdownMenuItem
                             key={warehouse.id}
@@ -1037,3 +1042,9 @@ export default function ParesInventoryComponent({ companyId, warehouseId }: Pare
     </div>
   )
 }
+
+// Exportar el componente envuelto con withPermission
+export const ParesInventoryComponent = withPermission(ParesInventoryBase, ['read']);
+
+// Exportar como default
+export default ParesInventoryComponent;

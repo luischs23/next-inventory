@@ -11,16 +11,18 @@ import { Label } from "app/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
 import Link from 'next/link'
 import { withPermission } from "app/components/withPermission"
-import { usePermissions } from "app/hooks/usePermissions"
 
-function SignUpPage() {
+interface SignUpPageProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function SignUpPage({ hasPermission }:  SignUpPageProps ) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [error, setError] = useState('')
   const router = useRouter()
-  const { hasPermission } = usePermissions()
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,7 +83,7 @@ function SignUpPage() {
                 required
               />
             </div>
-            {hasPermission("companies") && (<>
+            {hasPermission && hasPermission("companies") && (<>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

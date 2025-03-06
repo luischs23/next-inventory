@@ -17,14 +17,7 @@ import { PlusIcon, Trash2Icon, RotateCcwIcon, ArrowLeft, PrinterIcon, CopyIcon }
 import { useToast } from "app/components/ui/use-toast"
 import { ProductFormSkeleton } from "../skeletons/ProductFormSkeleton"
 import ProductImageUpload from "../ui/ProductImageUpload"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "../ui/alert-dialog"
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger} from "../ui/alert-dialog"
 import { Skeleton } from "../ui/skeleton"
 import { saveAs } from "file-saver"
 

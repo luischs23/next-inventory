@@ -32,3 +32,4 @@ if (!admin.apps.length) {
 
 export const adminAuth = admin.auth();
 export const adminDb = getFirestore();
+export default admin; // Exporta admin por defecto

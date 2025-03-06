@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useParams } from "next/navigation"
+import { useRouter} from "next/navigation"
 import { db, storage, auth } from "app/services/firebase/firebase.config"
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc, query, where } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage"
@@ -11,28 +11,14 @@ import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import Link from "next/link"
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "app/components/ui/dropdown-menu"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "app/components/ui/alert-dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "app/components/ui/dropdown-menu"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,} from "app/components/ui/alert-dialog"
 import Image from "next/image"
-import { usePermissions } from "app/hooks/usePermissions"
 import { StoreCardSkeleton } from "app/components/skeletons/StoreCardSkeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { useToast } from "app/components/ui/use-toast"
 import imageCompression from "browser-image-compression"
+import { withPermission } from "app/components/withPermission";
 
 interface Store {
   id: string
@@ -58,10 +44,14 @@ interface UserProfile {
   isDeveloper?: boolean
 }
 
-export default function StoreListPage() {
+interface StoreListPageProps {
+  hasPermission: (action: string) => boolean;
+  params: { companyId?: string }; // Si estás usando parámetros dinámicos
+}
+
+function StoreListPage({ hasPermission, params }: StoreListPageProps) {
   const router = useRouter()
-  const params = useParams()
-  const companyId = params.companyId as string
+  const companyId = params.companyId as string || 'default'
   const [stores, setStores] = useState<Store[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
@@ -79,7 +69,6 @@ export default function StoreListPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [, setUser] = useState<FirebaseUser | null>(null)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const { hasPermission } = usePermissions()
   const [activeStoreId, setActiveStoreId] = useState<string | null>(null)
   const [storeToDelete, setStoreToDelete] = useState<Store | null>(null)
 
@@ -473,7 +462,7 @@ export default function StoreListPage() {
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Stores</h1>
-        {hasPermission("delete") && (
+        {hasPermission && hasPermission("delete") && (
           <Button
             variant="secondary"
             onClick={() => {
@@ -519,13 +508,13 @@ export default function StoreListPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent className="mr-2">
-                            {hasPermission("delete") && (
+                            {hasPermission && hasPermission("delete") && (
                               <DropdownMenuItem onClick={() => openEditPopup(store)}>
                                 <Pencil className="mr-2 h-4 w-4" />
                                 <span>Update</span>
                               </DropdownMenuItem>
                             )}
-                            {hasPermission("delete") && (
+                            {hasPermission && hasPermission("delete") && (
                               <DropdownMenuItem onSelect={() => setStoreToDelete(store)}>
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 <span>Delete</span>
@@ -689,3 +678,5 @@ export default function StoreListPage() {
     </div>
   )
 }
+
+export default withPermission(StoreListPage, ["read","customer"]);

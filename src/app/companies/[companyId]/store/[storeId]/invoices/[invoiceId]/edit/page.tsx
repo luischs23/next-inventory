@@ -3,21 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { db } from "app/services/firebase/firebase.config"
-import {
-  collection,
-  doc,
-  getDoc,
-  updateDoc,
-  setDoc,
-  deleteDoc,
-  getDocs,
-  serverTimestamp,
-  Timestamp,
-  query,
-  where,
-  orderBy,
-  limit,
-} from "firebase/firestore"
+import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, serverTimestamp, Timestamp, query, where, orderBy, limit} from "firebase/firestore"
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
@@ -26,18 +12,9 @@ import { Save, Search, Lock, Unlock, ArrowLeft, X, Loader2 } from "lucide-react"
 import { useToast } from "app/components/ui/use-toast"
 import { format } from "date-fns"
 import NewInvoiceSkeleton from "app/components/skeletons/NewInvoiceSkeleton"
-import { usePermissions } from "app/hooks/usePermissions"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "app/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle} from "app/components/ui/alert-dialog"
 import { RadioGroup, RadioGroupItem } from "app/components/ui/radio-group"
+import { withPermission } from "app/components/withPermission"
 
 interface Size {
   quantity: number
@@ -91,9 +68,12 @@ interface BoxItem extends Omit<InvoiceItem, "size"> {
   assignedUserName?: string
 }
 
-export default function EditInvoicePage({
-  params,
-}: { params: { companyId: string; storeId: string; invoiceId: string } }) {
+interface EditInvoicePageProps {
+  hasPermission: (action: string) => boolean;
+  params: { companyId: string; storeId: string, invoiceId: string };
+}
+
+function EditInvoicePage({ hasPermission, params }: EditInvoicePageProps) { 
   const { toast } = useToast()
   const router = useRouter()
   const [invoice, setInvoice] = useState<(InvoiceItem | BoxItem)[]>([])
@@ -113,7 +93,6 @@ export default function EditInvoicePage({
   const [invoiceCustomerName, setInvoiceCustomerName] = useState<string>("")
   const [totalEarn, setTotalEarn] = useState(0)
   const [loading, setLoading] = useState(true)
-  const { hasPermission } = usePermissions()
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
   const [, setSelectedUser] = useState<string | null>(null)
   const [itemToAddToInvoice, setItemToAddToInvoice] = useState<ProductWithBarcode | null>(null)
@@ -919,7 +898,7 @@ export default function EditInvoicePage({
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Invoice {formatCustomerName(invoiceCustomerName)}</h1>
-        {hasPermission("ska") && (
+        {hasPermission && hasPermission("ska") && (
           <Button onClick={handleSaveInvoice}>
             <Save className="h-4 w-4 mr-2" />
             Save
@@ -927,7 +906,7 @@ export default function EditInvoicePage({
         )}
       </header>
       <main className="container mx-auto p-4 mb-16">
-        {hasPermission("create") && (
+       {hasPermission && hasPermission("create") && (
           <Card className="mb-4">
             <CardHeader>
               <CardTitle>Search Product</CardTitle>
@@ -968,12 +947,12 @@ export default function EditInvoicePage({
             <CardTitle>Invoice</CardTitle>
             <div className="text-sm flex text-gray-500 dark:text-gray-300">
               <p>Items: {invoice.length}</p>
-              {hasPermission("ska") && (
+              {hasPermission && hasPermission("ska") && (
                 <>
                   <p> | Total Sold: ${formatPrice(totalSold)}</p>
                 </>
               )}
-              {hasPermission("create") && (
+              {hasPermission && hasPermission("create") && (
                 <>
                   <p> | Earn Total: ${formatPrice(totalEarn)}</p>
                 </>
@@ -1000,7 +979,7 @@ export default function EditInvoicePage({
                     {!item.exhibitionStore && item.warehouseId && (
                       <div className="text-sm text-gray-500 dark:text-gray-300">WH: {warehouses[item.warehouseId]}</div>
                     )}
-                    {hasPermission("create") && (
+                    {hasPermission && hasPermission("create") && (
                       <div className="text-sm text-gray-500 dark:text-gray-300">
                         | Earn unit: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}
                       </div>
@@ -1013,8 +992,8 @@ export default function EditInvoicePage({
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {hasPermission("create") && <Button onClick={() => handleReturn(item)}>Return</Button>}
-                    {hasPermission("ska") && (
+                    {hasPermission && hasPermission("create") && <Button onClick={() => handleReturn(item)}>Return</Button>}
+                    {hasPermission && hasPermission("ska") && (
                       <>
                         <Input
                           value={salePrices[item.invoiceId] ?? formatPrice(item.salePrice)}
@@ -1104,3 +1083,5 @@ export default function EditInvoicePage({
     </div>
   )
 }
+
+export default withPermission(EditInvoicePage, ["ska"]);

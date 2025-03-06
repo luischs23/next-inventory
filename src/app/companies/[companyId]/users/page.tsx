@@ -6,19 +6,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { db, auth, storage } from "app/services/firebase/firebase.config"
 import { ref, deleteObject } from "firebase/storage"
-import {
-  collection,
-  getDocs,
-  serverTimestamp,
-  doc,
-  updateDoc,
-  deleteDoc,
-  getDoc,
-  type Timestamp,
-  query,
-  where,
-  setDoc,
-} from "firebase/firestore"
+import { collection, getDocs, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, type Timestamp, query, where, setDoc } from "firebase/firestore"
 import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth"
 import { Button } from "app/components/ui/button"
 import Image from "next/image"
@@ -27,23 +15,8 @@ import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { useToast } from "app/components/ui/use-toast"
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-  AlertDialogAction,
-} from "app/components/ui/alert-dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "app/components/ui/dropdown-menu"
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction} from "app/components/ui/alert-dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "app/components/ui/dropdown-menu"
 import { PlusIcon, UserIcon, MoreHorizontal, Pencil, Trash2, Eye, EyeOff, ArrowLeft, FilterIcon } from "lucide-react"
 import { UserSkeleton } from "app/components/skeletons/UserSkeleton"
 import { Switch } from "app/components/ui/switch"
