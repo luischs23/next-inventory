@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo} from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, doc, getDoc, Timestamp, deleteDoc, addDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
@@ -16,7 +16,7 @@ import { Skeleton } from "app/components/ui/skeleton"
 import { ArrowLeft, Calendar, MoreVertical, Menu, PlusIcon } from 'lucide-react'
 import { toast } from "app/components/ui/use-toast"
 import { InvoiceSkeleton } from 'app/components/skeletons/InvoiceSkeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
+import { withPermission } from "app/components/withPermission"
 
 interface Invoice {
   id: string
@@ -33,8 +33,13 @@ interface Store {
   name: string
 }
 
-export default function InvoiceListPage({ params }: { params: { companyId: string; storeId: string } }) {
+interface InvoiceListPageProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function InvoiceListPage({ hasPermission}: InvoiceListPageProps) {  
   const router = useRouter()
+  const params = useParams<{ companyId: string; storeId: string }>();
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [storeName, setStoreName] = useState<string>("")
   const [loading, setLoading] = useState(true)
@@ -49,7 +54,6 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false)
   const [activeCardId, setActiveCardId] = useState<string | null>(null)
   const [isCreatingInvoice, setIsCreatingInvoice] = useState(false)
-  const { hasPermission } = usePermissions()
   const [selectedYear, setSelectedYear] = useState<number | undefined>(undefined)
   const [selectedMonth, setSelectedMonth] = useState<number | undefined>(undefined)
   const [selectedDay, setSelectedDay] = useState<number | undefined>(undefined)
@@ -340,7 +344,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -408,13 +412,13 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
             </div>
             <AlertDialogFooter className="flex justify-between items-end">
               <AlertDialogCancel className="bg-black text-white">Close</AlertDialogCancel>
-              <Button onClick={handleClearFilters} variant="outline">
+              <Button className="dark:border-gray-300" onClick={handleClearFilters} variant="outline">
                 Clear Filters
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        {hasPermission("create") && (
+        {hasPermission && hasPermission("create") && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="text-white">
@@ -438,7 +442,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by name, barcode, invoice ID"
             className="w-full"
-          />
+          /> 
         </div>
         <div className="mb-2">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -474,21 +478,21 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                                 </Link>
                               </DropdownMenuItem>
                             )}
-                            {hasPermission("create") && (
+                            {hasPermission && hasPermission("create") && (
                               <DropdownMenuItem onClick={() => openEditDialog(invoice)}>Edit Card</DropdownMenuItem>
                             )}
-                            {hasPermission("delete") && (
+                            {hasPermission && hasPermission("delete") && (
                               <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>Delete</DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
-                      <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
+                      <CardTitle className="text-lg font-semibold text-teal-700 dark:text-teal-400">{invoice.customerName}</CardTitle>
                       <p className="text-sm ">{invoice.customerPhone}</p>
                     </CardHeader>
                     <CardContent className="flex justify-between items-center">
-                      <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
-                      {hasPermission("ska") && (
+                      <p className="text-sm text-gray-500 dark:text-gray-200">{formatDate(invoice.createdAt)}</p>
+                      {hasPermission && hasPermission("ska") && (
                         <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
                       )}
                     </CardContent>
@@ -510,7 +514,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
             .filter((invoice) => invoice.status !== "open")
             .map((invoice, index) => (
               <div key={invoice.id} className="relative flex items-start">
-                <div className="text-sm font-semibold mr-2 mt-2 text-black">{index + 1}</div>
+                <div className="text-sm font-semibold mr-2 mt-2 text-black dark:text-gray-200">{index + 1}</div>
                 <Card className="p-2 flex-grow" onClick={() => handleCardClick(invoice.id)}>
                   <CardHeader className="relative">
                     {activeCardId === invoice.id && (
@@ -539,21 +543,21 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                               </Link>
                             </DropdownMenuItem>
                           )}
-                          {hasPermission("create") && (
+                          {hasPermission && hasPermission("create") && (
                             <DropdownMenuItem onClick={() => openEditDialog(invoice)}>Edit Card</DropdownMenuItem>
                           )}
-                          {hasPermission("delete") && (
+                          {hasPermission && hasPermission("delete") && (
                             <DropdownMenuItem onClick={() => setInvoiceToDelete(invoice)}>Delete</DropdownMenuItem>
                           )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
-                    <CardTitle className="text-lg font-semibold text-teal-700">{invoice.customerName}</CardTitle>
+                    <CardTitle className="text-lg font-semibold text-teal-700 dark:text-teal-400">{invoice.customerName}</CardTitle>
                     <p className="text-sm ">{invoice.customerPhone}</p>
                   </CardHeader>
                   <CardContent className="flex justify-between items-center">
-                    <p className="text-sm text-gray-500">{formatDate(invoice.createdAt)}</p>
-                    {hasPermission("ska") && (
+                    <p className="text-sm text-gray-500 dark:text-gray-200">{formatDate(invoice.createdAt)}</p>
+                    {hasPermission && hasPermission("ska") && (
                       <p className="text-base font-medium">Total: ${formatPrice(invoice.totalSold)}</p>
                     )}
                   </CardContent>
@@ -563,7 +567,7 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
                     >
                       Status: {invoice.status === "open" ? "Open" : "Closed"}
                     </p>
-                    <p className="text-sm text-gray-500">{invoice.invoiceId}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-200">{invoice.invoiceId}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -668,3 +672,5 @@ export default function InvoiceListPage({ params }: { params: { companyId: strin
     </div>
   )
 }
+
+export default withPermission(InvoiceListPage, ["ska"]);

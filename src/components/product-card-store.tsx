@@ -42,7 +42,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <p>Color: {product.color}</p>
           <p>{product.isBox ? 'Box' : 'Size'}: {product.isBox ? product.total2 : product.size}</p>
           <p>Barcode: {product.barcode}</p>
-          {formattedDate && <p className='text-sm text-gray-500'>Added: {formattedDate}</p>}
+          {formattedDate && <p className='text-sm text-gray-500 dark:text-gray-300'>Added: {formattedDate}</p>}
         </div>
         <div className="w-24 h-24 relative">
           <Image

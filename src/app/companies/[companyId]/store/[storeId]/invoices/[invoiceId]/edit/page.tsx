@@ -1,20 +1,20 @@
-'use client'
+"use client"
 
-import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
-import { db } from 'app/services/firebase/firebase.config'
-import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, serverTimestamp, Timestamp, query, where, orderBy, limit} from 'firebase/firestore'
+import { useState, useEffect, useCallback } from "react"
+import { useRouter, useParams } from "next/navigation"
+import { db } from "app/services/firebase/firebase.config"
+import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, serverTimestamp, Timestamp, query, where, orderBy, limit} from "firebase/firestore"
 import { Button } from "app/components/ui/button"
 import { Input } from "app/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
-import ProductCard from 'app/components/product-card-store'
-import { Save, Search, Lock, Unlock , ArrowLeft, X, Loader2} from 'lucide-react'
+import ProductCard from "app/components/product-card-store"
+import { Save, Search, Lock, Unlock, ArrowLeft, X, Loader2 } from "lucide-react"
 import { useToast } from "app/components/ui/use-toast"
-import { format } from 'date-fns'
-import NewInvoiceSkeleton from 'app/components/skeletons/NewInvoiceSkeleton'
-import { usePermissions } from 'app/hooks/usePermissions'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from 'app/components/ui/alert-dialog'
+import { format } from "date-fns"
+import NewInvoiceSkeleton from "app/components/skeletons/NewInvoiceSkeleton"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle} from "app/components/ui/alert-dialog"
 import { RadioGroup, RadioGroupItem } from "app/components/ui/radio-group"
+import { withPermission } from "app/components/withPermission"
 
 interface Size {
   quantity: number
@@ -23,7 +23,7 @@ interface Size {
 
 interface Product {
   id: string
-  productId: string;
+  productId: string
   brand: string
   reference: string
   color: string
@@ -31,11 +31,11 @@ interface Product {
   total: number
   imageUrl: string
   saleprice: number
-  exhibition?: { [storeId: string]: { size: string, barcode: string } }
+  exhibition?: { [storeId: string]: { size: string; barcode: string } }
   baseprice: number
   comments: string
   gender: string
-  createdAt: Timestamp 
+  createdAt: Timestamp
   barcode: string
   total2: number
 }
@@ -58,7 +58,7 @@ interface InvoiceItem extends ProductWithBarcode {
   assignedUserName?: string
 }
 
-interface BoxItem extends Omit<InvoiceItem, 'size'> {
+interface BoxItem extends Omit<InvoiceItem, "size"> {
   comments: string
   gender: string
   baseprice: number
@@ -68,10 +68,13 @@ interface BoxItem extends Omit<InvoiceItem, 'size'> {
   assignedUserName?: string
 }
 
-export default function EditInvoicePage({
-  params,
-}: { params: { companyId: string; storeId: string; invoiceId: string } }) {
+interface EditInvoicePageProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function EditInvoicePage({ hasPermission }: EditInvoicePageProps) { 
   const { toast } = useToast()
+  const params = useParams<{ companyId: string; storeId: string, invoiceId: string }>();
   const router = useRouter()
   const [invoice, setInvoice] = useState<(InvoiceItem | BoxItem)[]>([])
   const [totalSold, setTotalSold] = useState(0)
@@ -90,12 +93,14 @@ export default function EditInvoicePage({
   const [invoiceCustomerName, setInvoiceCustomerName] = useState<string>("")
   const [totalEarn, setTotalEarn] = useState(0)
   const [loading, setLoading] = useState(true)
-  const { hasPermission } = usePermissions()
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false)
   const [, setSelectedUser] = useState<string | null>(null)
   const [itemToAddToInvoice, setItemToAddToInvoice] = useState<ProductWithBarcode | null>(null)
   const [users, setUsers] = useState<{ [id: string]: { name: string; role: string } }>({})
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
+  const [isSaveAlertOpen, setIsSaveAlertOpen] = useState(false)
+  const [isReturnAlertOpen, setIsReturnAlertOpen] = useState(false)
+  const [itemToReturn, setItemToReturn] = useState<InvoiceItem | BoxItem | null>(null)
 
   const fetchInvoiceData = useCallback(async () => {
     const invoiceRef = collection(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`)
@@ -591,64 +596,83 @@ export default function EditInvoicePage({
     }
   }
 
-  const handleReturn = async (item: InvoiceItem | BoxItem) => {
+  const handleReturn = (item: InvoiceItem | BoxItem) => {
+    setItemToReturn(item)
+    setIsReturnAlertOpen(true)
+  }
+
+  const processReturn = async () => {
+    if (!itemToReturn) return
+
     try {
       // Remove the item from the invoice
       await deleteDoc(
-        doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`, item.invoiceId),
+        doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices/temp/items`, itemToReturn.invoiceId),
       )
 
-      if (item.exhibitionStore) {
+      if (itemToReturn.exhibitionStore) {
         // Handle returning exhibition item
-        const productRef = doc(db, `companies/${params.companyId}/warehouses/${item.warehouseId}/products`, item.id)
+        const productRef = doc(
+          db,
+          `companies/${params.companyId}/warehouses/${itemToReturn.warehouseId}/products`,
+          itemToReturn.id,
+        )
         const productDoc = await getDoc(productRef)
         if (productDoc.exists()) {
           const productData = productDoc.data() as Product
           const updatedExhibition = {
             ...productData.exhibition,
-            [item.exhibitionStore]: { size: item.size, barcode: item.barcode },
+            [itemToReturn.exhibitionStore]: { size: itemToReturn.size, barcode: itemToReturn.barcode },
           }
           await updateDoc(productRef, { exhibition: updatedExhibition })
         }
-      } else if (item.isBox) {
+      } else if (itemToReturn.isBox) {
         // Handle returning box item
-        const boxRef = doc(db, `companies/${params.companyId}/warehouses/${item.warehouseId}/products`, item.id)
+        const boxRef = doc(
+          db,
+          `companies/${params.companyId}/warehouses/${itemToReturn.warehouseId}/products`,
+          itemToReturn.id,
+        )
         const boxData: Partial<BoxItem> = {
-          brand: item.brand,
-          reference: item.reference,
-          color: item.color,
-          barcode: item.barcode,
-          total2: item.total2,
-          imageUrl: item.imageUrl,
-          saleprice: item.saleprice,
-          warehouseId: item.warehouseId,
-          comments: (item as BoxItem).comments,
-          gender: (item as BoxItem).gender,
-          baseprice: (item as BoxItem).baseprice,
-          total: (item as BoxItem).total,
-          sizes: item.sizes,
-          isBox: item.isBox,
-          exhibition: item.exhibition,
-          createdAt: item.createdAt,
+          brand: itemToReturn.brand,
+          reference: itemToReturn.reference,
+          color: itemToReturn.color,
+          barcode: itemToReturn.barcode,
+          total2: itemToReturn.total2,
+          imageUrl: itemToReturn.imageUrl,
+          saleprice: itemToReturn.saleprice,
+          warehouseId: itemToReturn.warehouseId,
+          comments: (itemToReturn as BoxItem).comments,
+          gender: (itemToReturn as BoxItem).gender,
+          baseprice: (itemToReturn as BoxItem).baseprice,
+          total: (itemToReturn as BoxItem).total,
+          sizes: itemToReturn.sizes,
+          isBox: itemToReturn.isBox,
+          exhibition: itemToReturn.exhibition,
+          createdAt: itemToReturn.createdAt,
         }
         await setDoc(boxRef, boxData)
       } else {
         // Handle returning regular inventory item
-        const productRef = doc(db, `companies/${params.companyId}/warehouses/${item.warehouseId}/products`, item.id)
+        const productRef = doc(
+          db,
+          `companies/${params.companyId}/warehouses/${itemToReturn.warehouseId}/products`,
+          itemToReturn.id,
+        )
         const productDoc = await getDoc(productRef)
         if (productDoc.exists()) {
           const productData = productDoc.data() as Product
           const updatedSizes = { ...productData.sizes }
 
-          if (updatedSizes[item.size]) {
-            updatedSizes[item.size] = {
-              quantity: (updatedSizes[item.size].quantity || 0) + 1,
-              barcodes: [...(updatedSizes[item.size].barcodes || []), item.barcode],
+          if (updatedSizes[itemToReturn.size]) {
+            updatedSizes[itemToReturn.size] = {
+              quantity: (updatedSizes[itemToReturn.size].quantity || 0) + 1,
+              barcodes: [...(updatedSizes[itemToReturn.size].barcodes || []), itemToReturn.barcode],
             }
           } else {
-            updatedSizes[item.size] = {
+            updatedSizes[itemToReturn.size] = {
               quantity: 1,
-              barcodes: [item.barcode],
+              barcodes: [itemToReturn.barcode],
             }
           }
 
@@ -659,23 +683,20 @@ export default function EditInvoicePage({
             total: newTotal,
           })
         } else {
-          console.error("Product not found:", item.id)
+          console.error("Product not found:", itemToReturn.id)
         }
       }
 
       // Update the local state
-      setInvoice((prevInvoice) => {
-        const updatedInvoice = prevInvoice.filter((i) => i.invoiceId !== item.invoiceId)
-        return updatedInvoice
-      })
+      setInvoice((prevInvoice) => prevInvoice.filter((i) => i.invoiceId !== itemToReturn.invoiceId))
 
-      if (item.sold) {
-        setTotalSold((prevTotal) => prevTotal - Number(item.salePrice))
+      if (itemToReturn.sold) {
+        setTotalSold((prevTotal) => prevTotal - Number(itemToReturn.salePrice))
       }
 
       toast({
         title: "Product Returned",
-        description: item.exhibitionStore
+        description: itemToReturn.exhibitionStore
           ? "The exhibition product has been returned to inventory."
           : "The product has been returned to inventory.",
         duration: 1500,
@@ -693,6 +714,9 @@ export default function EditInvoicePage({
         duration: 1000,
         variant: "destructive",
       })
+    } finally {
+      setIsReturnAlertOpen(false)
+      setItemToReturn(null)
     }
   }
 
@@ -758,7 +782,7 @@ export default function EditInvoicePage({
     }
   }
 
-  const handleSaveInvoice = async () => {
+  const handleSaveInvoice = () => {
     if (invoice.length === 0) {
       toast({
         title: "Error",
@@ -779,6 +803,10 @@ export default function EditInvoicePage({
       return
     }
 
+    setIsSaveAlertOpen(true)
+  }
+
+  const processSaveInvoice = async () => {
     try {
       const invoiceRef = doc(db, `companies/${params.companyId}/stores/${params.storeId}/invoices`, params.invoiceId)
       const invoiceNumber = generateInvoiceNumber()
@@ -810,7 +838,7 @@ export default function EditInvoicePage({
             isBox: item.isBox || false,
             quantity: quantity,
             assignedUser: item.assignedUser || null,
-            assignedUserName: item.assignedUser ? users[item.assignedUser]?.name || "Unknown User" : null, // Updated line
+            assignedUserName: item.assignedUser ? users[item.assignedUser]?.name || "Unknown User" : null,
             ...(item.isBox
               ? {
                   comments: (item as BoxItem).comments || "",
@@ -849,6 +877,8 @@ export default function EditInvoicePage({
         description: "Failed to update invoice. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsSaveAlertOpen(false)
     }
   }
 
@@ -862,59 +892,72 @@ export default function EditInvoicePage({
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Invoice {formatCustomerName(invoiceCustomerName)}</h1>
-        <Button onClick={handleSaveInvoice}>
-          <Save className="h-4 w-4 mr-2" />
-          Save
-        </Button>
+        {hasPermission && hasPermission("ska") && (
+          <Button onClick={handleSaveInvoice}>
+            <Save className="h-4 w-4 mr-2" />
+            Save
+          </Button>
+        )}
       </header>
       <main className="container mx-auto p-4 mb-16">
-      {hasPermission("create") && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle>Search Product</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex space-x-2 mb-2">
-              <div className="flex-grow">
-                <Input
-                  placeholder="Enter barcode"
-                  value={searchBarcode}
-                  onChange={(e) => setSearchBarcode(e.target.value)}
-                  className={searchError ? "border-red-500" : ""}
-                />
-                {searchError && <p className="text-red-500 text-sm mt-1">{searchError}</p>}
-              </div><Button onClick={handleSearch} disabled={isSearching}>
-                {isSearching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4w-4 mr2" />}
-                {isSearching ? "Searching..." : "Search"}
-              </Button>
-              <Button onClick={handleClean} variant="outline">
-                <X className="h-4 w-4 mr-2" />
-                Clean
-              </Button>
-            </div>
-            {searchedProduct && (
-              <div className="mt-4">
-                <ProductCard product={searchedProduct} />
-                <div className="flex space-x-2 mt-2">
-                  <Button onClick={() => handleSendToUser(searchedProduct)}>Send</Button>
+       {hasPermission && hasPermission("create") && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle>Search Product</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex space-x-2 mb-2">
+                <div className="flex-grow">
+                  <Input
+                    placeholder="Enter barcode"
+                    value={searchBarcode}
+                    onChange={(e) => setSearchBarcode(e.target.value)}
+                    className={searchError ? "border-red-500" : ""}
+                  />
+                  {searchError && <p className="text-red-500 text-sm mt-1">{searchError}</p>}
                 </div>
+                <Button onClick={handleSearch} disabled={isSearching}>
+                  {isSearching ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4w-4 mr2" />}
+                  {isSearching ? "Searching..." : "Search"}
+                </Button>
+                <Button onClick={handleClean} variant="outline">
+                  <X className="h-4 w-4 mr-2" />
+                  Clean
+                </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              {searchedProduct && (
+                <div className="mt-4">
+                  <ProductCard product={searchedProduct} />
+                  <div className="flex space-x-2 mt-2">
+                    <Button onClick={() => handleSendToUser(searchedProduct)}>Send</Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
         <Card className="mb-4">
           <CardHeader>
             <CardTitle>Invoice</CardTitle>
-            <div className="text-sm flex text-gray-500">
-              <p>Items: {invoice.length}</p>{hasPermission("ska") && (<><p> | Total Sold: ${formatPrice(totalSold)}</p></>)}{hasPermission("create") && (<><p> | Earn Total: ${formatPrice(totalEarn)}</p></>)}<p> |
-              Date: {format(new Date(), "dd-MM-yyyy")}</p>
+            <div className="text-sm flex text-gray-500 dark:text-gray-300">
+              <p>Items: {invoice.length}</p>
+              {hasPermission && hasPermission("ska") && (
+                <>
+                  <p> | Total Sold: ${formatPrice(totalSold)}</p>
+                </>
+              )}
+              {hasPermission && hasPermission("create") && (
+                <>
+                  <p> | Earn Total: ${formatPrice(totalEarn)}</p>
+                </>
+              )}
+              <p> | Date: {format(new Date(), "dd-MM-yyyy")}</p>
             </div>
           </CardHeader>
           <CardContent>
@@ -922,42 +965,54 @@ export default function EditInvoicePage({
               {invoice.map((item, index) => (
                 <div key={item.invoiceId} className="space-y-2">
                   <div className="flex">
-                    <span className="text-sm font-normal text-gray-600 pt-1 pr-1">{invoice.length - index}</span>
+                    <span className="text-sm font-normal text-gray-600 pt-1 pr-1 dark:text-gray-200">
+                      {invoice.length - index}
+                    </span>
                     <ProductCard product={item} />
                   </div>
-                  <div className="flex space-x-1 pl-3">
+                  <div className="flex space-x-1 pl-3 ">
                     {item.exhibitionStore && (
-                      <div className="text-sm text-gray-500">Exb: {stores[item.exhibitionStore]}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-300">
+                        Exb: {stores[item.exhibitionStore]}
+                      </div>
                     )}
                     {!item.exhibitionStore && item.warehouseId && (
-                      <div className="text-sm text-gray-500">WH: {warehouses[item.warehouseId]}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-300">WH: {warehouses[item.warehouseId]}</div>
                     )}
-                    {hasPermission("create") && (
-                    <div className="text-sm text-gray-500">
-                      | Earn unit: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}
+                    {hasPermission && hasPermission("create") && (
+                      <div className="text-sm text-gray-500 dark:text-gray-300">
+                        | Earn unit: ${formatPrice(Number(item.salePrice) - Number(item.baseprice))}
+                      </div>
+                    )}
+                    <div className="text-sm text-gray-500 dark:text-gray-300">
+                      | Assigned to:{" "}
+                      {item.assignedUserName
+                        ? `${item.assignedUserName.split(" ")[0]} ${item.assignedUserName.split(" ")[1]?.charAt(0) || ""}`
+                        : "Not assigned"}
                     </div>
-                    )}
-                    <div className="text-sm text-gray-500">
-                    | Assigned to:{" "}
-                            {item.assignedUserName
-                              ? `${item.assignedUserName.split(" ")[0]} ${item.assignedUserName.split(" ")[1]?.charAt(0) || ""}`
-                              : "Not assigned"}
-                  </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    {hasPermission("update") && <Button onClick={() => handleReturn(item)}>Return</Button>}
-                    <Input
-                      value={salePrices[item.invoiceId] ?? formatPrice(item.salePrice)}
-                      onChange={(e) => handleSalePriceChange(item.invoiceId, e.target.value)}
-                      disabled={!enabledItems[item.invoiceId]}
-                      className="w-24"
-                    />
-                    <Button onClick={() => toggleItemEnabled(item.invoiceId)} variant="outline" size="icon">
-                      {!enabledItems[item.invoiceId] ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                    </Button>
-                    <Button onClick={() => handleSold(item)} disabled={!enabledItems[item.invoiceId]}>
-                      Sold
-                    </Button>
+                    {hasPermission && hasPermission("create") && <Button onClick={() => handleReturn(item)}>Return</Button>}
+                    {hasPermission && hasPermission("ska") && (
+                      <>
+                        <Input
+                          value={salePrices[item.invoiceId] ?? formatPrice(item.salePrice)}
+                          onChange={(e) => handleSalePriceChange(item.invoiceId, e.target.value)}
+                          disabled={!enabledItems[item.invoiceId]}
+                          className="w-24"
+                        />
+                        <Button onClick={() => toggleItemEnabled(item.invoiceId)} variant="outline" size="icon">
+                          {!enabledItems[item.invoiceId] ? (
+                            <Lock className="h-4 w-4" />
+                          ) : (
+                            <Unlock className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button onClick={() => handleSold(item)} disabled={!enabledItems[item.invoiceId]}>
+                          Sold
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -972,7 +1027,7 @@ export default function EditInvoicePage({
             <AlertDialogDescription>Choose a user to assign this product to:</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="max-h-[60vh] overflow-y-auto">
-          <RadioGroup value={selectedUserId || ""} onValueChange={setSelectedUserId}>
+            <RadioGroup value={selectedUserId || ""} onValueChange={setSelectedUserId}>
               {Object.entries(users)
                 .filter(([, userData]) => userData.role !== "customer")
                 .map(([userId, userData]) => (
@@ -996,6 +1051,37 @@ export default function EditInvoicePage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={isSaveAlertOpen} onOpenChange={setIsSaveAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Save Invoice</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to save this invoice? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={processSaveInvoice}>Save</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={isReturnAlertOpen} onOpenChange={setIsReturnAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Return</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to return this item? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={processReturn}>Return</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
+
+export default withPermission(EditInvoicePage, ["ska"]);

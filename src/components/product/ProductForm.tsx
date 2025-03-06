@@ -19,7 +19,7 @@ import Image from 'next/image'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "../ui/alert-dialog"
 import { ArrowLeft, PlusCircle, Edit, Trash, Check } from 'lucide-react'
 
-type Gender = 'Dama' | 'Hombre'
+type Gender = 'Dama' | 'Hombre' | 'Niño';
 
 interface SizeInput {
   quantity: number
@@ -444,13 +444,22 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     }
   }
 
-  const sizeInputs = formData.gender === 'Dama'
-    ? ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40']
-    : ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45']
+  const sizeInputs = useMemo(() => {
+    switch (formData.gender) {
+      case 'Dama':
+        return ['T-35', 'T-36', 'T-37', 'T-38', 'T-39', 'T-40'];
+      case 'Hombre':
+        return ['T-40', 'T-41', 'T-42', 'T-43', 'T-44', 'T-45'];
+      case 'Niño':
+        return ['T-28', 'T-29', 'T-30', 'T-31', 'T-32', 'T-33', 'T-34', 'T-35'];
+      default:
+        return [];
+    }
+  }, [formData.gender]);
 
     if (loading) {
       return (
-        <div className="min-h-screen bg-blue-100">
+        <div className="min-h-screen bg-blue-100 dark:bg-gray-600">
           <header className="bg-teal-600 text-white p-4 flex items-center">
             <Skeleton className="h-6 w-6 mr-2" />
             <Skeleton className="h-8 w-48 mr-2 flex-grow" />
@@ -468,7 +477,7 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
     }
 
   return (
-    <div className='min-h-screen bg-blue-100'>
+    <div className='min-h-screen bg-blue-100 dark:bg-gray-600'>
    
     <header className="bg-teal-600 text-white p-3 flex items-center sticky top-0 z-20">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() =>  router.push(`/companies/${companyId}/warehouses/${warehouseId}/pares-inventory`)}>
@@ -610,13 +619,20 @@ export const ProductFormComponent: React.FC<ProductFormComponentProps> = ({ comp
             <Input id="comments" name="comments" value={formData.comments} onChange={handleInputChange} />
           </div>
           <div className="flex items-center space-x-2">
-            <Label htmlFor="gender">Gender</Label>
-            <Switch
-              id="gender"
-              checked={formData.gender === 'Hombre'}
-              onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, gender: checked ? 'Hombre' : 'Dama' }))}
-            />
-            <span>{formData.gender}</span>
+          <Label htmlFor="gender">Gender</Label>
+            <Select
+              value={formData.gender}
+              onValueChange={(value: Gender) => setFormData((prev) => ({ ...prev, gender: value }))}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select Gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Dama">Dama</SelectItem>
+                <SelectItem value="Hombre">Hombre</SelectItem>
+                <SelectItem value="Niño">Niño</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           {!isBox && (
           <div className="grid grid-cols-3 gap-4">

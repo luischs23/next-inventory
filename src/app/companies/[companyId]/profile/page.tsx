@@ -94,36 +94,47 @@ const fetchCompanyName = async () => {
 }
 
 const fetchUserProfile = async (uid: string) => {
-    try {
+  try {
+    // 1️⃣ Buscar en `companies/${params.companyId}/users`
     const userQuery = query(
-        collection(db, `companies/${params.companyId}/users`),
-        where('uid', '==', uid)
-    )
-    
-    const userSnapshot = await getDocs(userQuery)
-    
+      collection(db, `companies/${params.companyId}/users`),
+      where('uid', '==', uid)
+    );
+
+    const userSnapshot = await getDocs(userQuery);
+
     if (!userSnapshot.empty) {
-        const userData = userSnapshot.docs[0].data() as UserProfile
-        setProfile({ ...userData, id: userSnapshot.docs[0].id })
+      const userData = userSnapshot.docs[0].data() as UserProfile;
+      setProfile({ ...userData, id: userSnapshot.docs[0].id });
+      return; // ⬅️ Si encuentra al usuario aquí, detenemos la ejecución
+    }
+
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      const userData = userSnap.data() as UserProfile;
+      setProfile({ ...userData, id: userSnap.id });
     } else {
-        console.error('User document not found')
-        toast({
-        title: "Error",
-        description: "User profile not found",
-        variant: "destructive",
-        })
+      console.error('Usuario no encontrado en ninguna colección.');
+      toast({
+        title: 'Error',
+        description: 'User profile not found in any collection',
+        variant: 'destructive',
+      });
     }
-    } catch (error) {
-    console.error('Error fetching user profile:', error)
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
     toast({
-        title: "Error",
-        description: "Failed to fetch user profile",
-        variant: "destructive",
-    })
-    } finally {
-    setLoading(false)
-    }
-}
+      title: 'Error',
+      description: 'Failed to fetch user profile',
+      variant: 'destructive',
+    });
+  } finally {
+    setLoading(false);
+  }
+};
+
 
 const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -262,20 +273,20 @@ if (!profile) {
 }
 
 return (
-    <div className="container mx-auto p-4 mb-20 bg-white ">
+    <div className="container mx-auto p-4 mb-20 bg-white dark:bg-gray-600">
         <div className="p-4 flex items-center">
         <Button
           variant="ghost"
           size="icon"
           onClick={() => router.back()}
-          className="text-black"
+          className="text-black dark:text-white"
         >
           <ArrowLeft className="h-6 w-6" />
         </Button>
-        <span className="ml-2 text-lg text-black">Your profile</span>
+        <span className="ml-2 text-lg text-black dark:text-white">Your profile</span>
     </div>
     <main className='mb-44'>
-    <div className="flex flex-col items-center mt-4 mb-8 bg-white">
+    <div className="flex flex-col items-center mt-4 mb-8 bg-white dark:bg-gray-600">
         <div className="relative">
           {profile.photo ? (
             <Image
@@ -287,29 +298,29 @@ return (
               priority
             />
           ) : (
-            <div className="w-[120px] h-[120px] bg-gray-600 rounded-full flex items-center justify-center">
-              <UserIcon className="w-16 h-16" />
+            <div className="w-[120px] h-[120px] bg-gray-600 rounded-full flex items-center justify-center dark:bg-gray-400">
+              <UserIcon className="w-16 h-16 " />
             </div>
           )}
           <Button
             variant="secondary"
             size="icon"
-            className="absolute bottom-0 right-0 rounded-full bg-gray-100 hover:bg-gray-200"
+            className="absolute bottom-0 right-0 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-600"
             onClick={() => setShowUpdatePhotoDialog(true)}
           >
             <Camera className="h-4 w-4" />
           </Button>
         </div>
-             <h2 className="mt-4 text-xl font-semibold text-black">{`${profile.name} ${profile.surname}`}</h2>
+             <h2 className="mt-4 text-xl font-semibold text-black dark:text-white">{`${profile.name}`}</h2>
         </div>
           {/* Menu Items */}
       <div className="px-4 space-y-3">
         <Button
           variant="ghost"
-          className="w-full bg-black/10 hover:bg-black/20 justify-between h-14"
+          className="w-full bg-black/10 hover:bg-black/20 justify-between h-14 dark:bg-white/10"
           onClick={() => setShowSettingsDialog(true)}
         >
-          <div className="flex items-center text-black">
+          <div className="flex items-center text-black dark:text-white">
             <Settings className="mr-2 h-5 w-5 " />
             <span>Ajustes</span>
           </div>
@@ -317,16 +328,16 @@ return (
         </Button>
         <Button
           variant="ghost"
-          className="w-full bg-black/10 hover:bg-black/20 justify-between h-14"
+          className="w-full bg-black/10 hover:bg-black/20 justify-between h-14 dark:bg-white/10"
         >
-          <div className="flex items-center text-black">
+          <div className="flex items-center text-black dark:text-white">
             <HelpCircle className="mr-2 h-5 w-5" />
             <span>Ayuda</span>
           </div>
           <ChevronRight className="h-5 w-5" />
         </Button>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white">
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-white dark:bg-gray-600">
         <Button
           variant="ghost"
           className="w-full justify-start text-red-500 hover:text-red-400 mb-4"
@@ -344,7 +355,7 @@ return (
           <AlertDialogHeader>
             <AlertDialogTitle>Información del perfil</AlertDialogTitle>
           </AlertDialogHeader>
-          <div className="space-y-4 text-black">
+          <div className="space-y-4 text-black dark:text-gray-300">
             <div className="space-y-2">
               <label className="text-sm font-semibold">Email</label>
               <p className="text-sm">{profile.email}</p>
@@ -413,7 +424,7 @@ return (
             className="rounded-full"
             onClick={handleRotate}
             >
-            <RotateCw className="h-4 w-4  text-black" />
+            <RotateCw className="h-4 w-4  text-black dark:text-gray-400" />
             </Button>
             <Button
             variant="outline"
@@ -421,7 +432,7 @@ return (
             className="rounded-full"
             onClick={handleUndo}
             >
-            <Undo className="h-4 w-4 text-black" />
+            <Undo className="h-4 w-4 text-black dark:text-gray-400" />
             </Button>
         </div>
         <input

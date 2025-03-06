@@ -1,25 +1,28 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { db, auth, storage } from 'app/services/firebase/firebase.config'
-import { ref, deleteObject } from 'firebase/storage'
-import { collection, getDocs, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, Timestamp, query, where } from 'firebase/firestore'
-import { createUserWithEmailAndPassword } from 'firebase/auth'
+import type React from "react"
+
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { db, auth, storage } from "app/services/firebase/firebase.config"
+import { ref, deleteObject } from "firebase/storage"
+import { collection, getDocs, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, type Timestamp, query, where, setDoc } from "firebase/firestore"
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth"
 import { Button } from "app/components/ui/button"
-import Image from 'next/image'
+import Image from "next/image"
 import { Card, CardContent } from "app/components/ui/card"
 import { Input } from "app/components/ui/input"
 import { Label } from "app/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "app/components/ui/select"
 import { useToast } from "app/components/ui/use-toast"
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "app/components/ui/alert-dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
-import { PlusIcon, UserIcon, MoreHorizontal, Pencil, Trash2, Eye, EyeOff, ArrowLeft, FilterIcon } from 'lucide-react'
-import { UserSkeleton } from 'app/components/skeletons/UserSkeleton'
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction} from "app/components/ui/alert-dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger} from "app/components/ui/dropdown-menu"
+import { PlusIcon, UserIcon, MoreHorizontal, Pencil, Trash2, Eye, EyeOff, ArrowLeft, FilterIcon } from "lucide-react"
+import { UserSkeleton } from "app/components/skeletons/UserSkeleton"
 import { Switch } from "app/components/ui/switch"
 import { Checkbox } from "app/components/ui/checkbox"
-import { DeletedUsersView } from 'src/components/DeletedUsersView'
+import { DeletedUsersView } from "src/components/DeletedUsersView"
+import { withPermission } from "app/components/withPermission"
 
 interface User {
   id: string
@@ -45,7 +48,12 @@ const roles = [
   { id: "customer", name: "Customer" },
 ]
 
-export default function UsersPage({ params }: { params: { companyId: string } }) {
+interface UsersPageProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function UsersPage({ hasPermission }: UsersPageProps) {
+  const params = useParams<{ companyId?: string }>();
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateAlertDialog, setShowCreateAlertDialog] = useState(false)
@@ -129,9 +137,17 @@ export default function UsersPage({ params }: { params: { companyId: string } })
     e.preventDefault()
     if (!formData.role) return
     setIsSubmitting(true)
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
+      const user = userCredential.user
 
+      // Enviar email de verificación
+      await sendEmailVerification(user)
+      console.log("📧 Email de verificación enviado a:", formData.email)
+
+      // Store user data in Firestore with the user's UID as the document ID
+      const userRef = doc(db, `companies/${params.companyId}/users`, user.uid)
       const userData = {
         name: formData.name,
         email: formData.email,
@@ -141,16 +157,16 @@ export default function UsersPage({ params }: { params: { companyId: string } })
         role: formData.role,
         companyId: params.companyId,
         createdAt: serverTimestamp(),
-        uid: userCredential.user.uid,
+        uid: user.uid,
         photo: "",
         status: "active",
       }
 
-      await addDoc(collection(db, `companies/${params.companyId}/users`), userData)
+      await setDoc(userRef, userData)
 
       toast({
         title: "Success",
-        description: "User created successfully",
+        description: "User created successfully. A verification email has been sent.",
         style: { background: "#4CAF50", color: "white", fontWeight: "bold" },
       })
 
@@ -322,7 +338,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
   }
 
   return (
-    <div className="container mx-auto bg-white">
+    <div className="container mx-auto bg-white dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-3 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
@@ -364,108 +380,110 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        <AlertDialog open={showCreateAlertDialog} onOpenChange={setShowCreateAlertDialog}>
-          <AlertDialogTrigger asChild>
-            <Button variant="secondary" onClick={handleOpenCreateDialog}>
-              <PlusIcon className="w-4 h-4 mr-2" />
-              Add User
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Create New User</AlertDialogTitle>
-            </AlertDialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <Label htmlFor="name">Name</Label>
-                  <Input id="name" name="name" value={formData.name} onChange={handleInputChange} required />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="number"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    required
-                    max="999999999999999"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cc">C.C.</Label>
-                  <Input
-                    id="cc"
-                    name="cc"
-                    type="number"
-                    value={formData.cc}
-                    onChange={handleInputChange}
-                    required
-                    max="9999999999999"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="location">Location</Label>
-                  <Input
-                    id="location"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div className="relative">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 pt-5 flex items-center text-sm leading-5"
-                  >
-                    {showPassword ? <Eye className="h-6 w-6" /> : <EyeOff className="h-6 w-6" />}
-                  </button>
-                </div>
-                <div>
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={formData.role} onValueChange={handleRoleChange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id}>
-                          {role.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <Button type="submit" className="w-full" disabled={!formData.role || isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create User"}
+        {hasPermission && hasPermission("delete") && (
+          <AlertDialog open={showCreateAlertDialog} onOpenChange={setShowCreateAlertDialog}>
+            <AlertDialogTrigger asChild>
+              <Button variant="secondary" onClick={handleOpenCreateDialog}>
+                <PlusIcon className="w-4 h-4 mr-2" />
+                Add User
               </Button>
-            </form>
-          </AlertDialogContent>
-        </AlertDialog>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Create New User</AlertDialogTitle>
+              </AlertDialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <Label htmlFor="name">Name</Label>
+                    <Input id="name" name="name" value={formData.name} onChange={handleInputChange} required />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      name="phone"
+                      type="number"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      required
+                      max="999999999999999"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="cc">C.C.</Label>
+                    <Input
+                      id="cc"
+                      name="cc"
+                      type="number"
+                      value={formData.cc}
+                      onChange={handleInputChange}
+                      required
+                      max="9999999999999"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="location">Location</Label>
+                    <Input
+                      id="location"
+                      name="location"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      required
+                    />
+                  </div>
+                  <div className="relative">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 pt-5 flex items-center text-sm leading-5"
+                    >
+                      {showPassword ? <Eye className="h-6 w-6" /> : <EyeOff className="h-6 w-6" />}
+                    </button>
+                  </div>
+                  <div>
+                    <Label htmlFor="role">Role</Label>
+                    <Select value={formData.role} onValueChange={handleRoleChange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {roles.map((role) => (
+                          <SelectItem key={role.id} value={role.id}>
+                            {role.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <Button type="submit" className="w-full" disabled={!formData.role || isSubmitting}>
+                  {isSubmitting ? "Creating..." : "Create User"}
+                </Button>
+              </form>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </header>
       <main className="container mx-auto p-4 mb-14">
         {showDeletedUsers ? (
@@ -502,10 +520,8 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                                 )}
                               </div>
                               <div>
-                                <h3 className="font-semibold">
-                                  {user.name}
-                                </h3>
-                                <p className="text-sm text-gray-500">{user.email}</p>
+                                <h3 className="font-semibold">{user.name}</h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-300">{user.email}</p>
                                 <p className="text-sm text-primary">{group.name}</p>
                               </div>
                             </div>
@@ -521,16 +537,18 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                                     <Pencil className="w-4 h-4 mr-2" />
                                     Update
                                   </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setSelectedUser(user)
-                                      setShowDeleteAlertDialog(true)
-                                    }}
-                                    className="text-red-600"
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
+                                  {hasPermission && hasPermission("delete") && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setSelectedUser(user)
+                                        setShowDeleteAlertDialog(true)
+                                      }}
+                                      className="text-red-600"
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             )}
@@ -573,21 +591,23 @@ export default function UsersPage({ params }: { params: { companyId: string } })
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="update-role">Role</Label>
-                <Select value={formData.role} onValueChange={handleRoleChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role.id} value={role.id}>
-                        {role.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {hasPermission && hasPermission("delete") && (
+                <div>
+                  <Label htmlFor="update-role">Role</Label>
+                  <Select value={formData.role} onValueChange={handleRoleChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role.id} value={role.id}>
+                          {role.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
             <Button type="submit" className="w-full">
               Update User
@@ -602,13 +622,7 @@ export default function UsersPage({ params }: { params: { companyId: string } })
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete the user
-              {selectedUser && (
-                <span className="font-semibold">
-                  {" "}
-                  {selectedUser.name}
-                </span>
-              )}
-              .
+              {selectedUser && <span className="font-semibold"> {selectedUser.name}</span>}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -622,3 +636,5 @@ export default function UsersPage({ params }: { params: { companyId: string } })
     </div>
   )
 }
+
+export default withPermission(UsersPage, ["create"])

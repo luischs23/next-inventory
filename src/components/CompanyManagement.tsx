@@ -12,16 +12,8 @@ import { Card, CardContent } from 'app/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "app/components/ui/dropdown-menu"
 import { ArrowLeft, MoreVertical, X, Pencil, Trash2 } from 'lucide-react'
 import Image from 'next/image'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "app/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,} from "app/components/ui/alert-dialog"
+import { withPermission } from "app/components/withPermission"
 
 interface Company {
   id: string
@@ -32,7 +24,11 @@ interface Company {
   imageUrl: string
 }
 
-export default function CompanyManagement() {
+interface CompanyManagementProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function CompanyManagement({ hasPermission }: CompanyManagementProps) {
   const router = useRouter()
   const [companies, setCompanies] = useState<Company[]>([])
   const [newCompany, setNewCompany] = useState<Omit<Company, 'id' | 'imageUrl'>>({
@@ -143,13 +139,14 @@ export default function CompanyManagement() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-100">
+    <div className="min-h-screen bg-blue-100 dark:bg-gray-800">
       <header className="bg-teal-600 text-white p-4 flex items-center">
         <Button variant="ghost" className="text-white p-0 mr-2" onClick={() => router.back()}>
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <h1 className="text-xl font-bold flex-grow">Companies</h1>
         <div className='space-x-2'>
+        {hasPermission && hasPermission("companies") && (
         <Button variant="secondary" onClick={() => {
           setEditingCompany(null)
           setNewCompany({ name: '', email: '', phone: '', address: '' })
@@ -157,6 +154,7 @@ export default function CompanyManagement() {
         }}>
           + Add 
         </Button>
+        )}
          </div>
       </header>
 
@@ -180,6 +178,7 @@ export default function CompanyManagement() {
               </div>
               <CardContent className="w-2/3 p-4 relative">
                 <div className="absolute top-2 right-2 flex" onClick={(e) => e.stopPropagation()}>
+                {hasPermission && hasPermission("companies") && (<>
                   <Button 
                     variant="ghost" 
                     className="h-8 w-8 p-0 mr-1" 
@@ -197,6 +196,7 @@ export default function CompanyManagement() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                  </>)}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button 
@@ -220,9 +220,9 @@ export default function CompanyManagement() {
                   </DropdownMenu>
                 </div>
                 <h2 className="font-bold mb-2">{company.name}</h2>
-                <p className="text-sm text-gray-600">{company.email}</p>
-                <p className="text-sm text-gray-600">Phone: {company.phone}</p>
-                <p className="text-sm text-gray-600">{company.address}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{company.email}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Phone: {company.phone}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{company.address}</p>
               </CardContent>
             </div>
           </Card> 
@@ -321,3 +321,5 @@ export default function CompanyManagement() {
     </div>
   )
 }
+
+export default withPermission(CompanyManagement, ["companies"])
