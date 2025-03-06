@@ -1,17 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useParams } from "next/navigation";
 import { Home, FileText, Store, Warehouse } from "lucide-react";
 import { cn } from "app/lib/utils";
-import { withPermission } from "app/components/withPermission";
+import { withPermission } from "../../../components/withPermission";
 
 interface CompanyNavbarProps {
-  companyId: string;
   hasPermission: (action: string) => boolean;
 }
 
-const CompanyNavbar: React.FC<CompanyNavbarProps> = ({ companyId, hasPermission }) => {
+function CompanyNavbar({ hasPermission}: CompanyNavbarProps) {
+  const params = useParams<{ companyId?: string }>();
+  const companyId = params.companyId as string || 'default'
   const pathname = usePathname();
 
   const navItems = [
@@ -19,11 +20,9 @@ const CompanyNavbar: React.FC<CompanyNavbarProps> = ({ companyId, hasPermission 
     { name: "Stores", icon: Store, href: `/companies/${companyId}/store`, label: "Stores" },
     { name: "Warehouses", icon: Warehouse, href: `/companies/${companyId}/warehouses`, label: "Warehouses" },
   ];
-
-  if (hasPermission && hasPermission("create")) {
+  if (hasPermission("create")) {
     navItems.push({ name: "Invoices", icon: FileText, href: `/companies/${companyId}/invoices`, label: "Invoices" });
   }
-
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-10 bg-white mt-10 dark:bg-gray-800 border-t shadow-lg md:top-0 md:left-0 md:h-screen md:w-16 md:border-r md:border-t-0">
       <div className="flex justify-around md:flex-col md:justify-start md:h-full md:p-4">
@@ -46,4 +45,4 @@ const CompanyNavbar: React.FC<CompanyNavbarProps> = ({ companyId, hasPermission 
   );
 };
 
-export default withPermission(CompanyNavbar, ["read", "customer", "create"]);
+export default withPermission(CompanyNavbar, ["cus"]);

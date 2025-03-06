@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter} from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { db, storage, auth } from "app/services/firebase/firebase.config"
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc, query, where } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "firebase/storage"
@@ -46,11 +46,11 @@ interface UserProfile {
 
 interface StoreListPageProps {
   hasPermission: (action: string) => boolean;
-  params: { companyId?: string }; // Si estás usando parámetros dinámicos
 }
 
-function StoreListPage({ hasPermission, params }: StoreListPageProps) {
+function StoreListPage({ hasPermission}: StoreListPageProps) {
   const router = useRouter()
+  const params = useParams<{ companyId?: string }>();
   const companyId = params.companyId as string || 'default'
   const [stores, setStores] = useState<Store[]>([])
   const [users, setUsers] = useState<UserProfile[]>([])

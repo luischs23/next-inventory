@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { Button } from "app/components/ui/button"
 import { Card } from "app/components/ui/card"
 import Link from 'next/link'
@@ -31,11 +31,11 @@ type MenuItem = {
 
 interface HomeProps {
   hasPermission: (action: string) => boolean;
-  params: { companyId?: string };
 }
 
-function Home({ hasPermission, params }: HomeProps) {
+function Home({ hasPermission }: HomeProps) {
   const router = useRouter()
+  const params = useParams<{ companyId?: string }>();
   const [, setUser] = useState<FirebaseUser | null>(null)
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [companyName, setCompanyName] = useState('')

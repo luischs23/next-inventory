@@ -6,7 +6,7 @@ import { CompanySidebar } from 'app/app/companies/[companyId]/CompanySidebar'
 interface CompanyLayoutProps {
   children: React.ReactNode
   params: { companyId: string }
-}
+} 
 
 export default function CompanyLayout({ children, params }: CompanyLayoutProps) {
   return (
@@ -16,12 +16,11 @@ export default function CompanyLayout({ children, params }: CompanyLayoutProps) 
         <div className="hidden md:block">
           <CompanySidebar companyId={params.companyId} />
         </div>
-
         {/* Main content area */}
         <div className="flex flex-col flex-1">
           {/* Navbar for mobile */}
           <div className="md:hidden">
-            <CompanyNavbar companyId={params.companyId} />
+            <CompanyNavbar />
           </div>
 
           {/* Main content */}

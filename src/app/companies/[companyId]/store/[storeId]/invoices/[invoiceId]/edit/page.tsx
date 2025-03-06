@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { db } from "app/services/firebase/firebase.config"
 import { collection, doc, getDoc, updateDoc, setDoc, deleteDoc, getDocs, serverTimestamp, Timestamp, query, where, orderBy, limit} from "firebase/firestore"
 import { Button } from "app/components/ui/button"
@@ -70,11 +70,11 @@ interface BoxItem extends Omit<InvoiceItem, "size"> {
 
 interface EditInvoicePageProps {
   hasPermission: (action: string) => boolean;
-  params: { companyId: string; storeId: string, invoiceId: string };
 }
 
-function EditInvoicePage({ hasPermission, params }: EditInvoicePageProps) { 
+function EditInvoicePage({ hasPermission }: EditInvoicePageProps) { 
   const { toast } = useToast()
+  const params = useParams<{ companyId: string; storeId: string, invoiceId: string }>();
   const router = useRouter()
   const [invoice, setInvoice] = useState<(InvoiceItem | BoxItem)[]>([])
   const [totalSold, setTotalSold] = useState(0)

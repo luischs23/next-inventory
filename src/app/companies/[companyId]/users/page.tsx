@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { db, auth, storage } from "app/services/firebase/firebase.config"
 import { ref, deleteObject } from "firebase/storage"
 import { collection, getDocs, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, type Timestamp, query, where, setDoc } from "firebase/firestore"
@@ -48,10 +48,12 @@ const roles = [
   { id: "customer", name: "Customer" },
 ]
 
-function UsersPage({
-  params,
-  hasPermission,
-}: { params: { companyId: string }; hasPermission: (action: string) => boolean }) {
+interface UsersPageProps {
+  hasPermission: (action: string) => boolean;
+}
+
+function UsersPage({ hasPermission }: UsersPageProps) {
+  const params = useParams<{ companyId?: string }>();
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateAlertDialog, setShowCreateAlertDialog] = useState(false)

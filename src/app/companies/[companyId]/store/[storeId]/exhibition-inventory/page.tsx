@@ -1,7 +1,7 @@
   'use client'
 
   import React, { useState, useEffect, useMemo } from 'react'
-  import { useRouter } from 'next/navigation'
+  import { useRouter, useParams } from 'next/navigation'
   import { db } from 'app/services/firebase/firebase.config'
   import { collection, getDocs, doc, getDoc} from 'firebase/firestore'
   import { Button } from "app/components/ui/button"
@@ -59,11 +59,11 @@
 
   interface InventoryExbPageProps {
     hasPermission: (action: string) => boolean;
-    params: { companyId: string; storeId: string };
   }
 
-  function InventoryExbPage({ hasPermission, params }: InventoryExbPageProps) {
+  function InventoryExbPage({ hasPermission }: InventoryExbPageProps) {
     const router = useRouter()
+    const params = useParams<{ companyId?: string ; storeId: string }>();
     const [products, setProducts] = useState<Product[]>([])
     const [storeName, setStoreName] = useState<string>("")
     const [loading, setLoading] = useState(true)

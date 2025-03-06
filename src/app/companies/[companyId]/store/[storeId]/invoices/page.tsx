@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo} from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
 import { collection, getDocs, doc, getDoc, Timestamp, deleteDoc, addDoc, updateDoc, serverTimestamp, query, orderBy } from 'firebase/firestore'
 import { Button } from "app/components/ui/button"
@@ -35,11 +35,11 @@ interface Store {
 
 interface InvoiceListPageProps {
   hasPermission: (action: string) => boolean;
-  params: { companyId: string; storeId: string };
 }
 
-function InvoiceListPage({ hasPermission, params }: InvoiceListPageProps) {  
+function InvoiceListPage({ hasPermission}: InvoiceListPageProps) {  
   const router = useRouter()
+  const params = useParams<{ companyId: string; storeId: string }>();
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [storeName, setStoreName] = useState<string>("")
   const [loading, setLoading] = useState(true)

@@ -2,18 +2,18 @@ import { NextResponse } from 'next/server';
 import admin from '../../../services/firebase/firebaseAdmin';
 
 // Definición de permisos por rol
-export const rolePermissions: Record<string, string[]> = {
+const rolePermissions: Record<string, string[]> = {
   developer: ["create", "read", "update", "delete", "ska", "companies","cus"],
   general_manager: ["create", "read", "update", "delete", "ska","cus"],
   warehouse_manager: ["create", "read", "update", "ska","customer"],
-  warehouse_salesperson: ["warehouse_salesperson", "read", "ska","cus"],
-  pos_salesperson: ["pos_salesperson", "read", "ska","cus"],
+  warehouse_salesperson: ["read", "ska","cus"],
+  pos_salesperson: ["read", "ska","cus"],
   skater: ["skater", "read","cus"],
   customer: ["customer","cus"],
 };
 
 // Función para verificar permisos
-export function checkPermissions(userRole: string, requiredPermissions: string[]): boolean {
+function checkPermissions(userRole: string, requiredPermissions: string[]): boolean {
   const userPermissions = rolePermissions[userRole] || [];
   return requiredPermissions.some(perm => userPermissions.includes(perm));
 }

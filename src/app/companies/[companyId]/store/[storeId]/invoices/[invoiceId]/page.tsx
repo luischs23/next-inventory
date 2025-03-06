@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { db } from 'app/services/firebase/firebase.config'
 import { doc, getDoc, getDocs, updateDoc, collection, Timestamp, arrayUnion, increment, DocumentData} from 'firebase/firestore'
 import { Card, CardContent, CardHeader, CardTitle } from "app/components/ui/card"
@@ -88,11 +88,11 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
 
 interface InvoicePageProps {
   hasPermission: (action: string) => boolean;
-  params: { companyId: string; storeId: string, invoiceId: string };
 }
 
-function InvoicePage({ hasPermission, params }: InvoicePageProps) {    
+function InvoicePage({ hasPermission}: InvoicePageProps) {    
   const router = useRouter()
+  const params = useParams<{  companyId: string; storeId: string, invoiceId: string }>();
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [storeName, setStoreName] = useState<string>("")
   const [warehouses, setWarehouses] = useState<{ [id: string]: string }>({})

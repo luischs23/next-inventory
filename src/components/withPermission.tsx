@@ -11,7 +11,7 @@ type WithPermissionProps = {
 
 export function withPermission<P extends object>(
   WrappedComponent: React.ComponentType<P & WithPermissionProps>,
-  requiredPermissions: string[],
+  requiredPermissions: string[], 
 ) {
   return function PermissionWrapper(props: P) {
     const { user, loading } = useAuth();
@@ -46,7 +46,7 @@ export function withPermission<P extends object>(
             } else {
               router.push("/unauthorized");
             }
-          })
+          }) 
           .catch(error => {
             console.error('Error verificando permisos:', error);
             router.push("/unauthorized");
